@@ -43,11 +43,13 @@ protected:
 	// Input callbacks - Building (delegates to BuildingComponent)
 	void OnToggleBuildMode();
 	void OnPlacePiece();
+	void OnRotate(const FInputActionValue& Value); // Handles 2D rotation input
 	void OnRotateLeft();
 	void OnRotateRight();
 	void OnScalePiece(const FInputActionValue& Value);
 	void OnCyclePieceType();
 	void OnNailPiece();
+	void OnAdvancePhase(); // Advance to next construction phase
 
 	// Enhanced Input Actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -85,6 +87,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* NailPieceAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* AdvancePhaseAction;
 
 	// Camera components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")

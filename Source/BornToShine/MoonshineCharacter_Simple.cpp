@@ -2,6 +2,7 @@
 
 #include "MoonshineCharacter_Simple.h"
 #include "BuildingComponent.h"
+#include "ConstructionPhaseManager.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -141,6 +142,18 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 		{
 			EnhancedInputComponent->BindAction(ScaleAction, ETriggerEvent::Triggered, this, &AMoonshineCharacter_Simple::OnScalePiece);
 		}
+
+		// Rotation
+		if (RotateAction)
+		{
+			EnhancedInputComponent->BindAction(RotateAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotate);
+		}
+
+		// Phase advancement
+		if (AdvancePhaseAction)
+		{
+			EnhancedInputComponent->BindAction(AdvancePhaseAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnAdvancePhase);
+		}
 	}
 }
 
@@ -222,6 +235,26 @@ void AMoonshineCharacter_Simple::OnPlacePiece()
 	}
 }
 
+void AMoonshineCharacter_Simple::OnRotate(const FInputActionValue& Value)
+{
+	if (!BuildingComponent) return;
+
+	FVector2D RotationVector = Value.Get<FVector2D>();
+
+	// X-axis: left (-1) / right (+1)
+	if (RotationVector.X < -0.5f)
+	{
+		BuildingComponent->RotatePreviewLeft();
+	}
+	else if (RotationVector.X > 0.5f)
+	{
+		BuildingComponent->RotatePreviewRight();
+	}
+
+	// Y-axis could be used for pitch/roll rotations if needed
+	// For now, just using horizontal rotation
+}
+
 void AMoonshineCharacter_Simple::OnRotateLeft()
 {
 	if (BuildingComponent)
@@ -260,5 +293,35 @@ void AMoonshineCharacter_Simple::OnNailPiece()
 	if (BuildingComponent)
 	{
 		BuildingComponent->NailLastPlacedPiece();
+	}
+}
+
+void AMoonshineCharacter_Simple::OnAdvancePhase()
+{
+	if (AConstructionPhaseManager::Instance)
+	{
+		if (AConstructionPhaseManager::Instance->AdvanceToNextPhase())
+		{
+			// Phase advanced successfully
+			EConstructionPhase CurrentPhase = AConstructionPhaseManager::Instance->GetCurrentPhase();
+			FString PhaseName = AConstructionPhaseManager::Instance->GetCurrentPhaseName();
+			UE_LOG(LogTemp, Log, TEXT("Advanced to phase: %s"), *PhaseName);
+
+			// Show on-screen message
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, FString::Printf(TEXT("Phase: %s"), *PhaseName));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Cannot advance phase - requirements not met"));
+
+			// Show warning message
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, TEXT("Cannot advance phase - place more foundation blocks"));
+			}
+		}
 	}
 }
