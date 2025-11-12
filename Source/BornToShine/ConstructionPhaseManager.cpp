@@ -171,19 +171,26 @@ bool AConstructionPhaseManager::CheckPrerequisites(EPieceType PieceType, const F
 			// Rim boards require foundation blocks nearby
 			{
 				TArray<ABuildablePiece*> FoundationBlocks = GetPiecesOfType(EPieceType::Foundation);
+				UE_LOG(LogTemp, Log, TEXT("RimBoard prerequisite check: %d total foundations registered"), FoundationBlocks.Num());
+
 				if (FoundationBlocks.Num() == 0)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks exist"));
+					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks exist (PhaseManager has 0 foundations registered)"));
 					return false;
 				}
 
 				// Check if there's a foundation block within reasonable distance (500cm = 5m)
 				TArray<ABuildablePiece*> NearbyFoundations = GetNearbyPieces(ProposedLocation, 500.0f);
+				UE_LOG(LogTemp, Log, TEXT("Found %d pieces within 500cm of location (%.1f, %.1f, %.1f)"),
+					NearbyFoundations.Num(), ProposedLocation.X, ProposedLocation.Y, ProposedLocation.Z);
+
 				bool bHasNearbyFoundation = false;
 				for (ABuildablePiece* Piece : NearbyFoundations)
 				{
 					if (Piece->GetPieceType() == EPieceType::Foundation)
 					{
+						float Distance = FVector::Dist(Piece->GetActorLocation(), ProposedLocation);
+						UE_LOG(LogTemp, Log, TEXT("Found nearby foundation at distance: %.1f cm"), Distance);
 						bHasNearbyFoundation = true;
 						break;
 					}
@@ -191,7 +198,7 @@ bool AConstructionPhaseManager::CheckPrerequisites(EPieceType PieceType, const F
 
 				if (!bHasNearbyFoundation)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks nearby"));
+					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks nearby (within 500cm)"));
 					return false;
 				}
 			}

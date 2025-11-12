@@ -227,6 +227,11 @@ bool ABuildablePiece::TryPlace()
 	if (AConstructionPhaseManager::Instance)
 	{
 		AConstructionPhaseManager::Instance->RegisterPlacedPiece(this);
+		UE_LOG(LogTemp, Log, TEXT("Registered %s with PhaseManager"), *GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ConstructionPhaseManager not found! Add BP_ConstructionPhaseManager to your level!"));
 	}
 
 	// If snapped, occupy the target socket
