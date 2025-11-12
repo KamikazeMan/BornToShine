@@ -63,7 +63,7 @@ void ARimBoard::CreateBottomEndSockets()
 	);
 	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing backward
 	LeftEndSocket.bIsOccupied = false;
-	Sockets.Add(LeftEndSocket.SocketName, LeftEndSocket);
+	Sockets.Add(LeftEndSocket);
 
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("BottomEnd_Right");
@@ -75,7 +75,7 @@ void ARimBoard::CreateBottomEndSockets()
 	);
 	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing forward
 	RightEndSocket.bIsOccupied = false;
-	Sockets.Add(RightEndSocket.SocketName, RightEndSocket);
+	Sockets.Add(RightEndSocket);
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 bottom end sockets"));
 }
@@ -95,7 +95,7 @@ void ARimBoard::CreateTopFaceSockets()
 		TopSocket.LocalPosition = SocketPositions[i];
 		TopSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing up
 		TopSocket.bIsOccupied = false;
-		Sockets.Add(TopSocket.SocketName, TopSocket);
+		Sockets.Add(TopSocket);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d top face sockets at %.2f cm spacing"),
@@ -123,7 +123,7 @@ void ARimBoard::CreateSideFaceSockets()
 		);
 		LeftSideSocket.LocalRotation = FRotator(0.0f, -90.0f, 0.0f); // Facing left
 		LeftSideSocket.bIsOccupied = false;
-		Sockets.Add(LeftSideSocket.SocketName, LeftSideSocket);
+		Sockets.Add(LeftSideSocket);
 
 		// Right side face socket
 		FConstructionSocket RightSideSocket;
@@ -136,7 +136,7 @@ void ARimBoard::CreateSideFaceSockets()
 		);
 		RightSideSocket.LocalRotation = FRotator(0.0f, 90.0f, 0.0f); // Facing right
 		RightSideSocket.bIsOccupied = false;
-		Sockets.Add(RightSideSocket.SocketName, RightSideSocket);
+		Sockets.Add(RightSideSocket);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d side face sockets"), JoistPositions.Num() * 2);
@@ -157,7 +157,7 @@ void ARimBoard::CreateEndCornerSockets()
 	TL_Left.LocalPosition = LeftEndCenter + FVector(0.0f, -BoardWidth / 2.0f, BoardHeight / 2.0f);
 	TL_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	TL_Left.bIsOccupied = false;
-	Sockets.Add(TL_Left.SocketName, TL_Left);
+	Sockets.Add(TL_Left);
 
 	// Top-right corner of left end
 	FConstructionSocket TR_Left;
@@ -166,7 +166,7 @@ void ARimBoard::CreateEndCornerSockets()
 	TR_Left.LocalPosition = LeftEndCenter + FVector(0.0f, BoardWidth / 2.0f, BoardHeight / 2.0f);
 	TR_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	TR_Left.bIsOccupied = false;
-	Sockets.Add(TR_Left.SocketName, TR_Left);
+	Sockets.Add(TR_Left);
 
 	// Bottom-left corner of left end
 	FConstructionSocket BL_Left;
@@ -175,7 +175,7 @@ void ARimBoard::CreateEndCornerSockets()
 	BL_Left.LocalPosition = LeftEndCenter + FVector(0.0f, -BoardWidth / 2.0f, -BoardHeight / 2.0f);
 	BL_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	BL_Left.bIsOccupied = false;
-	Sockets.Add(BL_Left.SocketName, BL_Left);
+	Sockets.Add(BL_Left);
 
 	// Bottom-right corner of left end
 	FConstructionSocket BR_Left;
@@ -184,7 +184,7 @@ void ARimBoard::CreateEndCornerSockets()
 	BR_Left.LocalPosition = LeftEndCenter + FVector(0.0f, BoardWidth / 2.0f, -BoardHeight / 2.0f);
 	BR_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	BR_Left.bIsOccupied = false;
-	Sockets.Add(BR_Left.SocketName, BR_Left);
+	Sockets.Add(BR_Left);
 
 	// Right end corners
 	FVector RightEndCenter = FVector(BoardLength / 2.0f, 0.0f, 0.0f);
@@ -196,7 +196,7 @@ void ARimBoard::CreateEndCornerSockets()
 	TL_Right.LocalPosition = RightEndCenter + FVector(0.0f, -BoardWidth / 2.0f, BoardHeight / 2.0f);
 	TL_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	TL_Right.bIsOccupied = false;
-	Sockets.Add(TL_Right.SocketName, TL_Right);
+	Sockets.Add(TL_Right);
 
 	// Top-right corner of right end
 	FConstructionSocket TR_Right;
@@ -205,7 +205,7 @@ void ARimBoard::CreateEndCornerSockets()
 	TR_Right.LocalPosition = RightEndCenter + FVector(0.0f, BoardWidth / 2.0f, BoardHeight / 2.0f);
 	TR_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	TR_Right.bIsOccupied = false;
-	Sockets.Add(TR_Right.SocketName, TR_Right);
+	Sockets.Add(TR_Right);
 
 	// Bottom-left corner of right end
 	FConstructionSocket BL_Right;
@@ -214,7 +214,7 @@ void ARimBoard::CreateEndCornerSockets()
 	BL_Right.LocalPosition = RightEndCenter + FVector(0.0f, -BoardWidth / 2.0f, -BoardHeight / 2.0f);
 	BL_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	BL_Right.bIsOccupied = false;
-	Sockets.Add(BL_Right.SocketName, BL_Right);
+	Sockets.Add(BL_Right);
 
 	// Bottom-right corner of right end
 	FConstructionSocket BR_Right;
@@ -223,7 +223,7 @@ void ARimBoard::CreateEndCornerSockets()
 	BR_Right.LocalPosition = RightEndCenter + FVector(0.0f, BoardWidth / 2.0f, -BoardHeight / 2.0f);
 	BR_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	BR_Right.bIsOccupied = false;
-	Sockets.Add(BR_Right.SocketName, BR_Right);
+	Sockets.Add(BR_Right);
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 8 end corner sockets"));
 }
@@ -252,21 +252,21 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 	return Positions;
 }
 
-void ARimBoard::UpdatePreviewPosition(const FVector& CameraLocation, const FVector& CameraForward)
+void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
 	// Use socket snapping if near foundation or other rim boards
 	// Otherwise fall back to free placement
-	Super::UpdatePreviewPosition(CameraLocation, CameraForward);
+	Super::UpdatePreviewPosition(NewLocation, NewRotation);
 
 	// Rim boards should align flush with foundation top surface
 	// The foundation top is at SocketHeightOffset (14cm) + BlockDimensions.Z (30.48cm) = 44.48cm
 	// Rim board bottom should sit at this height
 	// So rim board center should be at: 44.48 + (BoardHeight / 2.0f)
 
-	if (!bIsSnapped && PreviewMesh)
+	if (!bIsSnapped && MeshComponent)
 	{
-		FVector CurrentLocation = PreviewMesh->GetComponentLocation();
+		FVector CurrentLocation = MeshComponent->GetComponentLocation();
 		float TargetHeight = 44.48f + (BoardHeight / 2.0f); // Foundation top + half rim board height
-		PreviewMesh->SetWorldLocation(FVector(CurrentLocation.X, CurrentLocation.Y, TargetHeight));
+		MeshComponent->SetWorldLocation(FVector(CurrentLocation.X, CurrentLocation.Y, TargetHeight));
 	}
 }

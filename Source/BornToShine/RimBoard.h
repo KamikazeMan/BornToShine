@@ -55,7 +55,7 @@ public:
 	void CreateEndCornerSockets();
 
 	// Override snapping for rim board alignment
-	virtual void UpdatePreviewPosition(const FVector& CameraLocation, const FVector& CameraForward) override;
+	virtual void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation) override;
 
 private:
 	// Helper to calculate socket positions along the board
