@@ -152,14 +152,13 @@ bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, 
 	{
 		if (Rule.SourceSocketType == SourceSocket)
 		{
-			// Check if we're in the correct construction phase
-			if (Rule.RequiredPhase <= CurrentPhase)
+			// Free building mode - phase check disabled
+			// Socket compatibility is now purely based on socket types
+
+			// Check if target socket is in compatible list
+			if (Rule.CompatibleSocketTypes.Contains(TargetSocket))
 			{
-				// Check if target socket is in compatible list
-				if (Rule.CompatibleSocketTypes.Contains(TargetSocket))
-				{
-					return true;
-				}
+				return true;
 			}
 		}
 	}

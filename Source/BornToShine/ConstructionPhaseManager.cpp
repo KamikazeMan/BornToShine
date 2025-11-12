@@ -161,84 +161,10 @@ TArray<ABuildablePiece*> AConstructionPhaseManager::GetNearbyPieces(const FVecto
 
 bool AConstructionPhaseManager::CheckPrerequisites(EPieceType PieceType, const FVector& ProposedLocation) const
 {
-	switch (PieceType)
-	{
-		case EPieceType::Foundation:
-			// Foundation can always be placed (first piece)
-			return true;
-
-		case EPieceType::RimBoard:
-			// Rim boards require foundation blocks nearby
-			{
-				TArray<ABuildablePiece*> FoundationBlocks = GetPiecesOfType(EPieceType::Foundation);
-				UE_LOG(LogTemp, Log, TEXT("RimBoard prerequisite check: %d total foundations registered"), FoundationBlocks.Num());
-
-				if (FoundationBlocks.Num() == 0)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks exist (PhaseManager has 0 foundations registered)"));
-					return false;
-				}
-
-				// Check if there's a foundation block within reasonable distance (500cm = 5m)
-				TArray<ABuildablePiece*> NearbyFoundations = GetNearbyPieces(ProposedLocation, 500.0f);
-				UE_LOG(LogTemp, Log, TEXT("Found %d pieces within 500cm of location (%.1f, %.1f, %.1f)"),
-					NearbyFoundations.Num(), ProposedLocation.X, ProposedLocation.Y, ProposedLocation.Z);
-
-				bool bHasNearbyFoundation = false;
-				for (ABuildablePiece* Piece : NearbyFoundations)
-				{
-					if (Piece->GetPieceType() == EPieceType::Foundation)
-					{
-						float Distance = FVector::Dist(Piece->GetActorLocation(), ProposedLocation);
-						UE_LOG(LogTemp, Log, TEXT("Found nearby foundation at distance: %.1f cm"), Distance);
-						bHasNearbyFoundation = true;
-						break;
-					}
-				}
-
-				if (!bHasNearbyFoundation)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place rim board - no foundation blocks nearby (within 500cm)"));
-					return false;
-				}
-			}
-			return true;
-
-		case EPieceType::FloorJoist:
-			// Joists require rim boards
-			{
-				TArray<ABuildablePiece*> RimBoards = GetPiecesOfType(EPieceType::RimBoard);
-				if (RimBoards.Num() < 2)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place joist - need at least 2 rim boards"));
-					return false;
-				}
-			}
-			return true;
-
-		case EPieceType::Plywood:
-			// Plywood requires rim boards and joists
-			{
-				TArray<ABuildablePiece*> RimBoards = GetPiecesOfType(EPieceType::RimBoard);
-				TArray<ABuildablePiece*> Joists = GetPiecesOfType(EPieceType::FloorJoist);
-
-				if (RimBoards.Num() < 4)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place plywood - need complete rim board perimeter (4+ pieces)"));
-					return false;
-				}
-
-				if (Joists.Num() < 1)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Cannot place plywood - need joists for support"));
-					return false;
-				}
-			}
-			return true;
-
-		default:
-			return true;
-	}
+	// Free building mode - no prerequisites enforced
+	// Socket snapping naturally handles logical building order
+	// If there's no socket nearby, piece won't snap but can still be placed
+	return true;
 }
 
 FString AConstructionPhaseManager::GetPhaseRequirements() const
