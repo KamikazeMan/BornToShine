@@ -222,8 +222,17 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		{
 			float Distance = FVector::Dist(SocketWorldLocation, SnapLoc);
 
+			// Get target socket to determine priority
+			FConstructionSocket TargetSocketInfo;
+			EConstructionSocketType TargetSocketType = EConstructionSocketType::Foundation_Corner; // Default
+
+			if (TargetPiece && TargetPiece->GetSocketByNameSafe(TargetSocketName, TargetSocketInfo))
+			{
+				TargetSocketType = TargetSocketInfo.SocketType;
+			}
+
 			// Calculate connection priority
-			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocket.SocketType);
+			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocketType);
 
 			// Choose this snap if:
 			// 1. It has higher priority, OR
