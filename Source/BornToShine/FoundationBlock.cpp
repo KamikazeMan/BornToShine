@@ -49,10 +49,10 @@ void AFoundationBlock::CreateCornerSockets()
 	float HalfWidth = BlockDimensions.X / 2.0f;
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
-	// CRITICAL: Socket should be at TOP of foundation block
-	// This is where rim boards sit
-	// Block center = 0, top = +BlockDimensions.Z/2
-	float SocketZPosition = BlockDimensions.Z / 2.0f;
+	// Socket should be at the groove depth (14cm from ground)
+	// With foundation actor at Z=BlockDimensions.Z/2 (bottom at ground):
+	// Groove at 14cm world = local Z of (14 - BlockDimensions.Z/2)
+	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
 
 	// Create 4 corner sockets at the groove of the foundation block
 	// These sockets will accept rim board bottom ends
@@ -97,13 +97,14 @@ void AFoundationBlock::CreateCornerSockets()
 	CornerSW.bIsOccupied = false;
 	Sockets.Add(CornerSW);
 
-	UE_LOG(LogTemp, Log, TEXT("Foundation: Corner sockets at local Z=%.2f (TOP of block)"), SocketZPosition);
+	UE_LOG(LogTemp, Log, TEXT("Foundation: Corner sockets at local Z=%.2f (%.2fcm from ground)"),
+		SocketZPosition, SocketHeightOffset);
 }
 
 void AFoundationBlock::CreateCenterSocket()
 {
-	// Socket at top of block
-	float SocketZPosition = BlockDimensions.Z / 2.0f;
+	// Socket at groove depth
+	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
 
 	// Center socket for pier posts or center beam support
 	FConstructionSocket CenterSocket;
@@ -122,8 +123,8 @@ void AFoundationBlock::CreateSideSockets()
 	float HalfWidth = BlockDimensions.X / 2.0f;
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
-	// Socket at top of block
-	float SocketZPosition = BlockDimensions.Z / 2.0f;
+	// Socket at groove depth
+	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
 
 	// North side
 	FConstructionSocket SideN;
@@ -174,9 +175,9 @@ FVector AFoundationBlock::SnapToGrid(const FVector& Location) const
 	SnappedLocation.X = FMath::RoundToFloat(Location.X / GridSize) * GridSize;
 	SnappedLocation.Y = FMath::RoundToFloat(Location.Y / GridSize) * GridSize;
 
-	// Keep Z as-is or snap to ground level
-	// For foundation, we typically want it on the ground (Z = 0 or terrain height)
-	SnappedLocation.Z = 0.0f;  // Or use Location.Z if placing on terrain
+	// Foundation bottom should be at ground level (Z=0)
+	// Actor center is at half the block height above ground
+	SnappedLocation.Z = BlockDimensions.Z / 2.0f;  // 15.24cm - bottom at ground
 
 	return SnappedLocation;
 }
