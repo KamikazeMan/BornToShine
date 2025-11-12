@@ -180,7 +180,7 @@ void AMoonshineCharacter::Look(const FInputActionValue& Value)
 	if (Controller != nullptr)
 	{
 		AddControllerYawInput(LookAxisVector.X * MouseSensitivity);
-		AddControllerPitchInput(LookAxisVector.Y * MouseSensitivity);
+		AddControllerPitchInput(LookAxisVector.Y * MouseSensitivity * -1.0f); // Negated for correct look direction
 	}
 }
 
