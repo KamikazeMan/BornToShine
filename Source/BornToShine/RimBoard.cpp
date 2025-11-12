@@ -174,87 +174,36 @@ void ARimBoard::CreateSideFaceSockets()
 void ARimBoard::CreateEndCornerSockets()
 {
 	// End corner sockets for rim-to-rim 90-degree connections
-	// Four corners at each end: top-left, top-right, bottom-left, bottom-right
+	// Single socket at the CENTER-BOTTOM of each end face for proper flush alignment
+	// This ensures when two boards meet at a corner, their ends align perfectly
 
-	// Left end corners
-	FVector LeftEndCenter = FVector(-BoardLength / 2.0f, 0.0f, 0.0f);
+	// Left end - socket at center-bottom of end face
+	FConstructionSocket LeftEndSocket;
+	LeftEndSocket.SocketName = FName("EndCorner_Left");
+	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
+	LeftEndSocket.LocalPosition = FVector(
+		-BoardLength / 2.0f,    // Left end center
+		0.0f,                   // Centered on width
+		-BoardHeight / 2.0f     // Bottom (same height as bottom end sockets)
+	);
+	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing left
+	LeftEndSocket.bIsOccupied = false;
+	Sockets.Add(LeftEndSocket);
 
-	// Top-left corner of left end
-	FConstructionSocket TL_Left;
-	TL_Left.SocketName = FName("EndCorner_Left_TopLeft");
-	TL_Left.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	TL_Left.LocalPosition = LeftEndCenter + FVector(0.0f, -BoardWidth / 2.0f, BoardHeight / 2.0f);
-	TL_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-	TL_Left.bIsOccupied = false;
-	Sockets.Add(TL_Left);
+	// Right end - socket at center-bottom of end face
+	FConstructionSocket RightEndSocket;
+	RightEndSocket.SocketName = FName("EndCorner_Right");
+	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
+	RightEndSocket.LocalPosition = FVector(
+		BoardLength / 2.0f,     // Right end center
+		0.0f,                   // Centered on width
+		-BoardHeight / 2.0f     // Bottom (same height as bottom end sockets)
+	);
+	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing right
+	RightEndSocket.bIsOccupied = false;
+	Sockets.Add(RightEndSocket);
 
-	// Top-right corner of left end
-	FConstructionSocket TR_Left;
-	TR_Left.SocketName = FName("EndCorner_Left_TopRight");
-	TR_Left.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	TR_Left.LocalPosition = LeftEndCenter + FVector(0.0f, BoardWidth / 2.0f, BoardHeight / 2.0f);
-	TR_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-	TR_Left.bIsOccupied = false;
-	Sockets.Add(TR_Left);
-
-	// Bottom-left corner of left end
-	FConstructionSocket BL_Left;
-	BL_Left.SocketName = FName("EndCorner_Left_BottomLeft");
-	BL_Left.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	BL_Left.LocalPosition = LeftEndCenter + FVector(0.0f, -BoardWidth / 2.0f, -BoardHeight / 2.0f);
-	BL_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-	BL_Left.bIsOccupied = false;
-	Sockets.Add(BL_Left);
-
-	// Bottom-right corner of left end
-	FConstructionSocket BR_Left;
-	BR_Left.SocketName = FName("EndCorner_Left_BottomRight");
-	BR_Left.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	BR_Left.LocalPosition = LeftEndCenter + FVector(0.0f, BoardWidth / 2.0f, -BoardHeight / 2.0f);
-	BR_Left.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-	BR_Left.bIsOccupied = false;
-	Sockets.Add(BR_Left);
-
-	// Right end corners
-	FVector RightEndCenter = FVector(BoardLength / 2.0f, 0.0f, 0.0f);
-
-	// Top-left corner of right end
-	FConstructionSocket TL_Right;
-	TL_Right.SocketName = FName("EndCorner_Right_TopLeft");
-	TL_Right.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	TL_Right.LocalPosition = RightEndCenter + FVector(0.0f, -BoardWidth / 2.0f, BoardHeight / 2.0f);
-	TL_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-	TL_Right.bIsOccupied = false;
-	Sockets.Add(TL_Right);
-
-	// Top-right corner of right end
-	FConstructionSocket TR_Right;
-	TR_Right.SocketName = FName("EndCorner_Right_TopRight");
-	TR_Right.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	TR_Right.LocalPosition = RightEndCenter + FVector(0.0f, BoardWidth / 2.0f, BoardHeight / 2.0f);
-	TR_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-	TR_Right.bIsOccupied = false;
-	Sockets.Add(TR_Right);
-
-	// Bottom-left corner of right end
-	FConstructionSocket BL_Right;
-	BL_Right.SocketName = FName("EndCorner_Right_BottomLeft");
-	BL_Right.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	BL_Right.LocalPosition = RightEndCenter + FVector(0.0f, -BoardWidth / 2.0f, -BoardHeight / 2.0f);
-	BL_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-	BL_Right.bIsOccupied = false;
-	Sockets.Add(BL_Right);
-
-	// Bottom-right corner of right end
-	FConstructionSocket BR_Right;
-	BR_Right.SocketName = FName("EndCorner_Right_BottomRight");
-	BR_Right.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	BR_Right.LocalPosition = RightEndCenter + FVector(0.0f, BoardWidth / 2.0f, -BoardHeight / 2.0f);
-	BR_Right.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-	BR_Right.bIsOccupied = false;
-	Sockets.Add(BR_Right);
-
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 8 end corner sockets"));
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 end corner sockets (center-bottom of each end)"));
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
