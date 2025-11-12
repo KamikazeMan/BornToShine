@@ -137,7 +137,13 @@ void ABuildablePiece::UpdatePreviewPosition(const FVector& NewLocation, const FR
 	if (FindSnapPoint(SnapLocation, SnapRotation))
 	{
 		SetActorLocation(SnapLocation);
-		SetActorRotation(SnapRotation);
+
+		// Preserve user's Yaw rotation when snapping
+		// Only use snap rotation for pitch/roll alignment
+		FRotator FinalRotation = SnapRotation;
+		FinalRotation.Yaw = NewRotation.Yaw; // Keep user's horizontal rotation
+
+		SetActorRotation(FinalRotation);
 		bIsSnapped = true;
 	}
 	else
@@ -219,6 +225,15 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
 				bFoundSnap = true;
+
+				UE_LOG(LogTemp, Warning, TEXT("SNAP FOUND! Socket: %s -> Target: %s on %s"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					*TargetPiece->GetName());
+				UE_LOG(LogTemp, Warning, TEXT("  Snap Location: %s, Distance: %.1fcm"),
+					*OutSnapLocation.ToString(), Distance);
+				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"),
+					*Socket.LocalPosition.ToString());
 			}
 		}
 	}

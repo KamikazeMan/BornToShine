@@ -18,6 +18,8 @@ UBuildingComponent::UBuildingComponent()
 	BuildRaycastDistance = 2000.0f; // 20 meters
 	PreviewDistance = 300.0f;       // 3 meters
 	SnapSearchRadius = 500.0f;      // 5 meters
+
+	PreviewRotation = FRotator::ZeroRotator; // Start with no rotation
 }
 
 void UBuildingComponent::BeginPlay()
@@ -69,17 +71,19 @@ void UBuildingComponent::SpawnPreviewPiece()
 	// Destroy existing preview
 	DestroyPreviewPiece();
 
+	// Reset rotation for new piece
+	PreviewRotation = FRotator::ZeroRotator;
+
 	// Spawn new preview piece
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
 	FVector SpawnLocation = Owner->GetActorLocation() + Owner->GetActorForwardVector() * PreviewDistance;
-	FRotator SpawnRotation = FRotator::ZeroRotator;
 
 	CurrentPreviewPiece = GetWorld()->SpawnActor<ABuildablePiece>(
 		AvailablePieceTypes[CurrentPieceTypeIndex],
 		SpawnLocation,
-		SpawnRotation
+		PreviewRotation
 	);
 
 	if (CurrentPreviewPiece)
@@ -107,7 +111,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 	if (GetPlacementLocation(PlacementLocation, PlacementNormal))
 	{
-		CurrentPreviewPiece->UpdatePreviewPosition(PlacementLocation, FRotator::ZeroRotator);
+		CurrentPreviewPiece->UpdatePreviewPosition(PlacementLocation, PreviewRotation);
 	}
 	else
 	{
@@ -118,7 +122,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 			FVector CameraLocation = Camera->GetComponentLocation();
 			FVector CameraForward = Camera->GetForwardVector();
 			FVector DefaultLocation = CameraLocation + (CameraForward * PreviewDistance);
-			CurrentPreviewPiece->UpdatePreviewPosition(DefaultLocation, FRotator::ZeroRotator);
+			CurrentPreviewPiece->UpdatePreviewPosition(DefaultLocation, PreviewRotation);
 		}
 	}
 }
@@ -247,7 +251,8 @@ void UBuildingComponent::RotatePreviewLeft()
 {
 	if (CurrentPreviewPiece)
 	{
-		CurrentPreviewPiece->RotateLeft();
+		PreviewRotation.Yaw -= 15.0f; // 15 degree rotation step
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateLeft - PreviewRotation.Yaw=%.1f"), PreviewRotation.Yaw);
 	}
 }
 
@@ -255,7 +260,8 @@ void UBuildingComponent::RotatePreviewRight()
 {
 	if (CurrentPreviewPiece)
 	{
-		CurrentPreviewPiece->RotateRight();
+		PreviewRotation.Yaw += 15.0f; // 15 degree rotation step
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateRight - PreviewRotation.Yaw=%.1f"), PreviewRotation.Yaw);
 	}
 }
 
@@ -265,11 +271,11 @@ void UBuildingComponent::RotatePreviewPitch(float Value)
 	{
 		if (Value > 0)
 		{
-			CurrentPreviewPiece->RotateFront();
+			PreviewRotation.Pitch += 15.0f;
 		}
 		else
 		{
-			CurrentPreviewPiece->RotateBack();
+			PreviewRotation.Pitch -= 15.0f;
 		}
 	}
 }
@@ -278,7 +284,7 @@ void UBuildingComponent::RotatePreviewRoll(float Value)
 {
 	if (CurrentPreviewPiece && FMath::Abs(Value) > 0.1f)
 	{
-		CurrentPreviewPiece->RotateRoll(Value * 15.0f);
+		PreviewRotation.Roll += Value * 15.0f;
 	}
 }
 

@@ -107,6 +107,9 @@ protected:
 	UPROPERTY()
 	class ABuildablePiece* LastPlacedPiece;
 
+	// Preview piece rotation (preserved across frames)
+	FRotator PreviewRotation;
+
 	// Raycast settings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Building")
 	float BuildRaycastDistance;
