@@ -79,7 +79,7 @@ public:
 
 	// Scale piece with mouse wheel
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	void ScalePiece(float ScaleDelta);
+	virtual void ScalePiece(float ScaleDelta);
 
 	// Check if placement is valid
 	UFUNCTION(BlueprintCallable, Category = "Construction")

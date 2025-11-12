@@ -103,10 +103,14 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 	{
 		PieceState = EPieceState::Preview;
 
-		// Enable collision only for tracing
+		// Enable collision only for tracing, not physics
 		if (MeshComponent)
 		{
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			// Don't collide with pawns (characters) to prevent pushing them
+			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+			// Also ignore physics objects to prevent interference
+			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
 		}
 	}
 	else
@@ -117,6 +121,9 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 		if (MeshComponent)
 		{
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			// Restore collision with pawns and physics
+			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Block);
 		}
 	}
 

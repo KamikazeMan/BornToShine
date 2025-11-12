@@ -17,7 +17,7 @@ UBuildingComponent::UBuildingComponent()
 	CurrentPieceTypeIndex = 0;
 
 	BuildRaycastDistance = 2000.0f; // 20 meters
-	PreviewDistance = 300.0f;       // 3 meters
+	PreviewDistance = 500.0f;       // 5 meters (increased for third-person comfort)
 	SnapSearchRadius = 500.0f;      // 5 meters
 
 	PreviewRotation = FRotator::ZeroRotator; // Start with no rotation
