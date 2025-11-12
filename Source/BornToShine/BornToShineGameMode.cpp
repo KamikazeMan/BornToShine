@@ -2,6 +2,7 @@
 
 #include "BornToShineGameMode.h"
 #include "MoonshineCharacter.h"
+#include "MoonshinePlayerController.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "UObject/ConstructorHelpers.h"
@@ -10,6 +11,9 @@ ABornToShineGameMode::ABornToShineGameMode()
 {
 	// Set default pawn class to our character
 	DefaultPawnClass = AMoonshineCharacter::StaticClass();
+
+	// Set default player controller
+	PlayerControllerClass = AMoonshinePlayerController::StaticClass();
 
 	SocketManager = nullptr;
 	PhaseManager = nullptr;
