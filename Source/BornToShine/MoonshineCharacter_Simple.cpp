@@ -268,17 +268,27 @@ void AMoonshineCharacter_Simple::OnRotate(const FInputActionValue& Value)
 
 void AMoonshineCharacter_Simple::OnRotateLeft()
 {
+	UE_LOG(LogTemp, Log, TEXT("OnRotateLeft called"));
 	if (BuildingComponent)
 	{
 		BuildingComponent->RotatePreviewLeft();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnRotateLeft: BuildingComponent is null!"));
 	}
 }
 
 void AMoonshineCharacter_Simple::OnRotateRight()
 {
+	UE_LOG(LogTemp, Log, TEXT("OnRotateRight called"));
 	if (BuildingComponent)
 	{
 		BuildingComponent->RotatePreviewRight();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnRotateRight: BuildingComponent is null!"));
 	}
 }
 

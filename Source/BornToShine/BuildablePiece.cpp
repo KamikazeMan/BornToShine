@@ -148,14 +148,38 @@ void ABuildablePiece::UpdatePreviewPosition(const FVector& NewLocation, const FR
 
 bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapRotation)
 {
-	if (!ASocketManager::Instance) return false;
-	if (!AConstructionPhaseManager::Instance) return false;
+	if (!ASocketManager::Instance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FindSnapPoint: SocketManager is null!"));
+		return false;
+	}
+	if (!AConstructionPhaseManager::Instance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FindSnapPoint: PhaseManager is null!"));
+		return false;
+	}
 
 	// Get nearby pieces
 	TArray<ABuildablePiece*> NearbyPieces = AConstructionPhaseManager::Instance->GetNearbyPieces(
 		GetActorLocation(),
 		SnapSearchRadius
 	);
+
+	if (NearbyPieces.Num() == 0)
+	{
+		// Only log once per second to avoid spam
+		static float LastLogTime = 0.0f;
+		float CurrentTime = GetWorld()->GetTimeSeconds();
+		if (CurrentTime - LastLogTime > 1.0f)
+		{
+			UE_LOG(LogTemp, Verbose, TEXT("%s: No nearby pieces within %.0fcm"), *GetName(), SnapSearchRadius);
+			LastLogTime = CurrentTime;
+		}
+		return false;
+	}
+
+	UE_LOG(LogTemp, Verbose, TEXT("%s: Searching %d nearby pieces with %d sockets"),
+		*GetName(), NearbyPieces.Num(), Sockets.Num());
 
 	// Try each socket on this piece to find the best snap
 	bool bFoundSnap = false;
@@ -409,6 +433,7 @@ void ABuildablePiece::RotateLeft()
 	SetActorRotation(NewRotation);
 
 	bIsSnapped = false; // Clear snap state when manually rotating
+	UE_LOG(LogTemp, Log, TEXT("RotateLeft: New rotation Yaw=%.1f"), NewRotation.Yaw);
 }
 
 void ABuildablePiece::RotateRight()
@@ -420,6 +445,7 @@ void ABuildablePiece::RotateRight()
 	SetActorRotation(NewRotation);
 
 	bIsSnapped = false;
+	UE_LOG(LogTemp, Log, TEXT("RotateRight: New rotation Yaw=%.1f"), NewRotation.Yaw);
 }
 
 void ABuildablePiece::RotateFront()

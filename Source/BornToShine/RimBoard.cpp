@@ -72,7 +72,7 @@ void ARimBoard::CreateBottomEndSockets()
 			0.0f,                  // Centered on width
 			-BoardHeight / 2.0f    // Bottom face
 		);
-		BottomSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
+		BottomSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
 		BottomSocket.bIsOccupied = false;
 		Sockets.Add(BottomSocket);
 
@@ -89,7 +89,7 @@ void ARimBoard::CreateBottomEndSockets()
 		0.0f,                  // Centered on width
 		-BoardHeight / 2.0f    // Bottom face
 	);
-	LeftEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
+	LeftEndSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
@@ -101,7 +101,7 @@ void ARimBoard::CreateBottomEndSockets()
 		0.0f,                  // Centered on width
 		-BoardHeight / 2.0f    // Bottom face
 	);
-	RightEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
+	RightEndSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
