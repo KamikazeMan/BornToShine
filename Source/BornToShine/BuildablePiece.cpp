@@ -219,7 +219,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 				// Calculate the offset from socket to actor origin
 				FVector SocketOffset = Socket.LocalPosition;
-				OutSnapLocation = SnapLoc - GetActorRotation().RotateVector(SocketOffset);
+				FVector RotatedOffset = GetActorRotation().RotateVector(SocketOffset);
+				OutSnapLocation = SnapLoc - RotatedOffset;
 				OutSnapRotation = SnapRot - Socket.LocalRotation;
 
 				SnappedToPiece = TargetPiece;
@@ -230,10 +231,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
 					*TargetPiece->GetName());
-				UE_LOG(LogTemp, Warning, TEXT("  Snap Location: %s, Distance: %.1fcm"),
+				UE_LOG(LogTemp, Warning, TEXT("  Target World Pos (SnapLoc): %s"), *SnapLoc.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"), *Socket.LocalPosition.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("  Rotated Offset: %s"), *RotatedOffset.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("  Final Actor Snap Location: %s, Distance: %.1fcm"),
 					*OutSnapLocation.ToString(), Distance);
-				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"),
-					*Socket.LocalPosition.ToString());
 			}
 		}
 	}

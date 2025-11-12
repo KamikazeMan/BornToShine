@@ -2,6 +2,7 @@
 
 #include "BuildingComponent.h"
 #include "BuildablePiece.h"
+#include "RimBoard.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -244,7 +245,20 @@ void UBuildingComponent::CyclePieceType()
 	CurrentPieceTypeIndex = (CurrentPieceTypeIndex + 1) % AvailablePieceTypes.Num();
 	SpawnPreviewPiece();
 
-	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Cycled to piece type %d"), CurrentPieceTypeIndex);
+	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Cycled to %s"), *GetCurrentPieceName());
+
+	// Show length info for rim boards
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
+	{
+		if (class ARimBoard* RimBoard = Cast<class ARimBoard>(CurrentPreviewPiece))
+		{
+			FString LengthInfo = RimBoard->GetLengthDisplayString();
+			UE_LOG(LogTemp, Warning, TEXT("===== RIM BOARD SELECTED ====="));
+			UE_LOG(LogTemp, Warning, TEXT("Current Length: %s"), *LengthInfo);
+			UE_LOG(LogTemp, Warning, TEXT("Use Mouse Wheel to adjust length (1-16 ft)"));
+			UE_LOG(LogTemp, Warning, TEXT("=============================="));
+		}
+	}
 }
 
 void UBuildingComponent::RotatePreviewLeft()
@@ -293,6 +307,15 @@ void UBuildingComponent::ScalePreview(float ScaleDelta)
 	if (CurrentPreviewPiece && FMath::Abs(ScaleDelta) > 0.01f)
 	{
 		CurrentPreviewPiece->ScalePiece(ScaleDelta * 0.1f);
+
+		// Show updated length for rim boards
+		if (CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
+		{
+			if (ARimBoard* RimBoard = Cast<ARimBoard>(CurrentPreviewPiece))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Rim Board Length: %s"), *RimBoard->GetLengthDisplayString());
+			}
+		}
 	}
 }
 

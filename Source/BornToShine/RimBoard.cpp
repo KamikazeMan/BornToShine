@@ -14,7 +14,8 @@ ARimBoard::ARimBoard()
 	// 2x6 lumber actual dimensions
 	BoardWidth = 3.81f;   // 1.5 inches
 	BoardHeight = 13.97f; // 5.5 inches
-	BoardLength = 243.84f; // 8 feet (default)
+	CurrentLengthFeet = 8; // Default 8 feet
+	BoardLength = CurrentLengthFeet * 30.48f; // Convert feet to cm
 
 	// Default to 16" on-center joist spacing
 	JoistSpacing = 40.64f; // 16 inches
@@ -282,19 +283,76 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 
 void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
-	// Use socket snapping if near foundation or other rim boards
-	// Otherwise fall back to free placement
+	// Use socket snapping system - let it handle all positioning
 	Super::UpdatePreviewPosition(NewLocation, NewRotation);
 
-	// Rim boards should align flush with foundation top surface
-	// The foundation top is at SocketHeightOffset (14cm) + BlockDimensions.Z (30.48cm) = 44.48cm
-	// Rim board bottom should sit at this height
-	// So rim board center should be at: 44.48 + (BoardHeight / 2.0f)
+	// No manual height override - socket snapping handles everything
+}
 
-	if (!bIsSnapped && MeshComponent)
+void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
+{
+	// Clamp to valid range
+	LengthInFeet = FMath::Clamp(LengthInFeet, MinLengthFeet, MaxLengthFeet);
+
+	if (LengthInFeet != CurrentLengthFeet)
 	{
-		FVector CurrentLocation = MeshComponent->GetComponentLocation();
-		float TargetHeight = 44.48f + (BoardHeight / 2.0f); // Foundation top + half rim board height
-		MeshComponent->SetWorldLocation(FVector(CurrentLocation.X, CurrentLocation.Y, TargetHeight));
+		CurrentLengthFeet = LengthInFeet;
+		BoardLength = CurrentLengthFeet * 30.48f; // Convert feet to cm
+
+		// Update mesh scale
+		if (MeshComponent)
+		{
+			MeshComponent->SetRelativeScale3D(FVector(
+				BoardLength / 100.0f,
+				BoardWidth / 100.0f,
+				BoardHeight / 100.0f
+			));
+		}
+
+		// Regenerate sockets for new length
+		RegenerateSockets();
+
+		UE_LOG(LogTemp, Log, TEXT("Rim Board length changed to: %s"), *GetLengthDisplayString());
 	}
+}
+
+int32 ARimBoard::GetBoardLengthFeet() const
+{
+	return CurrentLengthFeet;
+}
+
+FString ARimBoard::GetLengthDisplayString() const
+{
+	return FString::Printf(TEXT("%d ft (%.1f cm)"), CurrentLengthFeet, BoardLength);
+}
+
+void ARimBoard::ScalePiece(float ScaleDelta)
+{
+	// For rim boards, scaling changes length, not visual scale
+	int32 NewLength = CurrentLengthFeet;
+
+	if (ScaleDelta > 0)
+	{
+		NewLength++; // Increase by 1 foot
+	}
+	else if (ScaleDelta < 0)
+	{
+		NewLength--; // Decrease by 1 foot
+	}
+
+	SetBoardLengthFeet(NewLength);
+}
+
+void ARimBoard::RegenerateSockets()
+{
+	// Clear existing sockets
+	Sockets.Empty();
+
+	// Recreate all sockets with new board dimensions
+	CreateBottomEndSockets();
+	CreateTopFaceSockets();
+	CreateSideFaceSockets();
+	CreateEndCornerSockets();
+
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Regenerated %d sockets for %d ft board"), Sockets.Num(), CurrentLengthFeet);
 }

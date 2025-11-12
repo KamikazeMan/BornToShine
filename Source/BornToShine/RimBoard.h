@@ -57,7 +57,30 @@ public:
 	// Override snapping for rim board alignment
 	virtual void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation) override;
 
+	// Length scaling (1ft to 16ft)
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	void SetBoardLengthFeet(int32 LengthInFeet);
+
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	int32 GetBoardLengthFeet() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	FString GetLengthDisplayString() const;
+
+	// Override scale to change length instead of visual scale
+	virtual void ScalePiece(float ScaleDelta) override;
+
 private:
 	// Helper to calculate socket positions along the board
 	TArray<FVector> CalculateJoistSocketPositions() const;
+
+	// Regenerate all sockets when board length changes
+	void RegenerateSockets();
+
+	// Current length in feet (for easy tracking)
+	int32 CurrentLengthFeet;
+
+	// Min and max length in feet
+	static constexpr int32 MinLengthFeet = 1;
+	static constexpr int32 MaxLengthFeet = 16;
 };
