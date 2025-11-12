@@ -62,6 +62,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetPhaseRequirements() const;
 
+	// Get current phase name
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	FString GetCurrentPhaseName() const;
+
+	// Enable/disable automatic phase advancement (default: true)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
+	bool bAutoAdvancePhases;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -88,4 +96,7 @@ protected:
 
 	// Check if rim boards form a closed perimeter
 	bool DoRimBoardsFormPerimeter() const;
+
+	// Helper to get phase name from phase enum
+	FString GetPhaseName(EConstructionPhase Phase) const;
 };

@@ -9,6 +9,7 @@ AConstructionPhaseManager::AConstructionPhaseManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	CurrentPhase = EConstructionPhase::Foundation;
+	bAutoAdvancePhases = true; // Auto-advance by default
 	Instance = this;
 }
 
@@ -120,6 +121,24 @@ void AConstructionPhaseManager::RegisterPlacedPiece(ABuildablePiece* Piece)
 	UE_LOG(LogTemp, Log, TEXT("Registered piece: %s (Total of this type: %d)"),
 		*UEnum::GetValueAsString(PieceType),
 		PlacedPieces[PieceType].Num());
+
+	// Auto-advance phase if enabled and requirements are met
+	if (bAutoAdvancePhases && CanAdvancePhase())
+	{
+		EConstructionPhase OldPhase = CurrentPhase;
+		if (AdvanceToNextPhase())
+		{
+			// Show on-screen message about phase advancement
+			if (GEngine)
+			{
+				FString PhaseName = GetCurrentPhaseName();
+				GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green,
+					FString::Printf(TEXT("✓ Phase Advanced: %s"), *PhaseName));
+			}
+			UE_LOG(LogTemp, Log, TEXT("Auto-advanced from %s to %s"),
+				*GetPhaseName(OldPhase), *GetCurrentPhaseName());
+		}
+	}
 }
 
 void AConstructionPhaseManager::UnregisterPiece(ABuildablePiece* Piece)
@@ -323,4 +342,32 @@ bool AConstructionPhaseManager::DoRimBoardsFormPerimeter() const
 	// - Ensure corners are at 90 degrees
 
 	return true;
+}
+
+FString AConstructionPhaseManager::GetCurrentPhaseName() const
+{
+	return GetPhaseName(CurrentPhase);
+}
+
+FString AConstructionPhaseManager::GetPhaseName(EConstructionPhase Phase) const
+{
+	switch (Phase)
+	{
+		case EConstructionPhase::Foundation:
+			return TEXT("Foundation Phase");
+		case EConstructionPhase::FloorFrame:
+			return TEXT("Floor Frame Phase");
+		case EConstructionPhase::FloorSheathing:
+			return TEXT("Floor Sheathing Phase");
+		case EConstructionPhase::WallFrame:
+			return TEXT("Wall Frame Phase");
+		case EConstructionPhase::WallSheathing:
+			return TEXT("Wall Sheathing Phase");
+		case EConstructionPhase::RoofFrame:
+			return TEXT("Roof Frame Phase");
+		case EConstructionPhase::RoofSheathing:
+			return TEXT("Roof Sheathing Phase");
+		default:
+			return TEXT("Unknown Phase");
+	}
 }
