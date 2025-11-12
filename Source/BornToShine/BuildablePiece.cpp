@@ -275,11 +275,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const
 {
 	// Rim-to-Rim corner connections (HIGHEST PRIORITY)
-	// These form the frame corners
+	// These form the frame corners - must override foundation completely
 	if ((SocketA == EConstructionSocketType::RimBoard_End_Corner &&
 		 SocketB == EConstructionSocketType::RimBoard_End_Corner))
 	{
-		return 100; // Highest priority - corner connections
+		return 1000; // Extremely high priority - corner connections must win
 	}
 
 	// Rim-to-Rim side connections (HIGH PRIORITY)
@@ -287,7 +287,7 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 	if ((SocketA == EConstructionSocketType::RimBoard_Side_Face &&
 		 SocketB == EConstructionSocketType::RimBoard_Side_Face))
 	{
-		return 90;
+		return 900;
 	}
 
 	// Joist-to-Rim connections (HIGH PRIORITY)
@@ -299,11 +299,11 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		  SocketA == EConstructionSocketType::RimBoard_Side_Face) &&
 		 SocketB == EConstructionSocketType::Joist_End))
 	{
-		return 80;
+		return 800;
 	}
 
-	// Rim bottom to Foundation (MEDIUM PRIORITY)
-	// Initial placement on foundation
+	// Rim bottom to Foundation (LOW PRIORITY)
+	// Only for initial placement when no other rim boards nearby
 	if ((SocketA == EConstructionSocketType::RimBoard_Bottom_End &&
 		 (SocketB == EConstructionSocketType::Foundation_Corner ||
 		  SocketB == EConstructionSocketType::Foundation_Side)) ||
@@ -311,7 +311,7 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		  SocketA == EConstructionSocketType::Foundation_Side) &&
 		 SocketB == EConstructionSocketType::RimBoard_Bottom_End))
 	{
-		return 50; // Medium priority - foundation connections
+		return 10; // Low priority - corners should always override
 	}
 
 	// Default priority for other connections
