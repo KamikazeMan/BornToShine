@@ -105,6 +105,9 @@ protected:
 	// Find best snap point near current location
 	bool FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapRotation);
 
+	// Determine socket connection priority (higher = preferred)
+	int32 GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const;
+
 	// Check if piece is properly supported (gravity check)
 	bool IsSupported() const;
 

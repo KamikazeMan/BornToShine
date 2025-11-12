@@ -197,6 +197,7 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 	// Try each socket on this piece to find the best snap
 	bool bFoundSnap = false;
 	float BestDistance = FLT_MAX;
+	int32 BestPriority = -1; // Track connection priority
 
 	for (const FConstructionSocket& Socket : Sockets)
 	{
@@ -220,9 +221,20 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 			TargetSocketName))
 		{
 			float Distance = FVector::Dist(SocketWorldLocation, SnapLoc);
-			if (Distance < BestDistance)
+
+			// Calculate connection priority
+			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocket.SocketType);
+
+			// Choose this snap if:
+			// 1. It has higher priority, OR
+			// 2. Same priority but closer distance
+			bool bIsBetter = (Priority > BestPriority) ||
+			                 (Priority == BestPriority && Distance < BestDistance);
+
+			if (bIsBetter)
 			{
 				BestDistance = Distance;
+				BestPriority = Priority;
 
 				// Calculate the offset from socket to actor origin
 				FVector SocketOffset = Socket.LocalPosition;
@@ -234,10 +246,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				SnappedToSocketName = TargetSocketName;
 				bFoundSnap = true;
 
-				UE_LOG(LogTemp, Warning, TEXT("SNAP FOUND! Socket: %s -> Target: %s on %s"),
+				UE_LOG(LogTemp, Warning, TEXT("SNAP FOUND! Socket: %s -> Target: %s on %s (Priority=%d)"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
-					*TargetPiece->GetName());
+					*TargetPiece->GetName(),
+					Priority);
 				UE_LOG(LogTemp, Warning, TEXT("  Target World Pos (SnapLoc): %s"), *SnapLoc.ToString());
 				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"), *Socket.LocalPosition.ToString());
 				UE_LOG(LogTemp, Warning, TEXT("  Rotated Offset: %s"), *RotatedOffset.ToString());
@@ -248,6 +261,52 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 	}
 
 	return bFoundSnap;
+}
+
+int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const
+{
+	// Rim-to-Rim corner connections (HIGHEST PRIORITY)
+	// These form the frame corners
+	if ((SocketA == EConstructionSocketType::RimBoard_End_Corner &&
+		 SocketB == EConstructionSocketType::RimBoard_End_Corner))
+	{
+		return 100; // Highest priority - corner connections
+	}
+
+	// Rim-to-Rim side connections (HIGH PRIORITY)
+	// For perpendicular joists
+	if ((SocketA == EConstructionSocketType::RimBoard_Side_Face &&
+		 SocketB == EConstructionSocketType::RimBoard_Side_Face))
+	{
+		return 90;
+	}
+
+	// Joist-to-Rim connections (HIGH PRIORITY)
+	// Joists connecting to rim boards
+	if ((SocketA == EConstructionSocketType::Joist_End &&
+		 (SocketB == EConstructionSocketType::RimBoard_Top_Face ||
+		  SocketB == EConstructionSocketType::RimBoard_Side_Face)) ||
+		((SocketA == EConstructionSocketType::RimBoard_Top_Face ||
+		  SocketA == EConstructionSocketType::RimBoard_Side_Face) &&
+		 SocketB == EConstructionSocketType::Joist_End))
+	{
+		return 80;
+	}
+
+	// Rim bottom to Foundation (MEDIUM PRIORITY)
+	// Initial placement on foundation
+	if ((SocketA == EConstructionSocketType::RimBoard_Bottom_End &&
+		 (SocketB == EConstructionSocketType::Foundation_Corner ||
+		  SocketB == EConstructionSocketType::Foundation_Side)) ||
+		((SocketA == EConstructionSocketType::Foundation_Corner ||
+		  SocketA == EConstructionSocketType::Foundation_Side) &&
+		 SocketB == EConstructionSocketType::RimBoard_Bottom_End))
+	{
+		return 50; // Medium priority - foundation connections
+	}
+
+	// Default priority for other connections
+	return 0;
 }
 
 bool ABuildablePiece::TryPlace()
