@@ -69,8 +69,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	EConstructionPhase CurrentPhase;
 
-	// All placed pieces tracked by type
-	UPROPERTY()
+	// All placed pieces tracked by type (not replicated - internal tracking only)
 	TMap<EPieceType, TArray<class ABuildablePiece*>> PlacedPieces;
 
 	// Phase advancement requirements

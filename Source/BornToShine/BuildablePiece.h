@@ -33,9 +33,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	TArray<FConstructionSocket> GetAllSockets() const { return Sockets; }
 
-	// Get a specific socket by name
-	UFUNCTION(BlueprintCallable, Category = "Construction")
+	// Get a specific socket by name (C++ only - returns pointer to socket or nullptr)
 	FConstructionSocket* GetSocketByName(FName SocketName);
+
+	// Get a specific socket by name (Blueprint-safe version)
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	bool GetSocketByNameSafe(FName SocketName, FConstructionSocket& OutSocket);
 
 	// Set piece to preview mode (ghost)
 	UFUNCTION(BlueprintCallable, Category = "Construction")

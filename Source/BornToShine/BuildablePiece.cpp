@@ -80,6 +80,19 @@ FConstructionSocket* ABuildablePiece::GetSocketByName(FName SocketName)
 	return nullptr;
 }
 
+bool ABuildablePiece::GetSocketByNameSafe(FName SocketName, FConstructionSocket& OutSocket)
+{
+	for (const FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketName == SocketName)
+		{
+			OutSocket = Socket;
+			return true;
+		}
+	}
+	return false;
+}
+
 void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 {
 	if (bIsPreview)
