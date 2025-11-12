@@ -49,10 +49,10 @@ void AFoundationBlock::CreateCornerSockets()
 	float HalfWidth = BlockDimensions.X / 2.0f;
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
-	// Socket height should be measured from BOTTOM of block, not center
-	// If mesh is centered at origin, bottom is at -BlockDimensions.Z/2
-	// So socket at 14cm from bottom = -BlockDimensions.Z/2 + SocketHeightOffset
-	float SocketZPosition = -BlockDimensions.Z / 2.0f + SocketHeightOffset;
+	// CRITICAL: Socket should be at TOP of foundation block
+	// This is where rim boards sit
+	// Block center = 0, top = +BlockDimensions.Z/2
+	float SocketZPosition = BlockDimensions.Z / 2.0f;
 
 	// Create 4 corner sockets at the groove of the foundation block
 	// These sockets will accept rim board bottom ends
@@ -97,14 +97,13 @@ void AFoundationBlock::CreateCornerSockets()
 	CornerSW.bIsOccupied = false;
 	Sockets.Add(CornerSW);
 
-	UE_LOG(LogTemp, Log, TEXT("Foundation: Corner sockets at local Z=%.2f (%.2fcm from mesh bottom)"),
-		SocketZPosition, SocketHeightOffset);
+	UE_LOG(LogTemp, Log, TEXT("Foundation: Corner sockets at local Z=%.2f (TOP of block)"), SocketZPosition);
 }
 
 void AFoundationBlock::CreateCenterSocket()
 {
-	// Socket height measured from bottom of block
-	float SocketZPosition = -BlockDimensions.Z / 2.0f + SocketHeightOffset;
+	// Socket at top of block
+	float SocketZPosition = BlockDimensions.Z / 2.0f;
 
 	// Center socket for pier posts or center beam support
 	FConstructionSocket CenterSocket;
@@ -123,8 +122,8 @@ void AFoundationBlock::CreateSideSockets()
 	float HalfWidth = BlockDimensions.X / 2.0f;
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
-	// Socket height measured from bottom of block
-	float SocketZPosition = -BlockDimensions.Z / 2.0f + SocketHeightOffset;
+	// Socket at top of block
+	float SocketZPosition = BlockDimensions.Z / 2.0f;
 
 	// North side
 	FConstructionSocket SideN;

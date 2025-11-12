@@ -92,9 +92,9 @@ void ASocketManager::CreateRimBoardRules()
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Corner); // For first plywood sheet
 	RimCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	RimCornerRule.SnapDistance = 30.0f;
-	RimCornerRule.bCheckAlignment = true;
-	RimCornerRule.MaxAlignmentAngle = 5.0f;
+	RimCornerRule.SnapDistance = 50.0f; // Increased for easier corner detection
+	RimCornerRule.bCheckAlignment = false; // Disable strict alignment for perpendicular corners
+	RimCornerRule.MaxAlignmentAngle = 95.0f; // Allow 90-degree corners with tolerance
 	CompatibilityRules.Add(RimCornerRule);
 }
 
