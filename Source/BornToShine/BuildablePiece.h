@@ -168,6 +168,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	FLinearColor NailedColor;
 
+	// Final material to use when piece is nailed/permanently placed
+	// Set this in Blueprint to your concrete/wood material
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Materials")
+	class UMaterialInterface* NailedMaterial;
+
+	// Should this piece auto-nail on placement? (true for foundation blocks)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
+	bool bAutoNailOnPlace;
+
 	// Rotation step in degrees
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	float RotationStep;

@@ -33,6 +33,10 @@ ABuildablePiece::ABuildablePiece()
 	InvalidPlacementColor = FLinearColor(1.0f, 0.0f, 0.0f, 0.5f);  // Red translucent
 	PlacedColor = FLinearColor(1.0f, 1.0f, 0.0f, 0.8f);            // Yellow
 	NailedColor = FLinearColor(0.8f, 0.6f, 0.4f, 1.0f);            // Wood color
+
+	// Material settings
+	NailedMaterial = nullptr;  // Set in Blueprint
+	bAutoNailOnPlace = false;   // Override to true for foundation blocks
 }
 
 void ABuildablePiece::BeginPlay()
@@ -209,8 +213,15 @@ bool ABuildablePiece::TryPlace()
 		return false;
 	}
 
-	// Change state to placed
-	PieceState = EPieceState::Placed;
+	// Change state to placed (or nailed if auto-nail is enabled)
+	if (bAutoNailOnPlace)
+	{
+		PieceState = EPieceState::Nailed;
+	}
+	else
+	{
+		PieceState = EPieceState::Placed;
+	}
 
 	// Register with construction phase manager
 	if (AConstructionPhaseManager::Instance)
@@ -226,7 +237,7 @@ bool ABuildablePiece::TryPlace()
 
 	UpdateVisualFeedback();
 
-	UE_LOG(LogTemp, Log, TEXT("Piece placed successfully"));
+	UE_LOG(LogTemp, Log, TEXT("Piece placed successfully%s"), bAutoNailOnPlace ? TEXT(" and auto-nailed") : TEXT(""));
 	return true;
 }
 
@@ -314,6 +325,17 @@ bool ABuildablePiece::IsSupported() const
 
 void ABuildablePiece::UpdateVisualFeedback()
 {
+	if (!MeshComponent) return;
+
+	// If nailed and we have a final material, switch to it
+	if (PieceState == EPieceState::Nailed && NailedMaterial)
+	{
+		MeshComponent->SetMaterial(0, NailedMaterial);
+		MeshComponent->SetRenderCustomDepth(false);
+		return;
+	}
+
+	// Otherwise use dynamic material with color feedback
 	if (!DynamicMaterial) return;
 
 	FLinearColor TargetColor;

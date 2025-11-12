@@ -19,6 +19,9 @@ AFoundationBlock::AFoundationBlock()
 
 	// Foundation blocks are always supported (on ground)
 	bIsSnapped = true;
+
+	// Foundation blocks auto-nail on placement (concrete doesn't need nailing!)
+	bAutoNailOnPlace = true;
 }
 
 void AFoundationBlock::BeginPlay()
