@@ -50,18 +50,46 @@ void ARimBoard::BeginPlay()
 
 void ARimBoard::CreateBottomEndSockets()
 {
-	// Bottom end sockets connect to foundation corners
-	// Two sockets, one at each end of the board
+	// Bottom sockets run along the entire bottom edge of the rim board
+	// These connect to foundation corner and side sockets
+	// Spacing matches foundation block width (243.84cm = 8ft)
+	// Create sockets every 60cm along the bottom edge for flexible snapping
 
+	float SocketSpacing = 60.0f; // 60cm spacing along bottom edge
+	float StartOffset = SocketSpacing / 2.0f; // Start half-spacing from end
+	int32 SocketCount = 0;
+
+	// Calculate number of sockets needed along the length
+	float CurrentX = -BoardLength / 2.0f + StartOffset;
+
+	while (CurrentX <= BoardLength / 2.0f - StartOffset / 2.0f)
+	{
+		FConstructionSocket BottomSocket;
+		BottomSocket.SocketName = FName(*FString::Printf(TEXT("BottomEdge_%d"), SocketCount));
+		BottomSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
+		BottomSocket.LocalPosition = FVector(
+			CurrentX,              // Along the length
+			0.0f,                  // Centered on width
+			-BoardHeight / 2.0f    // Bottom face
+		);
+		BottomSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
+		BottomSocket.bIsOccupied = false;
+		Sockets.Add(BottomSocket);
+
+		CurrentX += SocketSpacing;
+		SocketCount++;
+	}
+
+	// Also add sockets at the exact ends for corner connections
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("BottomEnd_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	LeftEndSocket.LocalPosition = FVector(
-		-BoardLength / 2.0f,  // Left end
-		0.0f,                 // Centered on width
-		-BoardHeight / 2.0f   // Bottom face
+		-BoardLength / 2.0f,   // Left end
+		0.0f,                  // Centered on width
+		-BoardHeight / 2.0f    // Bottom face
 	);
-	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing backward
+	LeftEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
@@ -69,15 +97,15 @@ void ARimBoard::CreateBottomEndSockets()
 	RightEndSocket.SocketName = FName("BottomEnd_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	RightEndSocket.LocalPosition = FVector(
-		BoardLength / 2.0f,   // Right end
-		0.0f,                 // Centered on width
-		-BoardHeight / 2.0f   // Bottom face
+		BoardLength / 2.0f,    // Right end
+		0.0f,                  // Centered on width
+		-BoardHeight / 2.0f    // Bottom face
 	);
-	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing forward
+	RightEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing down
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 bottom end sockets"));
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d bottom sockets along bottom edge"), SocketCount + 2);
 }
 
 void ARimBoard::CreateTopFaceSockets()
