@@ -50,9 +50,9 @@ void AFoundationBlock::CreateCornerSockets()
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
 	// Socket should be at the groove depth (14cm from ground)
-	// With foundation actor at Z=BlockDimensions.Z/2 (bottom at ground):
-	// Groove at 14cm world = local Z of (14 - BlockDimensions.Z/2)
-	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
+	// With foundation actor at Z=0 (pivot at bottom, bottom at ground):
+	// Groove at 14cm world = local Z of 14cm
+	float SocketZPosition = SocketHeightOffset;
 
 	// Create 4 corner sockets at the groove of the foundation block
 	// These sockets will accept rim board bottom ends
@@ -103,8 +103,8 @@ void AFoundationBlock::CreateCornerSockets()
 
 void AFoundationBlock::CreateCenterSocket()
 {
-	// Socket at groove depth
-	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
+	// Socket at groove depth (actor pivot at bottom)
+	float SocketZPosition = SocketHeightOffset;
 
 	// Center socket for pier posts or center beam support
 	FConstructionSocket CenterSocket;
@@ -123,8 +123,8 @@ void AFoundationBlock::CreateSideSockets()
 	float HalfWidth = BlockDimensions.X / 2.0f;
 	float HalfLength = BlockDimensions.Y / 2.0f;
 
-	// Socket at groove depth
-	float SocketZPosition = SocketHeightOffset - BlockDimensions.Z / 2.0f;
+	// Socket at groove depth (actor pivot at bottom)
+	float SocketZPosition = SocketHeightOffset;
 
 	// North side
 	FConstructionSocket SideN;
@@ -176,8 +176,10 @@ FVector AFoundationBlock::SnapToGrid(const FVector& Location) const
 	SnappedLocation.Y = FMath::RoundToFloat(Location.Y / GridSize) * GridSize;
 
 	// Foundation bottom should be at ground level (Z=0)
-	// Actor center is at half the block height above ground
-	SnappedLocation.Z = BlockDimensions.Z / 2.0f;  // 15.24cm - bottom at ground
+	// If mesh pivot is at bottom: Z=0 places bottom at ground
+	// If mesh pivot is at center: Z=BlockDimensions.Z/2 places bottom at ground
+	// Setting to 0 assumes pivot at bottom (most common for foundation pieces)
+	SnappedLocation.Z = 0.0f;
 
 	return SnappedLocation;
 }
