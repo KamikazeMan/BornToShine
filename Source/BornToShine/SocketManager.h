@@ -28,11 +28,11 @@ public:
 
 	// Check if two socket types are compatible
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	bool AreSocketsCompatible(ESocketType SourceSocket, ESocketType TargetSocket, EConstructionPhase CurrentPhase) const;
+	bool AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const;
 
 	// Get the compatibility rule for a socket type
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	FSocketCompatibilityRule GetCompatibilityRule(ESocketType SocketType) const;
+	FSocketCompatibilityRule GetCompatibilityRule(EConstructionSocketType SocketType) const;
 
 	// Find the best snap point within range
 	UFUNCTION(BlueprintCallable, Category = "Construction")

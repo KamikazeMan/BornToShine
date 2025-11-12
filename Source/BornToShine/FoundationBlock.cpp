@@ -52,7 +52,7 @@ void AFoundationBlock::CreateCornerSockets()
 	// Northeast corner
 	FConstructionSocket CornerNE;
 	CornerNE.SocketName = FName("Foundation_Corner_NE");
-	CornerNE.SocketType = ESocketType::Foundation_Corner;
+	CornerNE.SocketType = EConstructionSocketType::Foundation_Corner;
 	CornerNE.LocalPosition = FVector(HalfWidth, HalfLength, SocketHeightOffset);
 	CornerNE.LocalRotation = FRotator::ZeroRotator;
 	CornerNE.Orientation = ESocketOrientation::Vertical;
@@ -62,7 +62,7 @@ void AFoundationBlock::CreateCornerSockets()
 	// Northwest corner
 	FConstructionSocket CornerNW;
 	CornerNW.SocketName = FName("Foundation_Corner_NW");
-	CornerNW.SocketType = ESocketType::Foundation_Corner;
+	CornerNW.SocketType = EConstructionSocketType::Foundation_Corner;
 	CornerNW.LocalPosition = FVector(HalfWidth, -HalfLength, SocketHeightOffset);
 	CornerNW.LocalRotation = FRotator::ZeroRotator;
 	CornerNW.Orientation = ESocketOrientation::Vertical;
@@ -72,7 +72,7 @@ void AFoundationBlock::CreateCornerSockets()
 	// Southeast corner
 	FConstructionSocket CornerSE;
 	CornerSE.SocketName = FName("Foundation_Corner_SE");
-	CornerSE.SocketType = ESocketType::Foundation_Corner;
+	CornerSE.SocketType = EConstructionSocketType::Foundation_Corner;
 	CornerSE.LocalPosition = FVector(-HalfWidth, HalfLength, SocketHeightOffset);
 	CornerSE.LocalRotation = FRotator::ZeroRotator;
 	CornerSE.Orientation = ESocketOrientation::Vertical;
@@ -82,7 +82,7 @@ void AFoundationBlock::CreateCornerSockets()
 	// Southwest corner
 	FConstructionSocket CornerSW;
 	CornerSW.SocketName = FName("Foundation_Corner_SW");
-	CornerSW.SocketType = ESocketType::Foundation_Corner;
+	CornerSW.SocketType = EConstructionSocketType::Foundation_Corner;
 	CornerSW.LocalPosition = FVector(-HalfWidth, -HalfLength, SocketHeightOffset);
 	CornerSW.LocalRotation = FRotator::ZeroRotator;
 	CornerSW.Orientation = ESocketOrientation::Vertical;
@@ -95,7 +95,7 @@ void AFoundationBlock::CreateCenterSocket()
 	// Center socket for pier posts or center beam support
 	FConstructionSocket CenterSocket;
 	CenterSocket.SocketName = FName("Foundation_Center");
-	CenterSocket.SocketType = ESocketType::Foundation_Corner; // Can accept same connections
+	CenterSocket.SocketType = EConstructionSocketType::Foundation_Corner; // Can accept same connections
 	CenterSocket.LocalPosition = FVector(0.0f, 0.0f, SocketHeightOffset);
 	CenterSocket.LocalRotation = FRotator::ZeroRotator;
 	CenterSocket.Orientation = ESocketOrientation::Vertical;
@@ -112,7 +112,7 @@ void AFoundationBlock::CreateSideSockets()
 	// North side
 	FConstructionSocket SideN;
 	SideN.SocketName = FName("Foundation_Side_N");
-	SideN.SocketType = ESocketType::Foundation_Side;
+	SideN.SocketType = EConstructionSocketType::Foundation_Side;
 	SideN.LocalPosition = FVector(HalfWidth, 0.0f, SocketHeightOffset);
 	SideN.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	SideN.Orientation = ESocketOrientation::Horizontal;
@@ -122,7 +122,7 @@ void AFoundationBlock::CreateSideSockets()
 	// South side
 	FConstructionSocket SideS;
 	SideS.SocketName = FName("Foundation_Side_S");
-	SideS.SocketType = ESocketType::Foundation_Side;
+	SideS.SocketType = EConstructionSocketType::Foundation_Side;
 	SideS.LocalPosition = FVector(-HalfWidth, 0.0f, SocketHeightOffset);
 	SideS.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	SideS.Orientation = ESocketOrientation::Horizontal;
@@ -132,7 +132,7 @@ void AFoundationBlock::CreateSideSockets()
 	// East side
 	FConstructionSocket SideE;
 	SideE.SocketName = FName("Foundation_Side_E");
-	SideE.SocketType = ESocketType::Foundation_Side;
+	SideE.SocketType = EConstructionSocketType::Foundation_Side;
 	SideE.LocalPosition = FVector(0.0f, HalfLength, SocketHeightOffset);
 	SideE.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
 	SideE.Orientation = ESocketOrientation::Horizontal;
@@ -142,7 +142,7 @@ void AFoundationBlock::CreateSideSockets()
 	// West side
 	FConstructionSocket SideW;
 	SideW.SocketName = FName("Foundation_Side_W");
-	SideW.SocketType = ESocketType::Foundation_Side;
+	SideW.SocketType = EConstructionSocketType::Foundation_Side;
 	SideW.LocalPosition = FVector(0.0f, -HalfLength, SocketHeightOffset);
 	SideW.LocalRotation = FRotator(0.0f, 270.0f, 0.0f);
 	SideW.Orientation = ESocketOrientation::Horizontal;

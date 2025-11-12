@@ -57,8 +57,9 @@ public:
 	void Remove();
 
 	// Update piece position for preview (handles snapping)
+	// Virtual to allow overriding (e.g., foundation grid snapping)
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation);
+	virtual void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation);
 
 	// Rotate piece in different directions
 	UFUNCTION(BlueprintCallable, Category = "Construction")

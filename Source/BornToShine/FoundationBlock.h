@@ -49,5 +49,5 @@ protected:
 	void CreateCenterSocket();
 
 	// Create side sockets (for mid-span support)
-	void CreateSideSocket s();
+	void CreateSideSockets();
 };

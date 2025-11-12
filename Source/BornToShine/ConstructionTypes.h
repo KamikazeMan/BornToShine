@@ -41,7 +41,7 @@ enum class EConstructionPhase : uint8
  * Defines socket type for compatibility checking
  */
 UENUM(BlueprintType)
-enum class ESocketType : uint8
+enum class EConstructionSocketType : uint8
 {
 	// Foundation Sockets
 	Foundation_Corner			UMETA(DisplayName = "Foundation Corner (Top)"),
@@ -106,7 +106,7 @@ struct FConstructionSocket
 
 	// Type of this socket
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Socket")
-	ESocketType SocketType;
+	EConstructionSocketType SocketType;
 
 	// Local position relative to piece origin
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Socket")
@@ -130,7 +130,7 @@ struct FConstructionSocket
 
 	FConstructionSocket()
 		: SocketName(NAME_None)
-		, SocketType(ESocketType::None)
+		, SocketType(EConstructionSocketType::None)
 		, LocalPosition(FVector::ZeroVector)
 		, LocalRotation(FRotator::ZeroRotator)
 		, Orientation(ESocketOrientation::Any)
@@ -150,11 +150,11 @@ struct FSocketCompatibilityRule
 
 	// The socket type that is looking for a connection
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Compatibility")
-	ESocketType SourceSocketType;
+	EConstructionSocketType SourceSocketType;
 
 	// List of socket types that can connect to the source
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Compatibility")
-	TArray<ESocketType> CompatibleSocketTypes;
+	TArray<EConstructionSocketType> CompatibleSocketTypes;
 
 	// Required construction phase for this connection to be valid
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Compatibility")
@@ -173,7 +173,7 @@ struct FSocketCompatibilityRule
 	float MaxAlignmentAngle;
 
 	FSocketCompatibilityRule()
-		: SourceSocketType(ESocketType::None)
+		: SourceSocketType(EConstructionSocketType::None)
 		, RequiredPhase(EConstructionPhase::Foundation)
 		, SnapDistance(100.0f)
 		, bCheckAlignment(true)

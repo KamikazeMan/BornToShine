@@ -34,8 +34,8 @@ void ASocketManager::CreateFoundationRules()
 {
 	// Foundation corners can accept rim board bottom ends
 	FSocketCompatibilityRule FoundationCornerRule;
-	FoundationCornerRule.SourceSocketType = ESocketType::Foundation_Corner;
-	FoundationCornerRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_Bottom_End);
+	FoundationCornerRule.SourceSocketType = EConstructionSocketType::Foundation_Corner;
+	FoundationCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
 	FoundationCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	FoundationCornerRule.SnapDistance = 50.0f; // 50cm snap distance
 	FoundationCornerRule.bCheckAlignment = true;
@@ -44,8 +44,8 @@ void ASocketManager::CreateFoundationRules()
 
 	// Foundation sides can accept rim board bottom (for mid-span support)
 	FSocketCompatibilityRule FoundationSideRule;
-	FoundationSideRule.SourceSocketType = ESocketType::Foundation_Side;
-	FoundationSideRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_Bottom_End);
+	FoundationSideRule.SourceSocketType = EConstructionSocketType::Foundation_Side;
+	FoundationSideRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
 	FoundationSideRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	FoundationSideRule.SnapDistance = 50.0f;
 	FoundationSideRule.bCheckAlignment = true;
@@ -57,9 +57,9 @@ void ASocketManager::CreateRimBoardRules()
 {
 	// Rim board bottom ends connect to foundation corners
 	FSocketCompatibilityRule RimBottomRule;
-	RimBottomRule.SourceSocketType = ESocketType::RimBoard_Bottom_End;
-	RimBottomRule.CompatibleSocketTypes.Add(ESocketType::Foundation_Corner);
-	RimBottomRule.CompatibleSocketTypes.Add(ESocketType::Foundation_Side);
+	RimBottomRule.SourceSocketType = EConstructionSocketType::RimBoard_Bottom_End;
+	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Corner);
+	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Side);
 	RimBottomRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	RimBottomRule.SnapDistance = 50.0f;
 	RimBottomRule.bCheckAlignment = true;
@@ -68,8 +68,8 @@ void ASocketManager::CreateRimBoardRules()
 
 	// Rim board top face accepts joist ends
 	FSocketCompatibilityRule RimTopRule;
-	RimTopRule.SourceSocketType = ESocketType::RimBoard_Top_Face;
-	RimTopRule.CompatibleSocketTypes.Add(ESocketType::Joist_End);
+	RimTopRule.SourceSocketType = EConstructionSocketType::RimBoard_Top_Face;
+	RimTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_End);
 	RimTopRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	RimTopRule.SnapDistance = 40.0f;
 	RimTopRule.bCheckAlignment = true;
@@ -78,8 +78,8 @@ void ASocketManager::CreateRimBoardRules()
 
 	// Rim board side face accepts perpendicular joist ends
 	FSocketCompatibilityRule RimSideRule;
-	RimSideRule.SourceSocketType = ESocketType::RimBoard_Side_Face;
-	RimSideRule.CompatibleSocketTypes.Add(ESocketType::Joist_End);
+	RimSideRule.SourceSocketType = EConstructionSocketType::RimBoard_Side_Face;
+	RimSideRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_End);
 	RimSideRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	RimSideRule.SnapDistance = 40.0f;
 	RimSideRule.bCheckAlignment = true;
@@ -88,9 +88,9 @@ void ASocketManager::CreateRimBoardRules()
 
 	// Rim board end corners connect to other rim board end corners
 	FSocketCompatibilityRule RimCornerRule;
-	RimCornerRule.SourceSocketType = ESocketType::RimBoard_End_Corner;
-	RimCornerRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_End_Corner);
-	RimCornerRule.CompatibleSocketTypes.Add(ESocketType::Plywood_Corner); // For first plywood sheet
+	RimCornerRule.SourceSocketType = EConstructionSocketType::RimBoard_End_Corner;
+	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
+	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Corner); // For first plywood sheet
 	RimCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	RimCornerRule.SnapDistance = 30.0f;
 	RimCornerRule.bCheckAlignment = true;
@@ -102,9 +102,9 @@ void ASocketManager::CreateJoistRules()
 {
 	// Joist ends connect to rim board faces
 	FSocketCompatibilityRule JoistEndRule;
-	JoistEndRule.SourceSocketType = ESocketType::Joist_End;
-	JoistEndRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_Top_Face);
-	JoistEndRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_Side_Face);
+	JoistEndRule.SourceSocketType = EConstructionSocketType::Joist_End;
+	JoistEndRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Top_Face);
+	JoistEndRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Side_Face);
 	JoistEndRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	JoistEndRule.SnapDistance = 40.0f;
 	JoistEndRule.bCheckAlignment = true;
@@ -113,8 +113,8 @@ void ASocketManager::CreateJoistRules()
 
 	// Joist top face accepts plywood edges
 	FSocketCompatibilityRule JoistTopRule;
-	JoistTopRule.SourceSocketType = ESocketType::Joist_Top_Face;
-	JoistTopRule.CompatibleSocketTypes.Add(ESocketType::Plywood_Edge);
+	JoistTopRule.SourceSocketType = EConstructionSocketType::Joist_Top_Face;
+	JoistTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Edge);
 	JoistTopRule.RequiredPhase = EConstructionPhase::FloorSheathing;
 	JoistTopRule.SnapDistance = 30.0f;
 	JoistTopRule.bCheckAlignment = false; // Plywood just needs to be on top
@@ -126,8 +126,8 @@ void ASocketManager::CreatePlywoodRules()
 {
 	// CRITICAL: First plywood corner ONLY snaps to rim board corners
 	FSocketCompatibilityRule PlywoodCornerRule;
-	PlywoodCornerRule.SourceSocketType = ESocketType::Plywood_Corner;
-	PlywoodCornerRule.CompatibleSocketTypes.Add(ESocketType::RimBoard_End_Corner);
+	PlywoodCornerRule.SourceSocketType = EConstructionSocketType::Plywood_Corner;
+	PlywoodCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	PlywoodCornerRule.RequiredPhase = EConstructionPhase::FloorSheathing;
 	PlywoodCornerRule.SnapDistance = 30.0f;
 	PlywoodCornerRule.bCheckAlignment = true;
@@ -136,9 +136,9 @@ void ASocketManager::CreatePlywoodRules()
 
 	// Plywood edges snap to joist tops and other plywood edges
 	FSocketCompatibilityRule PlywoodEdgeRule;
-	PlywoodEdgeRule.SourceSocketType = ESocketType::Plywood_Edge;
-	PlywoodEdgeRule.CompatibleSocketTypes.Add(ESocketType::Joist_Top_Face);
-	PlywoodEdgeRule.CompatibleSocketTypes.Add(ESocketType::Plywood_Edge); // Sheet-to-sheet
+	PlywoodEdgeRule.SourceSocketType = EConstructionSocketType::Plywood_Edge;
+	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_Top_Face);
+	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Edge); // Sheet-to-sheet
 	PlywoodEdgeRule.RequiredPhase = EConstructionPhase::FloorSheathing;
 	PlywoodEdgeRule.SnapDistance = 25.0f;
 	PlywoodEdgeRule.bCheckAlignment = false;
@@ -146,7 +146,7 @@ void ASocketManager::CreatePlywoodRules()
 	CompatibilityRules.Add(PlywoodEdgeRule);
 }
 
-bool ASocketManager::AreSocketsCompatible(ESocketType SourceSocket, ESocketType TargetSocket, EConstructionPhase CurrentPhase) const
+bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const
 {
 	for (const FSocketCompatibilityRule& Rule : CompatibilityRules)
 	{
@@ -166,7 +166,7 @@ bool ASocketManager::AreSocketsCompatible(ESocketType SourceSocket, ESocketType 
 	return false;
 }
 
-FSocketCompatibilityRule ASocketManager::GetCompatibilityRule(ESocketType SocketType) const
+FSocketCompatibilityRule ASocketManager::GetCompatibilityRule(EConstructionSocketType SocketType) const
 {
 	for (const FSocketCompatibilityRule& Rule : CompatibilityRules)
 	{
