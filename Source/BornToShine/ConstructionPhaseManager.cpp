@@ -9,7 +9,7 @@ AConstructionPhaseManager::AConstructionPhaseManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	CurrentPhase = EConstructionPhase::Foundation;
-	bAutoAdvancePhases = true; // Auto-advance by default
+	bAutoAdvancePhases = false; // Disabled - using free build with prerequisites instead
 	Instance = this;
 }
 
@@ -21,33 +21,9 @@ void AConstructionPhaseManager::BeginPlay()
 
 bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 {
-	switch (CurrentPhase)
-	{
-		case EConstructionPhase::Foundation:
-			// Only foundation blocks in foundation phase
-			return PieceType == EPieceType::Foundation;
-
-		case EConstructionPhase::FloorFrame:
-			// Can place rim boards and joists
-			return PieceType == EPieceType::RimBoard || PieceType == EPieceType::FloorJoist;
-
-		case EConstructionPhase::FloorSheathing:
-			// Can place plywood
-			return PieceType == EPieceType::Plywood;
-
-		case EConstructionPhase::WallFrame:
-			// Can place wall studs, plates, headers
-			return PieceType == EPieceType::WallStud ||
-				   PieceType == EPieceType::WallPlate ||
-				   PieceType == EPieceType::Header;
-
-		case EConstructionPhase::WallSheathing:
-			// Can place wall sheathing
-			return PieceType == EPieceType::Plywood;
-
-		default:
-			return false;
-	}
+	// Free building mode - allow any piece type
+	// Logical order is enforced by CheckPrerequisites() instead
+	return true;
 }
 
 bool AConstructionPhaseManager::CanAdvancePhase() const

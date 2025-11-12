@@ -80,6 +80,12 @@ protected:
 	class UInputAction* RotateAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* RotateLeftAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* RotateRightAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* ScaleAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")

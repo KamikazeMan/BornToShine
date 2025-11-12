@@ -143,7 +143,18 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(ScaleAction, ETriggerEvent::Triggered, this, &AMoonshineCharacter_Simple::OnScalePiece);
 		}
 
-		// Rotation
+		// Rotation - separate left/right for arrow keys
+		if (RotateLeftAction)
+		{
+			EnhancedInputComponent->BindAction(RotateLeftAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotateLeft);
+		}
+
+		if (RotateRightAction)
+		{
+			EnhancedInputComponent->BindAction(RotateRightAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotateRight);
+		}
+
+		// Rotation (2D axis - for gamepad or alternative input)
 		if (RotateAction)
 		{
 			EnhancedInputComponent->BindAction(RotateAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotate);
