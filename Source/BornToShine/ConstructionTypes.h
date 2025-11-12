@@ -13,7 +13,7 @@ enum class EPieceType : uint8
 {
 	None				UMETA(DisplayName = "None"),
 	Foundation			UMETA(DisplayName = "Foundation Block"),
-	RimBoard			UMETA(DisplayName = "Rim Board (2x8)"),
+	RimBoard			UMETA(DisplayName = "Rim Board (2x6)"),
 	FloorJoist			UMETA(DisplayName = "Floor Joist"),
 	Plywood				UMETA(DisplayName = "Plywood Sheathing"),
 	WallStud			UMETA(DisplayName = "Wall Stud"),
