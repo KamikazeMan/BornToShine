@@ -252,70 +252,74 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 			SnapSearchRadius
 		);
 
-		// Check if we can find rim boards near both corner sockets
-		int32 RimBoardsFound = 0;
-		FVector FirstCornerTarget = FVector::ZeroVector;
-		FVector SecondCornerTarget = FVector::ZeroVector;
+		// Find target positions for each corner socket
+		FVector LeftCornerTarget = FVector::ZeroVector;
+		FVector RightCornerTarget = FVector::ZeroVector;
+		bool bLeftFound = false;
+		bool bRightFound = false;
 
 		for (const FConstructionSocket& Socket : Sockets)
 		{
-			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+			if (Socket.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+
+			FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
+			bool bIsLeftSocket = Socket.SocketName.ToString().Contains("Left");
+
+			// Look for nearby rim board corner sockets
+			for (ABuildablePiece* Piece : NearbyPieces)
 			{
-				FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
+				if (!Piece || Piece == this) continue;
 
-				// Look for nearby rim board corner sockets
-				for (ABuildablePiece* Piece : NearbyPieces)
+				// Check if this piece is a RimBoard
+				ARimBoard* RimBoardPiece = Cast<ARimBoard>(Piece);
+				if (!RimBoardPiece) continue;
+
+				TArray<FConstructionSocket> TargetSockets = Piece->GetAllSockets();
+				for (const FConstructionSocket& TargetSocket : TargetSockets)
 				{
-					if (!Piece || Piece == this) continue;
-
-					// Check if this piece is a RimBoard using Cast
-					ARimBoard* RimBoardPiece = Cast<ARimBoard>(Piece);
-					if (!RimBoardPiece) continue;
-
-					TArray<FConstructionSocket> TargetSockets = Piece->GetAllSockets();
-					for (const FConstructionSocket& TargetSocket : TargetSockets)
+					if (TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 					{
-						if (TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
-						{
-							FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
-							float Distance = FVector::Dist(SocketWorldLocation, TargetWorldLocation);
+						FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
+						float Distance = FVector::Dist(SocketWorldLocation, TargetWorldLocation);
 
-							if (Distance < 50.0f) // Within snap distance
+						if (Distance < 50.0f) // Within snap distance
+						{
+							if (bIsLeftSocket && !bLeftFound)
 							{
-								if (RimBoardsFound == 0)
-								{
-									FirstCornerTarget = TargetWorldLocation;
-									RimBoardsFound++;
-								}
-								else if (RimBoardsFound == 1 && !FirstCornerTarget.Equals(TargetWorldLocation, 1.0f))
-								{
-									SecondCornerTarget = TargetWorldLocation;
-									RimBoardsFound++;
-								}
-								break;
+								LeftCornerTarget = TargetWorldLocation;
+								bLeftFound = true;
 							}
+							else if (!bIsLeftSocket && !bRightFound)
+							{
+								RightCornerTarget = TargetWorldLocation;
+								bRightFound = true;
+							}
+							break; // Found a match for this socket, move to next socket
 						}
 					}
-					if (RimBoardsFound >= 2) break;
 				}
-				if (RimBoardsFound >= 2) break;
+				if ((bIsLeftSocket && bLeftFound) || (!bIsLeftSocket && bRightFound))
+					break; // Found target for this socket, move to next socket
 			}
 		}
 
-		// If we found 2 rim boards, we're closing a rectangle - auto-scale!
-		if (RimBoardsFound >= 2)
+		// If BOTH corners found targets, we're closing a rectangle - auto-scale!
+		if (bLeftFound && bRightFound)
 		{
-			float RequiredLength = FVector::Dist(FirstCornerTarget, SecondCornerTarget);
-			float RequiredLengthCM = RequiredLength;
+			float RequiredLength = FVector::Dist(LeftCornerTarget, RightCornerTarget);
 
-			// Convert to feet and set (will regenerate sockets)
-			int32 RequiredFeet = FMath::RoundToInt(RequiredLengthCM / 30.48f);
+			// Account for the flush offset (1.905cm per corner = 3.81cm total)
+			// Add the board width since corners need to extend beyond the gap
+			RequiredLength += BoardWidth;
+
+			// Convert to cm and round to nearest foot
+			int32 RequiredFeet = FMath::RoundToInt(RequiredLength / 30.48f);
 			RequiredFeet = FMath::Clamp(RequiredFeet, MinLengthFeet, MaxLengthFeet);
 
 			if (RequiredFeet != CurrentLengthFeet)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: %.1fcm (%.1fft) -> %dft"),
-					BoardLength, BoardLength / 30.48f, RequiredFeet);
+				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: %.1fcm (%.1fft) -> %dft (gap=%.1fcm)"),
+					BoardLength, BoardLength / 30.48f, RequiredFeet, RequiredLength - BoardWidth);
 				SetBoardLengthFeet(RequiredFeet);
 			}
 		}
