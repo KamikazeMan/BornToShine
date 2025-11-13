@@ -145,12 +145,24 @@ void ABuildablePiece::UpdatePreviewPosition(const FVector& NewLocation, const FR
 	{
 		SetActorLocation(SnapLocation);
 
-		// Preserve user's Yaw rotation when snapping
-		// Only use snap rotation for pitch/roll alignment
-		FRotator FinalRotation = SnapRotation;
-		FinalRotation.Yaw = NewRotation.Yaw; // Keep user's horizontal rotation
+		// Check if this is a rim-to-rim corner snap (auto-rotation case)
+		bool bIsCornerSnap = SnappedToSocketName.ToString().Contains("EndCorner");
 
-		SetActorRotation(FinalRotation);
+		if (bIsCornerSnap)
+		{
+			// Corner snap: Use the full auto-rotated SnapRotation
+			SetActorRotation(SnapRotation);
+			UE_LOG(LogTemp, Verbose, TEXT("Using auto-rotation for corner snap: %.1f°"), SnapRotation.Yaw);
+		}
+		else
+		{
+			// Normal snap: Preserve user's Yaw rotation
+			// Only use snap rotation for pitch/roll alignment
+			FRotator FinalRotation = SnapRotation;
+			FinalRotation.Yaw = NewRotation.Yaw; // Keep user's horizontal rotation
+			SetActorRotation(FinalRotation);
+		}
+
 		bIsSnapped = true;
 	}
 	else
