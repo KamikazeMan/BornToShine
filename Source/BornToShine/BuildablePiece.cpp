@@ -307,13 +307,24 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					float BoardWidth = 3.81f; // 2x6 actual width
 					float FlushOffset = BoardWidth / 2.0f; // Half width
 
-					// Offset perpendicular to this board's forward direction
-					// Right vector = perpendicular to forward
-					FVector OffsetDirection = CurrentActorRotation.RotateVector(FVector(0, 1, 0));
+					// Calculate offset direction based on target board's orientation
+					// Offset perpendicular to the target board (not the incoming board)
+					FRotator TargetRotation = TargetPiece->GetActorRotation();
+					FVector TargetRight = TargetRotation.RotateVector(FVector(0, 1, 0));
+
+					// Determine which side: use cross product to determine if we offset +right or -right
+					FVector TargetForward = TargetRotation.RotateVector(FVector(1, 0, 0));
+					FVector IncomingForward = CurrentActorRotation.RotateVector(FVector(1, 0, 0));
+					FVector CrossCheck = FVector::CrossProduct(TargetForward, IncomingForward);
+
+					// If cross Z is positive, offset in +right direction, otherwise -right
+					float OffsetSign = (CrossCheck.Z > 0) ? 1.0f : -1.0f;
+					FVector OffsetDirection = TargetRight * OffsetSign;
+
 					OutSnapLocation += OffsetDirection * FlushOffset;
 
-					UE_LOG(LogTemp, Warning, TEXT("  📏 Corner flush offset: %.2fcm in direction %s"),
-						FlushOffset, *OffsetDirection.ToString());
+					UE_LOG(LogTemp, Warning, TEXT("  📏 Corner flush offset: %.2fcm in direction %s (sign=%.1f)"),
+						FlushOffset, *OffsetDirection.ToString(), OffsetSign);
 				}
 
 				OutSnapRotation = CurrentActorRotation;
