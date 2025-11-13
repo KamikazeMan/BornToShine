@@ -204,6 +204,14 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
+		// DEBUG: Log when evaluating corner sockets
+		if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("🔵 Evaluating RimBoard_End_Corner socket: %s at world %s"),
+				*Socket.SocketName.ToString(),
+				*SocketWorldLocation.ToString());
+		}
+
 		FVector SnapLoc;
 		FRotator SnapRot;
 		ABuildablePiece* TargetPiece;

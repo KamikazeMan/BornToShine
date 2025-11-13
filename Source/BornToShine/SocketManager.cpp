@@ -92,7 +92,7 @@ void ASocketManager::CreateRimBoardRules()
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Corner); // For first plywood sheet
 	RimCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	RimCornerRule.SnapDistance = 10.0f; // Tight tolerance for flush corner alignment
+	RimCornerRule.SnapDistance = 50.0f; // Increased to detect corners from further away (Priority 1000 will ensure they win)
 	RimCornerRule.bCheckAlignment = true; // Enable alignment checking for precise 90-degree corners
 	RimCornerRule.MaxAlignmentAngle = 95.0f; // Allow 90-degree corners with 5-degree tolerance
 	CompatibilityRules.Add(RimCornerRule);
@@ -216,6 +216,14 @@ bool ASocketManager::FindBestSnapPoint(
 			float Distance = FVector::Dist(WorldLocation, TargetWorldLocation);
 			if (Distance > Rule.SnapDistance) continue;
 
+			// DEBUG: Log when rim corners are found within snap distance
+			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("🟢 Found Rim Corner Match! Distance=%.1fcm, SnapDist=%.1fcm"),
+					Distance, Rule.SnapDistance);
+			}
+
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
 			{
@@ -229,6 +237,9 @@ bool ASocketManager::FindBestSnapPoint(
 						TargetWorldRotation.Yaw
 					));
 
+					// DEBUG: Log angle between corners
+					UE_LOG(LogTemp, Warning, TEXT("   Angle between corners: %.1f degrees"), AngleDiff);
+
 					// Must be approximately 90 or 270 degrees (perpendicular)
 					bool bIsPerpendicular =
 						FMath::IsNearlyEqual(AngleDiff, 90.0f, 15.0f) ||
@@ -236,7 +247,7 @@ bool ASocketManager::FindBestSnapPoint(
 
 					if (!bIsPerpendicular)
 					{
-						UE_LOG(LogTemp, Log, TEXT("Rim corner angle check failed: %.1f degrees (need ~90°)"), AngleDiff);
+						UE_LOG(LogTemp, Warning, TEXT("   ❌ Rim corner angle check failed: %.1f degrees (need ~90°)"), AngleDiff);
 						continue;
 					}
 				}
