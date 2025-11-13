@@ -10,8 +10,8 @@ AFoundationBlock::AFoundationBlock()
 	// 8 feet = 243.84 cm in Unreal units (1 unit = 1 cm)
 	GridSize = 243.84f;
 
-	// 14 cm from ground for socket height
-	SocketHeightOffset = 14.0f;
+	// 8 cm from ground for socket height (rim board seating depth)
+	SocketHeightOffset = 8.0f;
 
 	// Standard foundation block dimensions (example: 2ft x 2ft x 1ft)
 	// In Unreal: 60.96cm x 60.96cm x 30.48cm
