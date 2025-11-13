@@ -227,29 +227,17 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
 			{
-				// For rim-to-rim corners, check for perpendicular alignment (90 degrees)
+				// For rim-to-rim corners, skip angle check - auto-rotation handles alignment
 				if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 				{
-					// Check for 90-degree angle between sockets
+					// Log but don't enforce - BuildablePiece::FindSnapPoint will auto-rotate
 					float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
 						WorldRotation.Yaw,
 						TargetWorldRotation.Yaw
 					));
-
-					// DEBUG: Log angle between corners
-					UE_LOG(LogTemp, Warning, TEXT("   Angle between corners: %.1f degrees"), AngleDiff);
-
-					// Must be approximately 90 or 270 degrees (perpendicular)
-					bool bIsPerpendicular =
-						FMath::IsNearlyEqual(AngleDiff, 90.0f, 15.0f) ||
-						FMath::IsNearlyEqual(AngleDiff, 270.0f, 15.0f);
-
-					if (!bIsPerpendicular)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("   ❌ Rim corner angle check failed: %.1f degrees (need ~90°)"), AngleDiff);
-						continue;
-					}
+					UE_LOG(LogTemp, Warning, TEXT("   📐 Rim corner angle: %.1f degrees (will auto-rotate to 90°)"), AngleDiff);
+					// Continue without checking - allow all angles
 				}
 				else
 				{
