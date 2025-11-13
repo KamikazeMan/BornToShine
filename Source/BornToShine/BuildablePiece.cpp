@@ -296,29 +296,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 				// Actor position = Target socket position - socket offset in world space
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
-
-				// FLUSH CORNER OFFSET: For rim-to-rim corners with centered sockets (Y=0)
-				// Move incoming board so outer edges touch instead of centers overlapping
-				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetPiece)
-				{
-					float BoardWidth = 3.81f; // 2x6 actual width
-
-					// Get perpendicular vectors for both boards
-					FRotator TargetRotation = TargetPiece->GetActorRotation();
-					FVector TargetRight = TargetRotation.RotateVector(FVector(0, 1, 0));
-					FVector IncomingRight = CurrentActorRotation.RotateVector(FVector(0, 1, 0));
-
-					// Offset by half board width in BOTH perpendicular directions
-					// This moves the board diagonally so outer edges align
-					FVector FlushOffset = (TargetRight + IncomingRight) * (BoardWidth / 2.0f);
-					OutSnapLocation += FlushOffset;
-
-					UE_LOG(LogTemp, Warning, TEXT("  📏 Flush offset: %.2fcm diagonal (TargetRight=%s, IncomingRight=%s)"),
-						FlushOffset.Size(), *TargetRight.ToString(), *IncomingRight.ToString());
-				}
-
 				OutSnapRotation = CurrentActorRotation;
 
 				SnappedToPiece = TargetPiece;
