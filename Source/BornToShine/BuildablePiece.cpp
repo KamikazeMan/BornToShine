@@ -269,18 +269,26 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					// Get target piece rotation and make this piece perpendicular (90 degrees)
+					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
 
-					// Determine which direction to rotate based on socket positions
-					// If the socket is on the left end, rotate +90, if on right end, rotate -90
-					bool bIsLeftSocket = Socket.SocketName.ToString().Contains("Left");
-					float RotationOffset = bIsLeftSocket ? 90.0f : -90.0f;
+					// Calculate relative position to determine rotation direction
+					FVector TargetSocketWorldPos = SnapLoc;
+					FVector SourceSocketWorldPos = SocketWorldLocation;
+					FVector ToTarget = (TargetSocketWorldPos - SourceSocketWorldPos).GetSafeNormal();
+
+					// Get target's forward vector
+					FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
+
+					// Use cross product to determine which way to rotate
+					// If cross product Z is positive, rotate +90°, if negative, rotate -90°
+					FVector CrossProduct = FVector::CrossProduct(TargetForward, ToTarget);
+					float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
 
 					CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
 
-					UE_LOG(LogTemp, Warning, TEXT("  🔄 Auto-rotating for corner snap: Target=%.1f° + Offset=%.1f° = New=%.1f°"),
-						TargetRotation.Yaw, RotationOffset, CurrentActorRotation.Yaw);
+					UE_LOG(LogTemp, Warning, TEXT("  🔄 Auto-rotating for corner snap: Target=%.1f° + Offset=%.1f° = New=%.1f° (Cross.Z=%.2f)"),
+						TargetRotation.Yaw, RotationOffset, CurrentActorRotation.Yaw, CrossProduct.Z);
 				}
 
 				// Transform the socket offset by the (possibly auto-rotated) rotation
