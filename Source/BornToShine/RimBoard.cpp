@@ -174,40 +174,36 @@ void ARimBoard::CreateSideFaceSockets()
 void ARimBoard::CreateEndCornerSockets()
 {
 	// End corner sockets for rim-to-rim 90-degree connections
-	// Socket positioned at the OUTER EDGE (not center) of end face
-	// This ensures when two boards meet perpendicular, their outer edges align flush
+	// Sockets at the exact end center (no Y offset)
+	// The auto-rotation and snap system will handle the perpendicular alignment
 
-	// For flush corners: socket should be offset by half the board width to the "outside"
-	// When boards meet at 90°, one board's end aligns with the other's outer edge
-	float CornerOffsetY = BoardWidth / 2.0f; // Offset to outer edge
-
-	// Left end - socket at outer edge of end face
+	// Left end - socket at center of end face
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("EndCorner_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	LeftEndSocket.LocalPosition = FVector(
-		-BoardLength / 2.0f,    // Left end center
-		-CornerOffsetY,         // Offset to outer edge (negative Y for left end when facing left)
-		-BoardHeight / 2.0f     // Bottom (same height as bottom end sockets)
+		-BoardLength / 2.0f,    // Left end
+		0.0f,                   // Center (no offset)
+		-BoardHeight / 2.0f     // Bottom
 	);
 	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing left
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
-	// Right end - socket at outer edge of end face
+	// Right end - socket at center of end face
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("EndCorner_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	RightEndSocket.LocalPosition = FVector(
-		BoardLength / 2.0f,     // Right end center
-		CornerOffsetY,          // Offset to outer edge (positive Y for right end when facing right)
-		-BoardHeight / 2.0f     // Bottom (same height as bottom end sockets)
+		BoardLength / 2.0f,     // Right end
+		0.0f,                   // Center (no offset)
+		-BoardHeight / 2.0f     // Bottom
 	);
 	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing right
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 end corner sockets (outer edge, offset by %.2fcm)"), CornerOffsetY);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 end corner sockets at board ends (centered)"));
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
