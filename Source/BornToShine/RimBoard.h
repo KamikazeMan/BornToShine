@@ -30,6 +30,9 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	// Initialize sockets (called when piece is spawned)
+	virtual void InitializeSockets() override;
+
 public:
 	// Rim board dimensions
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")

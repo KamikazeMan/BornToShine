@@ -40,13 +40,23 @@ void ARimBoard::BeginPlay()
 {
 	Super::BeginPlay();
 
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: BeginPlay - Total sockets: %d"), Sockets.Num());
+}
+
+void ARimBoard::InitializeSockets()
+{
+	Super::InitializeSockets();
+
+	// Clear any existing sockets first
+	Sockets.Empty();
+
 	// Generate all sockets
 	CreateBottomEndSockets();
 	CreateTopFaceSockets();
 	CreateSideFaceSockets();
 	CreateEndCornerSockets();
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Generated %d sockets"), Sockets.Num());
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: InitializeSockets - Generated %d sockets"), Sockets.Num());
 }
 
 void ARimBoard::CreateBottomEndSockets()
