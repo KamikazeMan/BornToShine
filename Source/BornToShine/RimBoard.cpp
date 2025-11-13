@@ -2,6 +2,7 @@
 
 #include "RimBoard.h"
 #include "SocketManager.h"
+#include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
 
 ARimBoard::ARimBoard()
@@ -266,7 +267,10 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 				for (ABuildablePiece* Piece : NearbyPieces)
 				{
 					if (!Piece || Piece == this) continue;
-					if (Piece->PieceType != EPieceType::RimBoard) continue;
+
+					// Check if this piece is a RimBoard using Cast
+					ARimBoard* RimBoardPiece = Cast<ARimBoard>(Piece);
+					if (!RimBoardPiece) continue;
 
 					TArray<FConstructionSocket> TargetSockets = Piece->GetAllSockets();
 					for (const FConstructionSocket& TargetSocket : TargetSockets)
