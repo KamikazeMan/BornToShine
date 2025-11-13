@@ -219,9 +219,34 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
 			{
-				if (!CheckSocketAlignment(WorldLocation, WorldRotation, TargetWorldLocation, TargetWorldRotation, Rule.MaxAlignmentAngle))
+				// For rim-to-rim corners, check for perpendicular alignment (90 degrees)
+				if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+					TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 				{
-					continue;
+					// Check for 90-degree angle between sockets
+					float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
+						WorldRotation.Yaw,
+						TargetWorldRotation.Yaw
+					));
+
+					// Must be approximately 90 or 270 degrees (perpendicular)
+					bool bIsPerpendicular =
+						FMath::IsNearlyEqual(AngleDiff, 90.0f, 15.0f) ||
+						FMath::IsNearlyEqual(AngleDiff, 270.0f, 15.0f);
+
+					if (!bIsPerpendicular)
+					{
+						UE_LOG(LogTemp, Log, TEXT("Rim corner angle check failed: %.1f degrees (need ~90°)"), AngleDiff);
+						continue;
+					}
+				}
+				else
+				{
+					// Standard alignment check for other socket types
+					if (!CheckSocketAlignment(WorldLocation, WorldRotation, TargetWorldLocation, TargetWorldRotation, Rule.MaxAlignmentAngle))
+					{
+						continue;
+					}
 				}
 			}
 
@@ -231,11 +256,19 @@ bool ASocketManager::FindBestSnapPoint(
 			if (Score > BestScore)
 			{
 				BestScore = Score;
+
+				// CRITICAL FIX: Return the socket locations, NOT actor locations
+				// The calling code (BuildablePiece::FindSnapPoint) will calculate actor position
 				OutSnapLocation = TargetWorldLocation;
 				OutSnapRotation = TargetWorldRotation;
 				OutTargetPiece = Piece;
 				OutTargetSocketName = TargetSocket.SocketName;
 				bFoundValidSnap = true;
+
+				UE_LOG(LogTemp, Log, TEXT("Snap candidate: %s -> %s (dist=%.1f, score=%.1f)"),
+					*SourceSocket.SocketName.ToString(),
+					*TargetSocket.SocketName.ToString(),
+					Distance, Score);
 			}
 		}
 	}

@@ -222,14 +222,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		{
 			float Distance = FVector::Dist(SocketWorldLocation, SnapLoc);
 
-			// Get target socket to determine priority
-			FConstructionSocket TargetSocketInfo;
-			EConstructionSocketType TargetSocketType = EConstructionSocketType::Foundation_Corner; // Default
-
-			if (TargetPiece && TargetPiece->GetSocketByNameSafe(TargetSocketName, TargetSocketInfo))
-			{
-				TargetSocketType = TargetSocketInfo.SocketType;
-			}
+			// Get target socket type to determine priority
+			EConstructionSocketType TargetSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
 
 			// Calculate connection priority
 			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocketType);
@@ -245,11 +239,17 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				BestDistance = Distance;
 				BestPriority = Priority;
 
-				// Calculate the offset from socket to actor origin
-				FVector SocketOffset = Socket.LocalPosition;
-				FVector RotatedOffset = GetActorRotation().RotateVector(SocketOffset);
-				OutSnapLocation = SnapLoc - RotatedOffset;
-				OutSnapRotation = SnapRot - Socket.LocalRotation;
+				// CRITICAL: Calculate where THIS actor's origin should be
+				// to align THIS socket with the TARGET socket
+				FVector SocketLocalOffset = Socket.LocalPosition;
+				FRotator CurrentActorRotation = GetActorRotation();
+
+				// Transform the socket offset by current rotation
+				FVector SocketWorldOffset = CurrentActorRotation.RotateVector(SocketLocalOffset);
+
+				// Actor position = Target socket position - socket offset in world space
+				OutSnapLocation = SnapLoc - SocketWorldOffset;
+				OutSnapRotation = CurrentActorRotation; // Keep current rotation (user controls this)
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
@@ -262,7 +262,7 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					Priority);
 				UE_LOG(LogTemp, Warning, TEXT("  Target World Pos (SnapLoc): %s"), *SnapLoc.ToString());
 				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"), *Socket.LocalPosition.ToString());
-				UE_LOG(LogTemp, Warning, TEXT("  Rotated Offset: %s"), *RotatedOffset.ToString());
+				UE_LOG(LogTemp, Warning, TEXT("  Socket World Offset: %s"), *SocketWorldOffset.ToString());
 				UE_LOG(LogTemp, Warning, TEXT("  Final Actor Snap Location: %s, Distance: %.1fcm"),
 					*OutSnapLocation.ToString(), Distance);
 			}
@@ -316,6 +316,19 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 
 	// Default priority for other connections
 	return 0;
+}
+
+EConstructionSocketType ABuildablePiece::GetTargetSocketType(ABuildablePiece* TargetPiece, FName SocketName) const
+{
+	if (!TargetPiece) return EConstructionSocketType::None;
+
+	FConstructionSocket TargetSocket;
+	if (TargetPiece->GetSocketByNameSafe(SocketName, TargetSocket))
+	{
+		return TargetSocket.SocketType;
+	}
+
+	return EConstructionSocketType::None;
 }
 
 bool ABuildablePiece::TryPlace()

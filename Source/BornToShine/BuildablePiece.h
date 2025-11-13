@@ -108,6 +108,9 @@ protected:
 	// Determine socket connection priority (higher = preferred)
 	int32 GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const;
 
+	// Get socket type from a target piece by socket name
+	EConstructionSocketType GetTargetSocketType(ABuildablePiece* TargetPiece, FName SocketName) const;
+
 	// Check if piece is properly supported (gravity check)
 	bool IsSupported() const;
 
