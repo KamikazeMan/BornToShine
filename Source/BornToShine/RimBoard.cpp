@@ -242,6 +242,81 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 
 void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
+	// EXPERIMENTAL: Auto-scale board when closing a rectangle
+	// Detect if both corner sockets can snap to different rim boards
+	if (PieceState == EPieceState::Preview && AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> NearbyPieces = AConstructionPhaseManager::Instance->GetNearbyPieces(
+			GetActorLocation(),
+			SnapSearchRadius
+		);
+
+		// Check if we can find rim boards near both corner sockets
+		int32 RimBoardsFound = 0;
+		FVector FirstCornerTarget = FVector::ZeroVector;
+		FVector SecondCornerTarget = FVector::ZeroVector;
+
+		for (const FConstructionSocket& Socket : Sockets)
+		{
+			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+			{
+				FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
+
+				// Look for nearby rim board corner sockets
+				for (ABuildablePiece* Piece : NearbyPieces)
+				{
+					if (!Piece || Piece == this) continue;
+					if (Piece->PieceType != EPieceType::RimBoard) continue;
+
+					TArray<FConstructionSocket> TargetSockets = Piece->GetAllSockets();
+					for (const FConstructionSocket& TargetSocket : TargetSockets)
+					{
+						if (TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+						{
+							FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
+							float Distance = FVector::Dist(SocketWorldLocation, TargetWorldLocation);
+
+							if (Distance < 50.0f) // Within snap distance
+							{
+								if (RimBoardsFound == 0)
+								{
+									FirstCornerTarget = TargetWorldLocation;
+									RimBoardsFound++;
+								}
+								else if (RimBoardsFound == 1 && !FirstCornerTarget.Equals(TargetWorldLocation, 1.0f))
+								{
+									SecondCornerTarget = TargetWorldLocation;
+									RimBoardsFound++;
+								}
+								break;
+							}
+						}
+					}
+					if (RimBoardsFound >= 2) break;
+				}
+				if (RimBoardsFound >= 2) break;
+			}
+		}
+
+		// If we found 2 rim boards, we're closing a rectangle - auto-scale!
+		if (RimBoardsFound >= 2)
+		{
+			float RequiredLength = FVector::Dist(FirstCornerTarget, SecondCornerTarget);
+			float RequiredLengthCM = RequiredLength;
+
+			// Convert to feet and set (will regenerate sockets)
+			int32 RequiredFeet = FMath::RoundToInt(RequiredLengthCM / 30.48f);
+			RequiredFeet = FMath::Clamp(RequiredFeet, MinLengthFeet, MaxLengthFeet);
+
+			if (RequiredFeet != CurrentLengthFeet)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: %.1fcm (%.1fft) -> %dft"),
+					BoardLength, BoardLength / 30.48f, RequiredFeet);
+				SetBoardLengthFeet(RequiredFeet);
+			}
+		}
+	}
+
 	// Use socket snapping system - let it handle all positioning
 	Super::UpdatePreviewPosition(NewLocation, NewRotation);
 
