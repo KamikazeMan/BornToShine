@@ -185,38 +185,38 @@ void ARimBoard::CreateSideFaceSockets()
 void ARimBoard::CreateEndCornerSockets()
 {
 	// End corner sockets for rim-to-rim 90-degree connections
-	// Sockets at OUTER CORNER position for direct flush snapping
-	// Both sockets at +Y (outer edge) regardless of rotation
+	// Left at INNER edge (-Y), Right at OUTER edge (+Y)
+	// This creates overlap when boards snap at 90° corners
 
-	float OuterEdgeOffset = BoardWidth / 2.0f; // 1.905cm to outer edge
+	float EdgeOffset = BoardWidth / 2.0f; // 1.905cm to edge
 
-	// Left end socket - at outer corner
+	// Left end socket - at INNER edge for overlap
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("EndCorner_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	LeftEndSocket.LocalPosition = FVector(
 		-BoardLength / 2.0f,    // Left end
-		OuterEdgeOffset,        // Outer edge (+Y)
+		-EdgeOffset,            // Inner edge (-Y) - creates overlap
 		-BoardHeight / 2.0f     // Bottom
 	);
 	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing left
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
-	// Right end socket - at outer corner
+	// Right end socket - at OUTER edge for overlap
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("EndCorner_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	RightEndSocket.LocalPosition = FVector(
 		BoardLength / 2.0f,     // Right end
-		OuterEdgeOffset,        // Outer edge (+Y)
+		EdgeOffset,             // Outer edge (+Y) - creates overlap
 		-BoardHeight / 2.0f     // Bottom
 	);
 	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing right
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 end corner sockets at outer edge (Y=+%.2fcm)"), OuterEdgeOffset);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created corner sockets - Left at inner edge (Y=-%.2fcm), Right at outer edge (Y=+%.2fcm)"), EdgeOffset, EdgeOffset);
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
