@@ -322,12 +322,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const
 {
-	// Rim-to-Rim corner connections (HIGHEST PRIORITY)
-	// These form the frame corners - must override foundation completely
+	// Rim-to-Rim corner connections (LOWER than foundation)
+	// Foundation snaps must win so boards sit properly, corners snap secondarily
 	if ((SocketA == EConstructionSocketType::RimBoard_End_Corner &&
 		 SocketB == EConstructionSocketType::RimBoard_End_Corner))
 	{
-		return 1000; // Extremely high priority - corner connections must win
+		return 5; // Lower than foundation (10) - boards must sit on foundation first
 	}
 
 	// Rim-to-Rim side connections (HIGH PRIORITY)
