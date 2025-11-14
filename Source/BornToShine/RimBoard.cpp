@@ -185,38 +185,35 @@ void ARimBoard::CreateSideFaceSockets()
 void ARimBoard::CreateEndCornerSockets()
 {
 	// End corner sockets for rim-to-rim 90-degree connections
-	// Left at INNER edge (-Y), Right at OUTER edge (+Y)
-	// This creates overlap when boards snap at 90° corners
+	// Centered sockets (Y=0) with overlap handled by snap offset in BuildablePiece
 
-	float EdgeOffset = BoardWidth / 2.0f; // 1.905cm to edge
-
-	// Left end socket - at INNER edge for overlap
+	// Left end socket - centered
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("EndCorner_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	LeftEndSocket.LocalPosition = FVector(
 		-BoardLength / 2.0f,    // Left end
-		-EdgeOffset,            // Inner edge (-Y) - creates overlap
+		0.0f,                   // Center (overlap via snap offset)
 		-BoardHeight / 2.0f     // Bottom
 	);
 	LeftEndSocket.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Facing left
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
-	// Right end socket - at OUTER edge for overlap
+	// Right end socket - centered
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("EndCorner_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	RightEndSocket.LocalPosition = FVector(
 		BoardLength / 2.0f,     // Right end
-		EdgeOffset,             // Outer edge (+Y) - creates overlap
+		0.0f,                   // Center (overlap via snap offset)
 		-BoardHeight / 2.0f     // Bottom
 	);
 	RightEndSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Facing right
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created corner sockets - Left at inner edge (Y=-%.2fcm), Right at outer edge (Y=+%.2fcm)"), EdgeOffset, EdgeOffset);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 centered corner sockets (Y=0), overlap via snap offset"));
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
