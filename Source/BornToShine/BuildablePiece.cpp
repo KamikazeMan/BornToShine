@@ -269,22 +269,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					// CRITICAL: Only allow proper corner pairings
-					// Inner sockets should snap to Outer sockets (and vice versa)
-					bool bIsSourceInner = Socket.SocketName.ToString().Contains(TEXT("Inner"));
-					bool bIsTargetInner = TargetSocketName.ToString().Contains(TEXT("Inner"));
-
-					// Skip if both are same type (both Inner or both Outer)
-					if (bIsSourceInner == bIsTargetInner)
-					{
-						UE_LOG(LogTemp, Log, TEXT("  ⚠️ Skipping incompatible corner pair: %s -> %s (both %s)"),
-							*Socket.SocketName.ToString(),
-							*TargetSocketName.ToString(),
-							bIsSourceInner ? TEXT("Inner") : TEXT("Outer"));
-						continue; // Skip this snap candidate
-					}
-
-					// Also check that they're on opposite ends (Left->Right or Right->Left)
+					// CRITICAL: Only allow opposite ends to connect (Left->Right or Right->Left)
+					// This prevents same-side connections which are geometrically invalid
 					bool bIsSourceLeft = Socket.SocketName.ToString().Contains(TEXT("Left"));
 					bool bIsTargetLeft = TargetSocketName.ToString().Contains(TEXT("Left"));
 
@@ -296,6 +282,10 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 							*TargetSocketName.ToString());
 						continue; // Skip this snap candidate
 					}
+
+					// NOTE: We allow both Outer->Outer and Inner->Inner pairings
+					// The snap system will choose the best match based on distance
+					// For outer corners to be flush, Outer->Outer will naturally win
 
 					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
