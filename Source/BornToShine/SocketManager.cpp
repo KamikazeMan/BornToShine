@@ -227,7 +227,7 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
 			{
-				// For rim-to-rim corners, REQUIRE perpendicular angles (~90 degrees)
+				// For rim-to-rim corners, SKIP angle check - auto-rotation in FindSnapPoint handles it
 				if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 				{
@@ -235,17 +235,9 @@ bool ASocketManager::FindBestSnapPoint(
 						WorldRotation.Yaw,
 						TargetWorldRotation.Yaw
 					));
-					UE_LOG(LogTemp, Warning, TEXT("   📐 Rim corner angle: %.1f degrees"), AngleDiff);
-
-					// REQUIRE perpendicular angles (85-95 degrees) for proper corner connections
-					// REJECT parallel boards (0-10 degrees or 170-180 degrees)
-					bool bIsPerpendicular = (AngleDiff >= 85.0f && AngleDiff <= 95.0f);
-
-					if (!bIsPerpendicular)
-					{
-						UE_LOG(LogTemp, Warning, TEXT("   ❌ Rejected: Not perpendicular (need 85-95°)"));
-						continue; // Skip this candidate
-					}
+					UE_LOG(LogTemp, Warning, TEXT("   📐 Rim corner angle: %.1f degrees (auto-rotation will fix)"), AngleDiff);
+					// Skip angle validation - FindSnapPoint will auto-rotate to perpendicular
+					// This allows players to place boards in any order (parallel first, then perpendicular, etc.)
 				}
 				else
 				{
