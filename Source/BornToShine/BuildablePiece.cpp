@@ -295,25 +295,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				FVector SocketWorldOffset = CurrentActorRotation.RotateVector(SocketLocalOffset);
 
 				// Actor position = Target socket position - socket offset in world space
+				// With outer corner sockets, outer corners snap directly together
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
-
-				// OVERLAP OFFSET for corner snaps: Move incoming board inward to create overlap
-				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetPiece)
-				{
-					float BoardWidth = 3.81f; // 2x6 actual width
-					FRotator TargetRotation = TargetPiece->GetActorRotation();
-					FVector TargetRight = TargetRotation.RotateVector(FVector::RightVector);
-
-					// Move incoming board INWARD (toward target's left) by half board width
-					FVector OverlapOffset = -TargetRight * (BoardWidth / 2.0f);
-					OutSnapLocation += OverlapOffset;
-
-					UE_LOG(LogTemp, Warning, TEXT("  📦 Overlap offset: %.2fcm inward (TargetRight=%s)"),
-						BoardWidth / 2.0f, *TargetRight.ToString());
-				}
-
 				OutSnapRotation = CurrentActorRotation;
 
 				SnappedToPiece = TargetPiece;
