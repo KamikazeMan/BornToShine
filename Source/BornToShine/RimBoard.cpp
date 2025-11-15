@@ -25,6 +25,11 @@ ARimBoard::ARimBoard()
 	// Rim boards are wood - require manual nailing
 	bAutoNailOnPlace = false;
 
+	// CRITICAL: Force actor scale to (1,1,1) - we use mesh scale for dimensions
+	// This prevents mouse wheel scaling from affecting width/height
+	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
+	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+
 	// Set mesh scale to match dimensions
 	if (MeshComponent)
 	{
