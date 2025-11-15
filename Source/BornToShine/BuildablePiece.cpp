@@ -300,9 +300,56 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				FVector SocketWorldOffset = CurrentActorRotation.RotateVector(SocketLocalOffset);
 
 				// Actor position = Target socket position - socket offset in world space
-				// With outer corner sockets, outer corners snap directly together
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
+
+				// CORNER CONSTRAINT SYSTEM: Force outer corners to align exactly
+				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
+					TargetPiece)
+				{
+					// Get rim board dimensions (assuming 2x6 lumber)
+					float BoardWidth = 3.81f;   // 1.5 inches
+					float BoardHeight = 13.97f; // 5.5 inches
+
+					// Determine which end is snapping (Left or Right)
+					bool bIsLeftEnd = Socket.SocketName.ToString().Contains(TEXT("Left"));
+					float EndXOffset = bIsLeftEnd ? -Socket.LocalPosition.X : Socket.LocalPosition.X;
+
+					// Calculate OUTER CORNER position (top outer edge of the snapping end)
+					// Outer corner = at the end, at outer edge (+Y), at top of board
+					FVector IncomingOuterCornerLocal = FVector(
+						bIsLeftEnd ? -EndXOffset : EndXOffset,  // At the end that's snapping
+						BoardWidth / 2.0f,                       // Outer edge (+Y)
+						BoardHeight / 2.0f                       // Top of board
+					);
+
+					// Transform to world space using the snap rotation and position
+					FVector IncomingOuterCornerWorld = OutSnapLocation + OutSnapRotation.RotateVector(IncomingOuterCornerLocal);
+
+					// Calculate target board's outer corner position
+					// Target is also at its outer edge, but which end depends on geometry
+					bool bIsTargetLeftEnd = TargetSocketName.ToString().Contains(TEXT("Left"));
+					FRotator TargetRotation = TargetPiece->GetActorRotation();
+					FVector TargetPosition = TargetPiece->GetActorLocation();
+
+					FVector TargetOuterCornerLocal = FVector(
+						bIsTargetLeftEnd ? -EndXOffset : EndXOffset,
+						BoardWidth / 2.0f,
+						BoardHeight / 2.0f
+					);
+
+					FVector TargetOuterCornerWorld = TargetPosition + TargetRotation.RotateVector(TargetOuterCornerLocal);
+
+					// Calculate correction offset to make outer corners coincide EXACTLY
+					FVector CornerAlignmentOffset = TargetOuterCornerWorld - IncomingOuterCornerWorld;
+
+					// Apply the correction (magnetize to flush)
+					OutSnapLocation += CornerAlignmentOffset;
+
+					UE_LOG(LogTemp, Warning, TEXT("  🧲 Corner constraint applied: offset=%.2fcm to align outer corners"),
+						CornerAlignmentOffset.Size());
+				}
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
