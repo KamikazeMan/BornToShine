@@ -252,6 +252,23 @@ bool ASocketManager::FindBestSnapPoint(
 			// Calculate snap score (closer and better aligned = higher score)
 			float Score = CalculateSnapScore(WorldLocation, TargetWorldLocation, WorldRotation, TargetWorldRotation);
 
+			// SPECIAL SCORING FOR CORNER SNAPS: Prefer perpendicular (90°) over parallel (0°)
+			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+			{
+				float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(WorldRotation.Yaw, TargetWorldRotation.Yaw));
+
+				// Give BONUS for being close to 90 degrees (perpendicular)
+				// Give PENALTY for being close to 0 or 180 degrees (parallel)
+				float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);  // How far from 90°?
+				float PerpendicularBonus = 100.0f / (AngleTo90 + 1.0f);  // Closer to 90° = higher bonus
+
+				Score += PerpendicularBonus;
+
+				UE_LOG(LogTemp, Log, TEXT("  Corner score adjusted: base=%.1f + perpendicular bonus=%.1f = %.1f"),
+					Score - PerpendicularBonus, PerpendicularBonus, Score);
+			}
+
 			if (Score > BestScore)
 			{
 				BestScore = Score;
