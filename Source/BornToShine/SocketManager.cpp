@@ -32,38 +32,44 @@ void ASocketManager::InitializeCompatibilityRules()
 
 void ASocketManager::CreateFoundationRules()
 {
-	// Foundation corners can accept rim board bottom ends
-	FSocketCompatibilityRule FoundationCornerRule;
-	FoundationCornerRule.SourceSocketType = EConstructionSocketType::Foundation_Corner;
-	FoundationCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
-	FoundationCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	FoundationCornerRule.SnapDistance = 50.0f; // 50cm snap distance
-	FoundationCornerRule.bCheckAlignment = true;
-	FoundationCornerRule.MaxAlignmentAngle = 10.0f;
-	CompatibilityRules.Add(FoundationCornerRule);
-
-	// Foundation sides can accept rim board bottom (for mid-span support)
+	// Foundation SIDE sockets are the PRIMARY connection points for rim boards
+	// Side sockets are positioned on the groove center lines (X=0 or Y=0),
+	// which ensures rim boards sit centered in the foundation groove
 	FSocketCompatibilityRule FoundationSideRule;
 	FoundationSideRule.SourceSocketType = EConstructionSocketType::Foundation_Side;
 	FoundationSideRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
 	FoundationSideRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	FoundationSideRule.SnapDistance = 50.0f;
+	FoundationSideRule.SnapDistance = 60.0f; // Larger snap distance - these are the preferred sockets
 	FoundationSideRule.bCheckAlignment = true;
-	FoundationSideRule.MaxAlignmentAngle = 10.0f;
+	FoundationSideRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(FoundationSideRule);
+
+	// Foundation CENTER socket can also accept rim boards (for mid-span support)
+	FSocketCompatibilityRule FoundationCenterRule;
+	FoundationCenterRule.SourceSocketType = EConstructionSocketType::Foundation_Corner; // Center uses Corner type
+	FoundationCenterRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
+	FoundationCenterRule.RequiredPhase = EConstructionPhase::FloorFrame;
+	FoundationCenterRule.SnapDistance = 40.0f; // Smaller snap distance than sides
+	FoundationCenterRule.bCheckAlignment = true;
+	FoundationCenterRule.MaxAlignmentAngle = 10.0f;
+	CompatibilityRules.Add(FoundationCenterRule);
+
+	// NOTE: Foundation_Corner sockets at diagonal corners (±HalfWidth, ±HalfLength)
+	// are NOT compatible with rim boards because they would place boards off-center
+	// from the foundation groove. Rim boards should only snap to Side or Center sockets.
 }
 
 void ASocketManager::CreateRimBoardRules()
 {
-	// Rim board bottom ends connect to foundation corners
+	// Rim board bottom ends connect to foundation SIDE sockets (primary)
+	// Side sockets ensure rim boards are centered on the foundation groove
 	FSocketCompatibilityRule RimBottomRule;
 	RimBottomRule.SourceSocketType = EConstructionSocketType::RimBoard_Bottom_End;
-	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Corner);
-	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Side);
+	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Side); // Primary - centered on groove
 	RimBottomRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	RimBottomRule.SnapDistance = 50.0f;
+	RimBottomRule.SnapDistance = 60.0f;
 	RimBottomRule.bCheckAlignment = true;
-	RimBottomRule.MaxAlignmentAngle = 10.0f;
+	RimBottomRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(RimBottomRule);
 
 	// Rim board top face accepts joist ends (during floor framing)

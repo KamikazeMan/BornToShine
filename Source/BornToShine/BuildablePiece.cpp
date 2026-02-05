@@ -303,66 +303,53 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// CORNER CONSTRAINT SYSTEM: Force outer corners to align exactly
+				// CORNER CONSTRAINT SYSTEM: Butt joint alignment
+				// The INCOMING board (being placed) BUTTs against the TARGET board (already placed)
+				// Incoming board's END FACE aligns with target board's OUTER FACE
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
 					// Get rim board dimensions (assuming 2x6 lumber)
-					float BoardWidth = 3.81f;   // 1.5 inches
+					float BoardWidth = 3.81f;   // 1.5 inches - the thickness to offset by
 					float BoardHeight = 13.97f; // 5.5 inches
 
-					// Determine which end is snapping (Left or Right)
-					bool bIsLeftEnd = Socket.SocketName.ToString().Contains(TEXT("Left"));
-					float EndXOffset = bIsLeftEnd ? -Socket.LocalPosition.X : Socket.LocalPosition.X;
+					// The incoming board needs to be offset INWARD so its END FACE
+					// meets the target board's OUTER FACE (butt joint)
+					// Offset = BoardWidth in the direction perpendicular to incoming board
 
-					// Calculate OUTER CORNER position (top outer edge of the snapping end)
-					// Outer corner = at the end, at outer edge (+Y), at top of board
-					FVector IncomingOuterCornerLocal = FVector(
-						bIsLeftEnd ? -EndXOffset : EndXOffset,  // At the end that's snapping
-						BoardWidth / 2.0f,                       // Outer edge (+Y)
-						BoardHeight / 2.0f                       // Top of board
-					);
-
-					// Transform to world space using the snap rotation and position
-					FVector IncomingOuterCornerWorld = OutSnapLocation + OutSnapRotation.RotateVector(IncomingOuterCornerLocal);
-
-					// Calculate target board's outer corner position
-					// Target is also at its outer edge, but which end depends on geometry
-					// CRITICAL: Must get the TARGET socket's position, not reuse incoming board's offset!
-					bool bIsTargetLeftEnd = TargetSocketName.ToString().Contains(TEXT("Left"));
+					// Get target board's rotation to determine its "outward" direction
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
-					FVector TargetPosition = TargetPiece->GetActorLocation();
 
-					// Get the target socket's actual local position from the target piece
-					float TargetEndXOffset = EndXOffset; // Default fallback
-					TArray<FConstructionSocket> TargetSockets = TargetPiece->GetAllSockets();
-					for (const FConstructionSocket& TargetSocket : TargetSockets)
+					// Target board's outer face is at its +Y local direction (outer edge)
+					// Incoming board should stop where target board's outer face is
+					// This means incoming board moves INWARD by BoardWidth along its own X-axis
+
+					// Determine which end of incoming board is snapping
+					bool bIsLeftEnd = Socket.SocketName.ToString().Contains(TEXT("Left"));
+
+					// The butt offset: move the incoming board back along its length
+					// so its end face aligns with the target's outer face
+					FVector ButtOffsetLocal;
+					if (bIsLeftEnd)
 					{
-						if (TargetSocket.SocketName == TargetSocketName)
-						{
-							// Calculate the target board's end offset from its own socket position
-							TargetEndXOffset = bIsTargetLeftEnd ? -TargetSocket.LocalPosition.X : TargetSocket.LocalPosition.X;
-							break;
-						}
+						// Left end snapping - move board in +X direction (inward from left end)
+						ButtOffsetLocal = FVector(BoardWidth, 0.0f, 0.0f);
+					}
+					else
+					{
+						// Right end snapping - move board in -X direction (inward from right end)
+						ButtOffsetLocal = FVector(-BoardWidth, 0.0f, 0.0f);
 					}
 
-					FVector TargetOuterCornerLocal = FVector(
-						bIsTargetLeftEnd ? -TargetEndXOffset : TargetEndXOffset,
-						BoardWidth / 2.0f,
-						BoardHeight / 2.0f
-					);
+					// Transform offset to world space using incoming board's rotation
+					FVector ButtOffsetWorld = OutSnapRotation.RotateVector(ButtOffsetLocal);
 
-					FVector TargetOuterCornerWorld = TargetPosition + TargetRotation.RotateVector(TargetOuterCornerLocal);
+					// Apply the butt joint offset
+					OutSnapLocation += ButtOffsetWorld;
 
-					// Calculate correction offset to make outer corners coincide EXACTLY
-					FVector CornerAlignmentOffset = TargetOuterCornerWorld - IncomingOuterCornerWorld;
-
-					// Apply the correction (magnetize to flush)
-					OutSnapLocation += CornerAlignmentOffset;
-
-					UE_LOG(LogTemp, Warning, TEXT("  🧲 Corner constraint applied: offset=%.2fcm to align outer corners"),
-						CornerAlignmentOffset.Size());
+					UE_LOG(LogTemp, Warning, TEXT("  🧲 Butt joint applied: incoming board offset %.2fcm inward to meet target's outer face"),
+						BoardWidth);
 				}
 
 				SnappedToPiece = TargetPiece;
