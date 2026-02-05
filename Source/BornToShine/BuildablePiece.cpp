@@ -324,24 +324,20 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						// Inside board butting against outside board needs offset
 						if (bSourceIsInside && bTargetIsOutside)
 						{
-							// Offset the inside board by the board width so it butts against the outside board
-							// The offset direction is along the outside board's length
-							FVector TargetForward = OutSnapRotation.RotateVector(FVector::ForwardVector);
+							// Calculate direction from snap point TOWARD the outside board's center
+							// This ensures the inside board moves inward to butt against the outside board's side
+							FVector OutsideBoardCenter = TargetPiece->GetActorLocation();
+							FVector DirectionToCenter = (OutsideBoardCenter - SnapLoc).GetSafeNormal();
 
-							// Calculate perpendicular to our rotation (along the outside board)
-							FRotator TargetBoardRot = TargetPiece->GetActorRotation();
-							FVector OutsideBoardDir = TargetBoardRot.RotateVector(FVector::ForwardVector);
+							// Offset toward the outside board by board width
+							OutSnapLocation += DirectionToCenter * SourceRimBoard->BoardWidth;
 
-							// Offset along the outside board's direction by board width
-							OutSnapLocation += OutsideBoardDir * SourceRimBoard->BoardWidth;
-
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board butting against outside board - offset by %.2f cm"),
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board butting against outside board - offset %.2fcm toward center"),
 								SourceRimBoard->BoardWidth);
 						}
 						else if (!bSourceIsInside && !bTargetIsOutside)
 						{
 							// Outside board connecting to inside board - no offset needed
-							// The inside board is already shorter
 							UE_LOG(LogTemp, Warning, TEXT("  🔧 Outside board connecting to inside board (no offset needed)"));
 						}
 						else
