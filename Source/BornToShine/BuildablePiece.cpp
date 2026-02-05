@@ -304,15 +304,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// OUTSIDE/INSIDE BOARD CORNER SYSTEM:
-				// - Outside boards: Full 8ft, extend to outer corner
-				// - Inside boards: 3" shorter, butt against outside boards
-				// When an inside board connects to an outside board, offset it by board width
+				// OUTSIDE/INSIDE BOARD CORNER SYSTEM using BOUNDING BOX for precise alignment
+				// Instead of calculated offsets, use actual mesh geometry
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					// Check if either board is an inside board (needs offset)
 					ARimBoard* SourceRimBoard = Cast<ARimBoard>(this);
 					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
 
@@ -321,26 +318,30 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						bool bSourceIsInside = !SourceRimBoard->bIsOutsideBoard;
 						bool bTargetIsOutside = TargetRimBoard->bIsOutsideBoard;
 
-						// Inside board at 93" should fit naturally between outside boards
-						// The 3" shorter length (1.5" each end) accounts for butting against outside board sides
-						// NO offset needed - just let the shorter board fit
+						// Inside board connecting to outside board - use bounds for precise positioning
 						if (bSourceIsInside && bTargetIsOutside)
 						{
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board (93\") connecting to outside board - no offset (shorter length handles fit)"));
-						}
-						else if (!bSourceIsInside && !bTargetIsOutside)
-						{
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Outside board connecting to inside board - no offset needed"));
+							// Get the outside board's actual bounds
+							FVector TargetOrigin, TargetExtent;
+							TargetPiece->GetActorBounds(false, TargetOrigin, TargetExtent);
+
+							// The outside board's SIDE is BoardWidth/2 from its centerline toward inside
+							// Direction from snap point toward outside board center tells us which way to offset
+							FVector ToCenter = (TargetOrigin - SnapLoc).GetSafeNormal();
+
+							// Offset by half the board width to reach the SIDE of the outside board
+							// (The inside board's end should touch the outside board's side face)
+							float OffsetAmount = SourceRimBoard->BoardWidth / 2.0f;
+							OutSnapLocation += ToCenter * OffsetAmount;
+
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board - BOUNDS-BASED offset %.2fcm toward outside board side"),
+								OffsetAmount);
 						}
 						else
 						{
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s type"),
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s type - standard snap"),
 								bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"));
 						}
-					}
-					else
-					{
-						UE_LOG(LogTemp, Warning, TEXT("  🧲 Corner snap - boards overlap for flush look (no offset)"));
 					}
 				}
 
