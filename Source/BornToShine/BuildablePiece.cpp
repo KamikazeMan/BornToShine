@@ -217,12 +217,24 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
-		// DEBUG: Log when evaluating corner sockets
+		// DEBUG: Log all corner socket evaluations to diagnose 4th board issues
 		if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("🔵 Evaluating RimBoard_End_Corner socket: %s at world %s"),
+			UE_LOG(LogTemp, Warning, TEXT("🔵 Evaluating corner socket: %s at world %s (searching %d nearby pieces)"),
 				*Socket.SocketName.ToString(),
-				*SocketWorldLocation.ToString());
+				*SocketWorldLocation.ToString(),
+				NearbyPieces.Num());
+
+			// Log what nearby pieces we're checking against
+			for (ABuildablePiece* Nearby : NearbyPieces)
+			{
+				if (Nearby)
+				{
+					float Dist = FVector::Dist(GetActorLocation(), Nearby->GetActorLocation());
+					UE_LOG(LogTemp, Warning, TEXT("    -> Nearby: %s (type=%d) at dist %.1fcm"),
+						*Nearby->GetName(), (int32)Nearby->PieceType, Dist);
+				}
+			}
 		}
 
 		FVector SnapLoc;
@@ -248,6 +260,16 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 			// Calculate connection priority
 			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocketType);
+
+			// Log all snap candidates for corner sockets
+			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("    🎯 Found snap: %s -> %s on %s (Priority=%d, Dist=%.1fcm, BestPri=%d)"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					*TargetPiece->GetName(),
+					Priority, Distance, BestPriority);
+			}
 
 			// Choose this snap if:
 			// 1. It has higher priority, OR
