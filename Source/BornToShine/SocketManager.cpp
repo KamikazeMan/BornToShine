@@ -97,7 +97,7 @@ void ASocketManager::CreateRimBoardRules()
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Corner); // For first plywood sheet
 	RimCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	RimCornerRule.SnapDistance = 50.0f; // Increased to detect corners from further away (Priority 1000 will ensure they win)
+	RimCornerRule.SnapDistance = 100.0f; // Increased from 50cm to help 4th board find corners when closing rectangle
 	RimCornerRule.bCheckAlignment = true; // Enable alignment checking for precise 90-degree corners
 	RimCornerRule.MaxAlignmentAngle = 95.0f; // Allow 90-degree corners with 5-degree tolerance
 	CompatibilityRules.Add(RimCornerRule);
@@ -220,15 +220,27 @@ bool ASocketManager::FindBestSnapPoint(
 
 			// Check if within snap distance
 			float Distance = FVector::Dist(WorldLocation, TargetWorldLocation);
-			if (Distance > Rule.SnapDistance) continue;
 
-			// DEBUG: Log when rim corners are found within snap distance
+			// DEBUG: Log ALL corner socket distances for diagnosis
 			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("🟢 Found Rim Corner Match! Distance=%.1fcm, SnapDist=%.1fcm"),
-					Distance, Rule.SnapDistance);
+				if (Distance > Rule.SnapDistance)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("🔴 Corner too far: %s -> %s on %s (Dist=%.1fcm > SnapDist=%.1fcm)"),
+						*SourceSocket.SocketName.ToString(),
+						*TargetSocket.SocketName.ToString(),
+						*Piece->GetName(),
+						Distance, Rule.SnapDistance);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("🟢 Found Rim Corner Match! Distance=%.1fcm, SnapDist=%.1fcm"),
+						Distance, Rule.SnapDistance);
+				}
 			}
+
+			if (Distance > Rule.SnapDistance) continue;
 
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
