@@ -55,6 +55,7 @@ protected:
 	void OnScalePiece(float Value);
 	void OnCyclePieceType();
 	void OnNailPiece();
+	void OnToggleBoardType(); // Toggle between outside and inside board for rim boards
 
 	// Enhanced Input Actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -92,6 +93,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* NailPieceAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* ToggleBoardTypeAction;
 
 	// Camera components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")

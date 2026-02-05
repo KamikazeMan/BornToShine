@@ -1,6 +1,7 @@
 // Born To Shine - Base class for all buildable construction pieces
 
 #include "BuildablePiece.h"
+#include "RimBoard.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -303,14 +304,57 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// CORNER OVERLAP: Both boards are 96" (8ft) matching foundation center-to-center
-				// At corners, boards simply OVERLAP inside each other - no offset needed
-				// This creates a visually flush corner without any complex calculations
+				// OUTSIDE/INSIDE BOARD CORNER SYSTEM:
+				// - Outside boards: Full 8ft, extend to outer corner
+				// - Inside boards: 3" shorter, butt against outside boards
+				// When an inside board connects to an outside board, offset it by board width
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					UE_LOG(LogTemp, Warning, TEXT("  🧲 Corner snap - boards overlap for flush look (no offset)"));
+					// Check if either board is an inside board (needs offset)
+					ARimBoard* SourceRimBoard = Cast<ARimBoard>(this);
+					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
+
+					if (SourceRimBoard && TargetRimBoard)
+					{
+						bool bSourceIsInside = !SourceRimBoard->bIsOutsideBoard;
+						bool bTargetIsOutside = TargetRimBoard->bIsOutsideBoard;
+
+						// Inside board butting against outside board needs offset
+						if (bSourceIsInside && bTargetIsOutside)
+						{
+							// Offset the inside board by the board width so it butts against the outside board
+							// The offset direction is along the outside board's length
+							FVector TargetForward = OutSnapRotation.RotateVector(FVector::ForwardVector);
+
+							// Calculate perpendicular to our rotation (along the outside board)
+							FRotator TargetBoardRot = TargetPiece->GetActorRotation();
+							FVector OutsideBoardDir = TargetBoardRot.RotateVector(FVector::ForwardVector);
+
+							// Offset along the outside board's direction by board width
+							OutSnapLocation += OutsideBoardDir * SourceRimBoard->BoardWidth;
+
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board butting against outside board - offset by %.2f cm"),
+								SourceRimBoard->BoardWidth);
+						}
+						else if (!bSourceIsInside && !bTargetIsOutside)
+						{
+							// Outside board connecting to inside board - no offset needed
+							// The inside board is already shorter
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Outside board connecting to inside board (no offset needed)"));
+						}
+						else
+						{
+							// Both same type - overlap
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s - overlapping"),
+								bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"));
+						}
+					}
+					else
+					{
+						UE_LOG(LogTemp, Warning, TEXT("  🧲 Corner snap - boards overlap for flush look (no offset)"));
+					}
 				}
 
 				SnappedToPiece = TargetPiece;

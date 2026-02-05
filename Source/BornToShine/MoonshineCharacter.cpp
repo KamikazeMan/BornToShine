@@ -2,6 +2,7 @@
 
 #include "MoonshineCharacter.h"
 #include "BuildablePiece.h"
+#include "RimBoard.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -150,6 +151,11 @@ void AMoonshineCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 		if (CyclePieceAction)
 		{
 			EnhancedInputComponent->BindAction(CyclePieceAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnCyclePieceType);
+		}
+
+		if (ToggleBoardTypeAction)
+		{
+			EnhancedInputComponent->BindAction(ToggleBoardTypeAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnToggleBoardType);
 		}
 	}
 }
@@ -416,5 +422,23 @@ void AMoonshineCharacter::OnScalePiece(float Value)
 	if (CurrentPreviewPiece && FMath::Abs(Value) > 0.1f)
 	{
 		CurrentPreviewPiece->ScalePiece(Value * 0.1f); // 0.1 scale per scroll
+	}
+}
+
+void AMoonshineCharacter::OnToggleBoardType()
+{
+	if (!bIsInBuildMode || !CurrentPreviewPiece) return;
+
+	// Only works on rim boards
+	ARimBoard* RimBoard = Cast<ARimBoard>(CurrentPreviewPiece);
+	if (RimBoard)
+	{
+		RimBoard->ToggleBoardType();
+		UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"),
+			RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Toggle board type only works on rim boards"));
 	}
 }

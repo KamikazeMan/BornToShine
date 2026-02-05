@@ -51,6 +51,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Spacing")
 	bool bUse24InchSpacing; // False = 16" OC, True = 24" OC
 
+	// Outside vs Inside board system for proper corner joints
+	// Outside boards: Full length, extend to outer corner edge
+	// Inside boards: 3" shorter, butt against the outside boards
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Corner")
+	bool bIsOutsideBoard; // True = outside board (full length), False = inside board (3" shorter)
+
+	// Toggle between outside and inside board mode
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	void ToggleBoardType();
+
+	// Get the effective length accounting for outside/inside type
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	float GetEffectiveLength() const;
+
 	// Socket generation
 	void CreateBottomEndSockets();
 	void CreateTopFaceSockets();

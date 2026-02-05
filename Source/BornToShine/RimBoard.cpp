@@ -22,6 +22,10 @@ ARimBoard::ARimBoard()
 	JoistSpacing = 40.64f; // 16 inches
 	bUse24InchSpacing = false;
 
+	// Default to outside board (full length)
+	// Inside boards are 3" shorter to butt against outside boards
+	bIsOutsideBoard = true;
+
 	// Rim boards are wood - require manual nailing
 	bAutoNailOnPlace = false;
 
@@ -30,14 +34,15 @@ ARimBoard::ARimBoard()
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Set mesh scale to match dimensions
+	// Set mesh scale to match dimensions (using effective length for outside/inside board type)
 	if (MeshComponent)
 	{
 		// Assuming a base mesh of 1m cube, scale to rim board dimensions
+		// Note: GetEffectiveLength() returns BoardLength for outside boards (default)
 		MeshComponent->SetRelativeScale3D(FVector(
-			BoardLength / 100.0f,  // Length (X-axis)
-			BoardWidth / 100.0f,   // Width (Y-axis)
-			BoardHeight / 100.0f   // Height (Z-axis)
+			GetEffectiveLength() / 100.0f,  // Length (X-axis) - accounts for board type
+			BoardWidth / 100.0f,            // Width (Y-axis)
+			BoardHeight / 100.0f            // Height (Z-axis)
 		));
 	}
 }
@@ -72,14 +77,17 @@ void ARimBoard::CreateBottomEndSockets()
 	// Spacing matches foundation block width (243.84cm = 8ft)
 	// Create sockets every 60cm along the bottom edge for flexible snapping
 
+	float EffectiveLen = GetEffectiveLength();
+	float HalfLen = EffectiveLen / 2.0f;
+
 	float SocketSpacing = 60.0f; // 60cm spacing along bottom edge
 	float StartOffset = SocketSpacing / 2.0f; // Start half-spacing from end
 	int32 SocketCount = 0;
 
 	// Calculate number of sockets needed along the length
-	float CurrentX = -BoardLength / 2.0f + StartOffset;
+	float CurrentX = -HalfLen + StartOffset;
 
-	while (CurrentX <= BoardLength / 2.0f - StartOffset / 2.0f)
+	while (CurrentX <= HalfLen - StartOffset / 2.0f)
 	{
 		FConstructionSocket BottomSocket;
 		BottomSocket.SocketName = FName(*FString::Printf(TEXT("BottomEdge_%d"), SocketCount));
@@ -102,7 +110,7 @@ void ARimBoard::CreateBottomEndSockets()
 	LeftEndSocket.SocketName = FName("BottomEnd_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	LeftEndSocket.LocalPosition = FVector(
-		-BoardLength / 2.0f,   // Left end
+		-HalfLen,              // Left end (uses effective length)
 		0.0f,                  // Centered on width
 		-BoardHeight / 2.0f    // Bottom face
 	);
@@ -114,7 +122,7 @@ void ARimBoard::CreateBottomEndSockets()
 	RightEndSocket.SocketName = FName("BottomEnd_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	RightEndSocket.LocalPosition = FVector(
-		BoardLength / 2.0f,    // Right end
+		HalfLen,               // Right end (uses effective length)
 		0.0f,                  // Centered on width
 		-BoardHeight / 2.0f    // Bottom face
 	);
@@ -122,7 +130,8 @@ void ARimBoard::CreateBottomEndSockets()
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d bottom sockets along bottom edge"), SocketCount + 2);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d bottom sockets for %s board"), SocketCount + 2,
+		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"));
 }
 
 void ARimBoard::CreateTopFaceSockets()
@@ -189,20 +198,23 @@ void ARimBoard::CreateSideFaceSockets()
 
 void ARimBoard::CreateEndCornerSockets()
 {
-	// CLEAN APPROACH: Corner sockets at CENTER of board width (Y=0)
-	// This makes socket-to-socket alignment simple and predictable.
-	// When two boards connect:
-	// - First board (already placed): extends fully, socket at its end center
-	// - Second board (being placed): butts against first, offset by BoardWidth
+	// OUTSIDE/INSIDE BOARD SYSTEM:
+	// - Outside boards: Full length, extend to the outer corner
+	// - Inside boards: 3" shorter, butt against outside boards
+	//
+	// Socket positions use EFFECTIVE length (accounting for board type)
+
+	float EffectiveLen = GetEffectiveLength();
+	float HalfLen = EffectiveLen / 2.0f;
 
 	// LEFT END - Center of width
 	FConstructionSocket LeftEnd;
 	LeftEnd.SocketName = FName("EndCorner_Left");
 	LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	LeftEnd.LocalPosition = FVector(
-		-BoardLength / 2.0f,    // Left end of board
+		-HalfLen,               // Left end of board (uses effective length)
 		0.0f,                   // CENTER of board width (Y=0)
-		0.0f                    // Center height (will align with other board's center)
+		0.0f                    // Center height
 	);
 	LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Points outward from left end
 	LeftEnd.bIsOccupied = false;
@@ -213,7 +225,7 @@ void ARimBoard::CreateEndCornerSockets()
 	RightEnd.SocketName = FName("EndCorner_Right");
 	RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
 	RightEnd.LocalPosition = FVector(
-		BoardLength / 2.0f,     // Right end of board
+		HalfLen,                // Right end of board (uses effective length)
 		0.0f,                   // CENTER of board width (Y=0)
 		0.0f                    // Center height
 	);
@@ -221,20 +233,24 @@ void ARimBoard::CreateEndCornerSockets()
 	RightEnd.bIsOccupied = false;
 	Sockets.Add(RightEnd);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 2 center-aligned end corner sockets at Y=0"));
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created corner sockets for %s board (effective length: %.2f cm)"),
+		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"), EffectiveLen);
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 {
 	TArray<FVector> Positions;
 
+	float EffectiveLen = GetEffectiveLength();
+	float HalfLen = EffectiveLen / 2.0f;
+
 	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f; // 24" or 16" OC
 	float StartOffset = Spacing; // Start one spacing in from the end
 
 	// Calculate how many sockets fit along the board length
-	float CurrentX = -BoardLength / 2.0f + StartOffset;
+	float CurrentX = -HalfLen + StartOffset;
 
-	while (CurrentX < BoardLength / 2.0f - StartOffset / 2.0f)
+	while (CurrentX < HalfLen - StartOffset / 2.0f)
 	{
 		FVector SocketPos = FVector(
 			CurrentX,
@@ -348,11 +364,12 @@ void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f; // Convert feet to cm
 
-		// Update mesh scale
+		// Update mesh scale using effective length (accounts for outside/inside board type)
 		if (MeshComponent)
 		{
+			float EffectiveLen = GetEffectiveLength();
 			MeshComponent->SetRelativeScale3D(FVector(
-				BoardLength / 100.0f,
+				EffectiveLen / 100.0f,
 				BoardWidth / 100.0f,
 				BoardHeight / 100.0f
 			));
@@ -361,7 +378,10 @@ void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 		// Regenerate sockets for new length
 		RegenerateSockets();
 
-		UE_LOG(LogTemp, Log, TEXT("Rim Board length changed to: %s"), *GetLengthDisplayString());
+		UE_LOG(LogTemp, Log, TEXT("Rim Board length changed to: %s (%s board, effective: %.2f cm)"),
+			*GetLengthDisplayString(),
+			bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"),
+			GetEffectiveLength());
 	}
 }
 
@@ -412,4 +432,41 @@ void ARimBoard::RegenerateSockets()
 	CreateEndCornerSockets();
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Regenerated %d sockets for %d ft board"), Sockets.Num(), CurrentLengthFeet);
+}
+
+void ARimBoard::ToggleBoardType()
+{
+	bIsOutsideBoard = !bIsOutsideBoard;
+
+	// Regenerate sockets to update positions
+	RegenerateSockets();
+
+	// Update mesh scale to reflect new effective length
+	if (MeshComponent)
+	{
+		float EffectiveLen = GetEffectiveLength();
+		MeshComponent->SetRelativeScale3D(FVector(
+			EffectiveLen / 100.0f,
+			BoardWidth / 100.0f,
+			BoardHeight / 100.0f
+		));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard: Toggled to %s board (effective length: %.2f cm)"),
+		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"), GetEffectiveLength());
+}
+
+float ARimBoard::GetEffectiveLength() const
+{
+	if (bIsOutsideBoard)
+	{
+		// Outside boards: full length
+		return BoardLength;
+	}
+	else
+	{
+		// Inside boards: 3" shorter (7.62cm) to butt against outside boards on both ends
+		// Each end butts against an outside board's thickness (1.5" = 3.81cm)
+		return BoardLength - (2.0f * BoardWidth); // Subtract 3.81cm from each end = 7.62cm total
+	}
 }
