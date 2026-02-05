@@ -432,7 +432,7 @@ void ARimBoard::ToggleBoardType()
 	// Update mesh scale - ONLY change the length (X), preserve width and height
 	if (MeshComponent)
 	{
-		FVector CurrentScale = MeshComponent->GetRelativeScale3D();
+		FVector MeshScale = MeshComponent->GetRelativeScale3D();
 		float OldEffectiveLen = bIsOutsideBoard ? (BoardLength - 2.0f * BoardWidth) : BoardLength;
 		float NewEffectiveLen = GetEffectiveLength();
 
@@ -441,9 +441,9 @@ void ARimBoard::ToggleBoardType()
 
 		// Only modify X (length), keep Y and Z the same
 		MeshComponent->SetRelativeScale3D(FVector(
-			CurrentScale.X * LengthRatio,
-			CurrentScale.Y,  // Keep width unchanged
-			CurrentScale.Z   // Keep height unchanged
+			MeshScale.X * LengthRatio,
+			MeshScale.Y,  // Keep width unchanged
+			MeshScale.Z   // Keep height unchanged
 		));
 	}
 
