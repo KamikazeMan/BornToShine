@@ -321,29 +321,20 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						bool bSourceIsInside = !SourceRimBoard->bIsOutsideBoard;
 						bool bTargetIsOutside = TargetRimBoard->bIsOutsideBoard;
 
-						// Inside board butting against outside board needs offset
+						// Inside board at 93" should fit naturally between outside boards
+						// The 3" shorter length (1.5" each end) accounts for butting against outside board sides
+						// NO offset needed - just let the shorter board fit
 						if (bSourceIsInside && bTargetIsOutside)
 						{
-							// Calculate direction from snap point TOWARD the outside board's center
-							// This ensures the inside board moves inward to butt against the outside board's side
-							FVector OutsideBoardCenter = TargetPiece->GetActorLocation();
-							FVector DirectionToCenter = (OutsideBoardCenter - SnapLoc).GetSafeNormal();
-
-							// Offset toward the outside board by board width
-							OutSnapLocation += DirectionToCenter * SourceRimBoard->BoardWidth;
-
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board butting against outside board - offset %.2fcm toward center"),
-								SourceRimBoard->BoardWidth);
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board (93\") connecting to outside board - no offset (shorter length handles fit)"));
 						}
 						else if (!bSourceIsInside && !bTargetIsOutside)
 						{
-							// Outside board connecting to inside board - no offset needed
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Outside board connecting to inside board (no offset needed)"));
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Outside board connecting to inside board - no offset needed"));
 						}
 						else
 						{
-							// Both same type - overlap
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s - overlapping"),
+							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s type"),
 								bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"));
 						}
 					}
