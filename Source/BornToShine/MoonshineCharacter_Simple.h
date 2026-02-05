@@ -50,6 +50,7 @@ protected:
 	void OnCyclePieceType();
 	void OnNailPiece();
 	void OnAdvancePhase(); // Advance to next construction phase
+	void OnToggleBoardType(); // Toggle between outside and inside board for rim boards
 
 	// Enhanced Input Actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -96,6 +97,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* AdvancePhaseAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* ToggleBoardTypeAction;
 
 	// Camera components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")

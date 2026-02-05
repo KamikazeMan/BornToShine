@@ -3,6 +3,7 @@
 #include "MoonshineCharacter_Simple.h"
 #include "BuildingComponent.h"
 #include "ConstructionPhaseManager.h"
+#include "RimBoard.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -164,6 +165,12 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 		if (AdvancePhaseAction)
 		{
 			EnhancedInputComponent->BindAction(AdvancePhaseAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnAdvancePhase);
+		}
+
+		// Toggle board type (outside/inside for rim boards)
+		if (ToggleBoardTypeAction)
+		{
+			EnhancedInputComponent->BindAction(ToggleBoardTypeAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnToggleBoardType);
 		}
 	}
 }
@@ -344,5 +351,35 @@ void AMoonshineCharacter_Simple::OnAdvancePhase()
 				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, TEXT("Cannot advance phase - place more foundation blocks"));
 			}
 		}
+	}
+}
+
+void AMoonshineCharacter_Simple::OnToggleBoardType()
+{
+	if (!BuildingComponent) return;
+
+	// Get the current preview piece from the building component
+	ABuildablePiece* PreviewPiece = BuildingComponent->GetCurrentPreviewPiece();
+	if (!PreviewPiece) return;
+
+	// Only works on rim boards
+	ARimBoard* RimBoard = Cast<ARimBoard>(PreviewPiece);
+	if (RimBoard)
+	{
+		RimBoard->ToggleBoardType();
+
+		FString BoardType = RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE");
+		UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"), *BoardType);
+
+		// Show on-screen message
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan,
+				FString::Printf(TEXT("Board Type: %s"), *BoardType));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Toggle board type only works on rim boards"));
 	}
 }

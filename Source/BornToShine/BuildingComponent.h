@@ -67,6 +67,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Building")
 	int32 GetPlacedPieceCount() const { return PlacedPieces.Num(); }
 
+	// Get the current preview piece (for board type toggling, etc.)
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	class ABuildablePiece* GetCurrentPreviewPiece() const { return CurrentPreviewPiece; }
+
 protected:
 	virtual void BeginPlay() override;
 
