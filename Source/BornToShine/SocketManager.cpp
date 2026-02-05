@@ -66,7 +66,7 @@ void ASocketManager::CreateRimBoardRules()
 	RimBottomRule.MaxAlignmentAngle = 10.0f;
 	CompatibilityRules.Add(RimBottomRule);
 
-	// Rim board top face accepts joist ends
+	// Rim board top face accepts joist ends (during floor framing)
 	FSocketCompatibilityRule RimTopRule;
 	RimTopRule.SourceSocketType = EConstructionSocketType::RimBoard_Top_Face;
 	RimTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_End);
@@ -75,6 +75,16 @@ void ASocketManager::CreateRimBoardRules()
 	RimTopRule.bCheckAlignment = true;
 	RimTopRule.MaxAlignmentAngle = 5.0f;
 	CompatibilityRules.Add(RimTopRule);
+
+	// Rim board top face also accepts plywood edges (during sheathing)
+	FSocketCompatibilityRule RimTopPlywoodRule;
+	RimTopPlywoodRule.SourceSocketType = EConstructionSocketType::RimBoard_Top_Face;
+	RimTopPlywoodRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Edge);
+	RimTopPlywoodRule.RequiredPhase = EConstructionPhase::FloorSheathing;
+	RimTopPlywoodRule.SnapDistance = 30.0f;
+	RimTopPlywoodRule.bCheckAlignment = false; // Plywood just needs to be on top
+	RimTopPlywoodRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(RimTopPlywoodRule);
 
 	// Rim board side face accepts perpendicular joist ends
 	FSocketCompatibilityRule RimSideRule;
@@ -134,10 +144,11 @@ void ASocketManager::CreatePlywoodRules()
 	PlywoodCornerRule.MaxAlignmentAngle = 5.0f;
 	CompatibilityRules.Add(PlywoodCornerRule);
 
-	// Plywood edges snap to joist tops and other plywood edges
+	// Plywood edges snap to joist tops, rim board tops, and other plywood edges
 	FSocketCompatibilityRule PlywoodEdgeRule;
 	PlywoodEdgeRule.SourceSocketType = EConstructionSocketType::Plywood_Edge;
 	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_Top_Face);
+	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Top_Face); // Rim board perimeter
 	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Edge); // Sheet-to-sheet
 	PlywoodEdgeRule.RequiredPhase = EConstructionPhase::FloorSheathing;
 	PlywoodEdgeRule.SnapDistance = 25.0f;
