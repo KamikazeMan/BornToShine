@@ -304,8 +304,10 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// OUTSIDE/INSIDE BOARD CORNER SYSTEM using BOUNDING BOX for precise alignment
-				// Instead of calculated offsets, use actual mesh geometry
+				// MESH SOCKET CORNER SYSTEM:
+				// Mesh sockets are placed at exact mesh edges in the Static Mesh Editor
+				// When mesh is scaled (inside boards), socket positions scale automatically
+				// No offset calculations needed - sockets define precise snap points
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
@@ -318,30 +320,10 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						bool bSourceIsInside = !SourceRimBoard->bIsOutsideBoard;
 						bool bTargetIsOutside = TargetRimBoard->bIsOutsideBoard;
 
-						// Inside board connecting to outside board - use bounds for precise positioning
-						if (bSourceIsInside && bTargetIsOutside)
-						{
-							// Get the outside board's actual bounds
-							FVector TargetOrigin, TargetExtent;
-							TargetPiece->GetActorBounds(false, TargetOrigin, TargetExtent);
-
-							// The outside board's SIDE is BoardWidth/2 from its centerline toward inside
-							// Direction from snap point toward outside board center tells us which way to offset
-							FVector ToCenter = (TargetOrigin - SnapLoc).GetSafeNormal();
-
-							// Offset by half the board width to reach the SIDE of the outside board
-							// (The inside board's end should touch the outside board's side face)
-							float OffsetAmount = SourceRimBoard->BoardWidth / 2.0f;
-							OutSnapLocation += ToCenter * OffsetAmount;
-
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Inside board - BOUNDS-BASED offset %.2fcm toward outside board side"),
-								OffsetAmount);
-						}
-						else
-						{
-							UE_LOG(LogTemp, Warning, TEXT("  🔧 Both boards are %s type - standard snap"),
-								bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"));
-						}
+						// Log the snap types for debugging
+						UE_LOG(LogTemp, Warning, TEXT("  🔧 Corner snap: Source=%s, Target=%s - using mesh socket positions"),
+							bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"),
+							bTargetIsOutside ? TEXT("OUTSIDE") : TEXT("INSIDE"));
 					}
 				}
 
