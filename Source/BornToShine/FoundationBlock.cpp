@@ -119,52 +119,25 @@ void AFoundationBlock::CreateCenterSocket()
 
 void AFoundationBlock::CreateSideSockets()
 {
-	// Create sockets on each side (midpoint) for rim board connections
-	float HalfWidth = BlockDimensions.X / 2.0f;
-	float HalfLength = BlockDimensions.Y / 2.0f;
+	// Create sockets at the CENTER of the foundation block
+	// The groove runs through the center (0,0), so all sockets are centered
+	// This ensures rim boards sit in the groove regardless of mesh pivot offset
 
 	// Socket at groove depth (actor pivot at bottom)
 	float SocketZPosition = SocketHeightOffset;
 
-	// North side
-	FConstructionSocket SideN;
-	SideN.SocketName = FName("Foundation_Side_N");
-	SideN.SocketType = EConstructionSocketType::Foundation_Side;
-	SideN.LocalPosition = FVector(HalfWidth, 0.0f, SocketZPosition);
-	SideN.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-	SideN.Orientation = ESocketOrientation::Horizontal;
-	SideN.bIsOccupied = false;
-	Sockets.Add(SideN);
+	// Single center socket for rim board connections
+	// Rim boards can connect here and extend in any direction
+	FConstructionSocket CenterGroove;
+	CenterGroove.SocketName = FName("Foundation_Side_Center");
+	CenterGroove.SocketType = EConstructionSocketType::Foundation_Side;
+	CenterGroove.LocalPosition = FVector(0.0f, 0.0f, SocketZPosition); // At the center
+	CenterGroove.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+	CenterGroove.Orientation = ESocketOrientation::Horizontal;
+	CenterGroove.bIsOccupied = false;
+	Sockets.Add(CenterGroove);
 
-	// South side
-	FConstructionSocket SideS;
-	SideS.SocketName = FName("Foundation_Side_S");
-	SideS.SocketType = EConstructionSocketType::Foundation_Side;
-	SideS.LocalPosition = FVector(-HalfWidth, 0.0f, SocketZPosition);
-	SideS.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-	SideS.Orientation = ESocketOrientation::Horizontal;
-	SideS.bIsOccupied = false;
-	Sockets.Add(SideS);
-
-	// East side
-	FConstructionSocket SideE;
-	SideE.SocketName = FName("Foundation_Side_E");
-	SideE.SocketType = EConstructionSocketType::Foundation_Side;
-	SideE.LocalPosition = FVector(0.0f, HalfLength, SocketZPosition);
-	SideE.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
-	SideE.Orientation = ESocketOrientation::Horizontal;
-	SideE.bIsOccupied = false;
-	Sockets.Add(SideE);
-
-	// West side
-	FConstructionSocket SideW;
-	SideW.SocketName = FName("Foundation_Side_W");
-	SideW.SocketType = EConstructionSocketType::Foundation_Side;
-	SideW.LocalPosition = FVector(0.0f, -HalfLength, SocketZPosition);
-	SideW.LocalRotation = FRotator(0.0f, 270.0f, 0.0f);
-	SideW.Orientation = ESocketOrientation::Horizontal;
-	SideW.bIsOccupied = false;
-	Sockets.Add(SideW);
+	UE_LOG(LogTemp, Log, TEXT("Foundation: Created center groove socket at (0, 0, %.1f)"), SocketZPosition);
 }
 
 FVector AFoundationBlock::SnapToGrid(const FVector& Location) const

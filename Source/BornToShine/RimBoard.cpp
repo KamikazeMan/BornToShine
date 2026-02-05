@@ -377,7 +377,9 @@ FString ARimBoard::GetLengthDisplayString() const
 
 void ARimBoard::ScalePiece(float ScaleDelta)
 {
-	// For rim boards, scaling changes length, not visual scale
+	// For rim boards, scaling changes LENGTH only, not width/height
+	// Actor scale must stay at (1,1,1) - we use mesh component scale for dimensions
+
 	int32 NewLength = CurrentLengthFeet;
 
 	if (ScaleDelta > 0)
@@ -390,6 +392,12 @@ void ARimBoard::ScalePiece(float ScaleDelta)
 	}
 
 	SetBoardLengthFeet(NewLength);
+
+	// CRITICAL: Force actor scale back to 1,1,1 in case base class modified it
+	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
+	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard::ScalePiece called - Length now %d ft, Actor scale forced to 1,1,1"), CurrentLengthFeet);
 }
 
 void ARimBoard::RegenerateSockets()
