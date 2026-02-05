@@ -444,10 +444,11 @@ void ARimBoard::ToggleBoardType()
 		float LengthRatio = NewEffectiveLen / OldEffectiveLen;
 
 		// Adjust mesh position to keep it centered
-		// Move by half the length difference so both ends shrink equally
+		// When shrinking (LengthDiff negative), mesh pivot at one end causes that end to stay fixed
+		// We need to shift the mesh in OPPOSITE direction of the length change to center it
 		FVector CurrentMeshPos = MeshComponent->GetRelativeLocation();
 		MeshComponent->SetRelativeLocation(FVector(
-			CurrentMeshPos.X + (LengthDiff / 2.0f),  // Shift to compensate for pivot offset
+			CurrentMeshPos.X - (LengthDiff / 2.0f),  // SUBTRACT (opposite of length change)
 			CurrentMeshPos.Y,
 			CurrentMeshPos.Z
 		));
