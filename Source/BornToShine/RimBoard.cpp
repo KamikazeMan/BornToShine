@@ -72,65 +72,53 @@ void ARimBoard::InitializeSockets()
 
 void ARimBoard::CreateBottomEndSockets()
 {
-	// Bottom sockets run along the entire bottom edge of the rim board
-	// These connect to foundation corner and side sockets
-	// Spacing matches foundation block width (243.84cm = 8ft)
-	// Create sockets every 60cm along the bottom edge for flexible snapping
+	// Bottom sockets ONLY at the exact ends for proper foundation alignment
+	// Having intermediate sockets causes misalignment when the board snaps
+	// to a middle socket instead of an end socket
 
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
 
-	float SocketSpacing = 60.0f; // 60cm spacing along bottom edge
-	float StartOffset = SocketSpacing / 2.0f; // Start half-spacing from end
-	int32 SocketCount = 0;
-
-	// Calculate number of sockets needed along the length
-	float CurrentX = -HalfLen + StartOffset;
-
-	while (CurrentX <= HalfLen - StartOffset / 2.0f)
-	{
-		FConstructionSocket BottomSocket;
-		BottomSocket.SocketName = FName(*FString::Printf(TEXT("BottomEdge_%d"), SocketCount));
-		BottomSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
-		BottomSocket.LocalPosition = FVector(
-			CurrentX,              // Along the length
-			0.0f,                  // Centered on width
-			-BoardHeight / 2.0f    // Bottom face
-		);
-		BottomSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
-		BottomSocket.bIsOccupied = false;
-		Sockets.Add(BottomSocket);
-
-		CurrentX += SocketSpacing;
-		SocketCount++;
-	}
-
-	// Also add sockets at the exact ends for corner connections
+	// Left end socket - for snapping to left foundation
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("BottomEnd_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	LeftEndSocket.LocalPosition = FVector(
-		-HalfLen,              // Left end (uses effective length)
-		0.0f,                  // Centered on width
+		-HalfLen,              // Left end
+		0.0f,                  // Centered on width (Y=0)
 		-BoardHeight / 2.0f    // Bottom face
 	);
-	LeftEndSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
+	LeftEndSocket.LocalRotation = FRotator::ZeroRotator;
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
+	// Right end socket - for snapping to right foundation
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("BottomEnd_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	RightEndSocket.LocalPosition = FVector(
-		HalfLen,               // Right end (uses effective length)
-		0.0f,                  // Centered on width
+		HalfLen,               // Right end
+		0.0f,                  // Centered on width (Y=0)
 		-BoardHeight / 2.0f    // Bottom face
 	);
-	RightEndSocket.LocalRotation = FRotator::ZeroRotator; // Match foundation socket orientation
+	RightEndSocket.LocalRotation = FRotator::ZeroRotator;
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created %d bottom sockets for %s board"), SocketCount + 2,
+	// Center socket - for middle foundation support on longer boards
+	FConstructionSocket CenterSocket;
+	CenterSocket.SocketName = FName("BottomEnd_Center");
+	CenterSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
+	CenterSocket.LocalPosition = FVector(
+		0.0f,                  // Center of board
+		0.0f,                  // Centered on width (Y=0)
+		-BoardHeight / 2.0f    // Bottom face
+	);
+	CenterSocket.LocalRotation = FRotator::ZeroRotator;
+	CenterSocket.bIsOccupied = false;
+	Sockets.Add(CenterSocket);
+
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created 3 bottom sockets (left, center, right) for %s board"),
 		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"));
 }
 
