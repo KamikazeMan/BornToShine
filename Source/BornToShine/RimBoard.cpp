@@ -189,16 +189,17 @@ void ARimBoard::CreateEndCornerSockets()
 	// MESH SOCKET SYSTEM:
 	// Use mesh-defined sockets (Snap_Corner_Left, Snap_Corner_Right) for precise positioning
 	// These sockets are placed at exact mesh edges in the Static Mesh Editor
-	//
-	// Fallback to calculated positions if mesh sockets don't exist
+	// Falls back to calculated positions for each socket that doesn't exist
 
-	bool bUsedMeshSockets = false;
+	float EffectiveLen = GetEffectiveLength();
+	float HalfLen = EffectiveLen / 2.0f;
+
+	bool bLeftFromMesh = false;
+	bool bRightFromMesh = false;
 
 	if (MeshComponent)
 	{
-		// Try to use mesh sockets for corner positions
-		// Mesh sockets: Snap_Corner_Left (X=-121.2, Y=180°), Snap_Corner_Right (X=+122.7, Y=0°)
-
+		// Try LEFT mesh socket
 		if (MeshComponent->DoesSocketExist(FName("Snap_Corner_Left")))
 		{
 			FTransform LeftSocketTransform = MeshComponent->GetSocketTransform(FName("Snap_Corner_Left"), ERelativeTransformSpace::RTS_Component);
@@ -214,9 +215,14 @@ void ARimBoard::CreateEndCornerSockets()
 			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Left at %s, rot %s"),
 				*LeftEnd.LocalPosition.ToString(), *LeftEnd.LocalRotation.ToString());
 
-			bUsedMeshSockets = true;
+			bLeftFromMesh = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("RimBoard: Snap_Corner_Left mesh socket NOT FOUND - using fallback"));
 		}
 
+		// Try RIGHT mesh socket
 		if (MeshComponent->DoesSocketExist(FName("Snap_Corner_Right")))
 		{
 			FTransform RightSocketTransform = MeshComponent->GetSocketTransform(FName("Snap_Corner_Right"), ERelativeTransformSpace::RTS_Component);
@@ -232,48 +238,42 @@ void ARimBoard::CreateEndCornerSockets()
 			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Right at %s, rot %s"),
 				*RightEnd.LocalPosition.ToString(), *RightEnd.LocalRotation.ToString());
 
-			bUsedMeshSockets = true;
+			bRightFromMesh = true;
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("RimBoard: Snap_Corner_Right mesh socket NOT FOUND - using fallback"));
 		}
 	}
 
-	// Fallback: Use calculated positions if mesh sockets not available
-	if (!bUsedMeshSockets)
+	// Fallback for LEFT socket if not found in mesh
+	if (!bLeftFromMesh)
 	{
-		float EffectiveLen = GetEffectiveLength();
-		float HalfLen = EffectiveLen / 2.0f;
-
-		// LEFT END - Center of width
 		FConstructionSocket LeftEnd;
 		LeftEnd.SocketName = FName("EndCorner_Left");
 		LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		LeftEnd.LocalPosition = FVector(
-			-HalfLen,               // Left end of board (uses effective length)
-			0.0f,                   // CENTER of board width (Y=0)
-			0.0f                    // Center height
-		);
-		LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f); // Points outward from left end
+		LeftEnd.LocalPosition = FVector(-HalfLen, 0.0f, 0.0f);
+		LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 		LeftEnd.bIsOccupied = false;
 		Sockets.Add(LeftEnd);
+	}
 
-		// RIGHT END - Center of width
+	// Fallback for RIGHT socket if not found in mesh
+	if (!bRightFromMesh)
+	{
 		FConstructionSocket RightEnd;
 		RightEnd.SocketName = FName("EndCorner_Right");
 		RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		RightEnd.LocalPosition = FVector(
-			HalfLen,                // Right end of board (uses effective length)
-			0.0f,                   // CENTER of board width (Y=0)
-			0.0f                    // Center height
-		);
-		RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f); // Points outward from right end
+		RightEnd.LocalPosition = FVector(HalfLen, 0.0f, 0.0f);
+		RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 		RightEnd.bIsOccupied = false;
 		Sockets.Add(RightEnd);
-
-		UE_LOG(LogTemp, Warning, TEXT("RimBoard: FALLBACK - Using calculated corner sockets (mesh sockets not found)"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Created corner sockets for %s board (effective length: %.2f cm) - MeshSockets=%s"),
-		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"), GetEffectiveLength(),
-		bUsedMeshSockets ? TEXT("YES") : TEXT("NO"));
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets for %s board - Left:%s, Right:%s"),
+		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"),
+		bLeftFromMesh ? TEXT("MESH") : TEXT("CALC"),
+		bRightFromMesh ? TEXT("MESH") : TEXT("CALC"));
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
