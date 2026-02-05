@@ -344,17 +344,19 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 						FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
 						float Distance = FVector::Dist(SocketWorldLocation, TargetWorldLocation);
 
-						if (Distance < 50.0f) // Within snap distance
+						if (Distance < 150.0f) // Increased search radius to find closing targets
 						{
 							if (bIsLeftSocket && !bLeftFound)
 							{
 								LeftCornerTarget = TargetWorldLocation;
 								bLeftFound = true;
+								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Left corner target found at %.1fcm"), Distance);
 							}
 							else if (!bIsLeftSocket && !bRightFound)
 							{
 								RightCornerTarget = TargetWorldLocation;
 								bRightFound = true;
+								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Right corner target found at %.1fcm"), Distance);
 							}
 							break; // Found a match for this socket, move to next socket
 						}
@@ -368,21 +370,45 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 		// If BOTH corners found targets, we're closing a rectangle - auto-scale!
 		if (bLeftFound && bRightFound)
 		{
-			float RequiredLength = FVector::Dist(LeftCornerTarget, RightCornerTarget);
+			float GapDistance = FVector::Dist(LeftCornerTarget, RightCornerTarget);
 
-			// Account for the flush offset (1.905cm per corner = 3.81cm total)
-			// Add the board width since corners need to extend beyond the gap
-			RequiredLength += BoardWidth;
+			// The required length is the gap distance (socket-to-socket on the board should match)
+			// Current socket-to-socket distance on mesh = 121.2 + 122.7 = 243.9cm for 8ft board
+			float CurrentSocketToSocket = 243.9f; // Approximate for 8ft
+			float CurrentMeshLength = GetEffectiveLength();
 
-			// Convert to cm and round to nearest foot
-			int32 RequiredFeet = FMath::RoundToInt(RequiredLength / 30.48f);
-			RequiredFeet = FMath::Clamp(RequiredFeet, MinLengthFeet, MaxLengthFeet);
+			// Scale factor to fit the gap
+			float ScaleFactor = GapDistance / CurrentSocketToSocket;
+			float NewLength = CurrentMeshLength * ScaleFactor;
 
-			if (RequiredFeet != CurrentLengthFeet)
+			// Clamp to reasonable limits (4ft to 12ft)
+			float MinLength = 4 * 30.48f;  // 4ft in cm
+			float MaxLength = 12 * 30.48f; // 12ft in cm
+			NewLength = FMath::Clamp(NewLength, MinLength, MaxLength);
+
+			// Only update if significant difference (>1cm)
+			if (FMath::Abs(NewLength - CurrentMeshLength) > 1.0f)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: %.1fcm (%.1fft) -> %dft (gap=%.1fcm)"),
-					BoardLength, BoardLength / 30.48f, RequiredFeet, RequiredLength - BoardWidth);
-				SetBoardLengthFeet(RequiredFeet);
+				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: Gap=%.1fcm, Current=%.1fcm -> New=%.1fcm (scale=%.3f)"),
+					GapDistance, CurrentMeshLength, NewLength, ScaleFactor);
+
+				// Update board length directly (continuous, not foot-based)
+				BoardLength = NewLength / (bIsOutsideBoard ? 1.0f : (1.0f - (2.0f * BoardWidth / (8 * 30.48f))));
+
+				// Update mesh scale
+				if (MeshComponent)
+				{
+					float EffectiveLen = GetEffectiveLength();
+					FVector CurrentMeshScale = MeshComponent->GetRelativeScale3D();
+					MeshComponent->SetRelativeScale3D(FVector(
+						EffectiveLen / 100.0f,
+						CurrentMeshScale.Y,  // Preserve width
+						CurrentMeshScale.Z   // Preserve height
+					));
+				}
+
+				// Regenerate sockets for new length
+				RegenerateSockets();
 			}
 		}
 	}
