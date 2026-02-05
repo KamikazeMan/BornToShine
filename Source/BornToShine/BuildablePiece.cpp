@@ -329,12 +329,26 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 					// Calculate target board's outer corner position
 					// Target is also at its outer edge, but which end depends on geometry
+					// CRITICAL: Must get the TARGET socket's position, not reuse incoming board's offset!
 					bool bIsTargetLeftEnd = TargetSocketName.ToString().Contains(TEXT("Left"));
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
 					FVector TargetPosition = TargetPiece->GetActorLocation();
 
+					// Get the target socket's actual local position from the target piece
+					float TargetEndXOffset = EndXOffset; // Default fallback
+					TArray<FConstructionSocket> TargetSockets = TargetPiece->GetAllSockets();
+					for (const FConstructionSocket& TargetSocket : TargetSockets)
+					{
+						if (TargetSocket.SocketName == TargetSocketName)
+						{
+							// Calculate the target board's end offset from its own socket position
+							TargetEndXOffset = bIsTargetLeftEnd ? -TargetSocket.LocalPosition.X : TargetSocket.LocalPosition.X;
+							break;
+						}
+					}
+
 					FVector TargetOuterCornerLocal = FVector(
-						bIsTargetLeftEnd ? -EndXOffset : EndXOffset,
+						bIsTargetLeftEnd ? -TargetEndXOffset : TargetEndXOffset,
 						BoardWidth / 2.0f,
 						BoardHeight / 2.0f
 					);
