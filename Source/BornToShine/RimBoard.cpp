@@ -430,14 +430,27 @@ void ARimBoard::ToggleBoardType()
 	RegenerateSockets();
 
 	// Update mesh scale - ONLY change the length (X), preserve width and height
+	// Also adjust mesh position to keep it centered (compensate for pivot not being at center)
 	if (MeshComponent)
 	{
 		FVector MeshScale = MeshComponent->GetRelativeScale3D();
 		float OldEffectiveLen = bIsOutsideBoard ? (BoardLength - 2.0f * BoardWidth) : BoardLength;
 		float NewEffectiveLen = GetEffectiveLength();
 
+		// Calculate the length difference
+		float LengthDiff = NewEffectiveLen - OldEffectiveLen;
+
 		// Calculate the ratio to apply to X scale
 		float LengthRatio = NewEffectiveLen / OldEffectiveLen;
+
+		// Adjust mesh position to keep it centered
+		// Move by half the length difference so both ends shrink equally
+		FVector CurrentMeshPos = MeshComponent->GetRelativeLocation();
+		MeshComponent->SetRelativeLocation(FVector(
+			CurrentMeshPos.X + (LengthDiff / 2.0f),  // Shift to compensate for pivot offset
+			CurrentMeshPos.Y,
+			CurrentMeshPos.Z
+		));
 
 		// Only modify X (length), keep Y and Z the same
 		MeshComponent->SetRelativeScale3D(FVector(
@@ -445,6 +458,8 @@ void ARimBoard::ToggleBoardType()
 			MeshScale.Y,  // Keep width unchanged
 			MeshScale.Z   // Keep height unchanged
 		));
+
+		UE_LOG(LogTemp, Warning, TEXT("RimBoard: Adjusted mesh position by %.2f cm to keep centered"), LengthDiff / 2.0f);
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("RimBoard: Toggled to %s board (effective length: %.2f cm)"),
