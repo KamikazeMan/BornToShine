@@ -441,14 +441,21 @@ void ARimBoard::ToggleBoardType()
 	// Regenerate sockets to update positions
 	RegenerateSockets();
 
-	// Update mesh scale to reflect new effective length
+	// Update mesh scale - ONLY change the length (X), preserve width and height
 	if (MeshComponent)
 	{
-		float EffectiveLen = GetEffectiveLength();
+		FVector CurrentScale = MeshComponent->GetRelativeScale3D();
+		float OldEffectiveLen = bIsOutsideBoard ? (BoardLength - 2.0f * BoardWidth) : BoardLength;
+		float NewEffectiveLen = GetEffectiveLength();
+
+		// Calculate the ratio to apply to X scale
+		float LengthRatio = NewEffectiveLen / OldEffectiveLen;
+
+		// Only modify X (length), keep Y and Z the same
 		MeshComponent->SetRelativeScale3D(FVector(
-			EffectiveLen / 100.0f,
-			BoardWidth / 100.0f,
-			BoardHeight / 100.0f
+			CurrentScale.X * LengthRatio,
+			CurrentScale.Y,  // Keep width unchanged
+			CurrentScale.Z   // Keep height unchanged
 		));
 	}
 
