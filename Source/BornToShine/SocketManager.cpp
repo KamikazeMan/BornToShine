@@ -32,31 +32,20 @@ void ASocketManager::InitializeCompatibilityRules()
 
 void ASocketManager::CreateFoundationRules()
 {
-	// Foundation SIDE sockets are the PRIMARY connection points for rim boards
-	// Side sockets are positioned on the groove center lines (X=0 or Y=0),
-	// which ensures rim boards sit centered in the foundation groove
+	// Foundation SIDE sockets are the ONLY connection points for rim boards
+	// Side sockets are at the edges, centered on the groove (Y=0 or X=0)
+	// This ensures rim boards sit perfectly centered in the foundation groove
 	FSocketCompatibilityRule FoundationSideRule;
 	FoundationSideRule.SourceSocketType = EConstructionSocketType::Foundation_Side;
 	FoundationSideRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
 	FoundationSideRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	FoundationSideRule.SnapDistance = 60.0f; // Larger snap distance - these are the preferred sockets
+	FoundationSideRule.SnapDistance = 50.0f;
 	FoundationSideRule.bCheckAlignment = true;
 	FoundationSideRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(FoundationSideRule);
 
-	// Foundation CENTER socket can also accept rim boards (for mid-span support)
-	FSocketCompatibilityRule FoundationCenterRule;
-	FoundationCenterRule.SourceSocketType = EConstructionSocketType::Foundation_Corner; // Center uses Corner type
-	FoundationCenterRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
-	FoundationCenterRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	FoundationCenterRule.SnapDistance = 40.0f; // Smaller snap distance than sides
-	FoundationCenterRule.bCheckAlignment = true;
-	FoundationCenterRule.MaxAlignmentAngle = 10.0f;
-	CompatibilityRules.Add(FoundationCenterRule);
-
-	// NOTE: Foundation_Corner sockets at diagonal corners (±HalfWidth, ±HalfLength)
-	// are NOT compatible with rim boards because they would place boards off-center
-	// from the foundation groove. Rim boards should only snap to Side or Center sockets.
+	// NOTE: Foundation_Corner sockets (at diagonal corners) are NOT used for rim boards
+	// because they would place boards off-center from the groove.
 }
 
 void ASocketManager::CreateRimBoardRules()
