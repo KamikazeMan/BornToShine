@@ -4,6 +4,7 @@
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMeshSocket.h"
 
 ARimBoard::ARimBoard()
 {
