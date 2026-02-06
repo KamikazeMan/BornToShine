@@ -24,26 +24,22 @@ ARimBoard::ARimBoard()
 	bUse24InchSpacing = false;
 
 	// Default to outside board (full length)
-	// Inside boards are 3" shorter to butt against outside boards
 	bIsOutsideBoard = true;
 
 	// Rim boards are wood - require manual nailing
 	bAutoNailOnPlace = false;
 
 	// CRITICAL: Force actor scale to (1,1,1) - we use mesh scale for dimensions
-	// This prevents mouse wheel scaling from affecting width/height
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Set mesh scale to match dimensions (using effective length for outside/inside board type)
+	// Set mesh scale to match dimensions
 	if (MeshComponent)
 	{
-		// Assuming a base mesh of 1m cube, scale to rim board dimensions
-		// Note: GetEffectiveLength() returns BoardLength for outside boards (default)
 		MeshComponent->SetRelativeScale3D(FVector(
-			GetEffectiveLength() / 100.0f,  // Length (X-axis) - accounts for board type
-			BoardWidth / 100.0f,            // Width (Y-axis)
-			BoardHeight / 100.0f            // Height (Z-axis)
+			GetEffectiveLength() / 100.0f,
+			BoardWidth / 100.0f,
+			BoardHeight / 100.0f
 		));
 	}
 }
@@ -73,47 +69,43 @@ void ARimBoard::InitializeSockets()
 
 void ARimBoard::CreateBottomEndSockets()
 {
-	// Bottom sockets ONLY at the exact ends for proper foundation alignment
-	// Having intermediate sockets causes misalignment when the board snaps
-	// to a middle socket instead of an end socket
-
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
 
-	// Left end socket - for snapping to left foundation
+	// Left end socket
 	FConstructionSocket LeftEndSocket;
 	LeftEndSocket.SocketName = FName("BottomEnd_Left");
 	LeftEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	LeftEndSocket.LocalPosition = FVector(
-		-HalfLen,              // Left end
-		0.0f,                  // Centered on width (Y=0)
-		-BoardHeight / 2.0f    // Bottom face
+		-HalfLen,
+		0.0f,
+		-BoardHeight / 2.0f
 	);
 	LeftEndSocket.LocalRotation = FRotator::ZeroRotator;
 	LeftEndSocket.bIsOccupied = false;
 	Sockets.Add(LeftEndSocket);
 
-	// Right end socket - for snapping to right foundation
+	// Right end socket
 	FConstructionSocket RightEndSocket;
 	RightEndSocket.SocketName = FName("BottomEnd_Right");
 	RightEndSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	RightEndSocket.LocalPosition = FVector(
-		HalfLen,               // Right end
-		0.0f,                  // Centered on width (Y=0)
-		-BoardHeight / 2.0f    // Bottom face
+		HalfLen,
+		0.0f,
+		-BoardHeight / 2.0f
 	);
 	RightEndSocket.LocalRotation = FRotator::ZeroRotator;
 	RightEndSocket.bIsOccupied = false;
 	Sockets.Add(RightEndSocket);
 
-	// Center socket - for middle foundation support on longer boards
+	// Center socket
 	FConstructionSocket CenterSocket;
 	CenterSocket.SocketName = FName("BottomEnd_Center");
 	CenterSocket.SocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	CenterSocket.LocalPosition = FVector(
-		0.0f,                  // Center of board
-		0.0f,                  // Centered on width (Y=0)
-		-BoardHeight / 2.0f    // Bottom face
+		0.0f,
+		0.0f,
+		-BoardHeight / 2.0f
 	);
 	CenterSocket.LocalRotation = FRotator::ZeroRotator;
 	CenterSocket.bIsOccupied = false;
@@ -125,8 +117,7 @@ void ARimBoard::CreateBottomEndSockets()
 
 void ARimBoard::CreateTopFaceSockets()
 {
-	// Top face sockets for floor joists at 16" or 24" intervals
-	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f; // 24" or 16"
+	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f;
 
 	TArray<FVector> SocketPositions = CalculateJoistSocketPositions();
 
@@ -136,7 +127,7 @@ void ARimBoard::CreateTopFaceSockets()
 		TopSocket.SocketName = FName(*FString::Printf(TEXT("TopFace_%d"), i));
 		TopSocket.SocketType = EConstructionSocketType::RimBoard_Top_Face;
 		TopSocket.LocalPosition = SocketPositions[i];
-		TopSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f); // Facing up
+		TopSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
 		TopSocket.bIsOccupied = false;
 		Sockets.Add(TopSocket);
 	}
@@ -147,37 +138,32 @@ void ARimBoard::CreateTopFaceSockets()
 
 void ARimBoard::CreateSideFaceSockets()
 {
-	// Side face sockets for perpendicular joists that butt into the rim
-	// These are at the same intervals as top sockets, but on the side face
-
 	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f;
 	TArray<FVector> JoistPositions = CalculateJoistSocketPositions();
 
 	for (int32 i = 0; i < JoistPositions.Num(); i++)
 	{
-		// Left side face socket
 		FConstructionSocket LeftSideSocket;
 		LeftSideSocket.SocketName = FName(*FString::Printf(TEXT("SideFace_Left_%d"), i));
 		LeftSideSocket.SocketType = EConstructionSocketType::RimBoard_Side_Face;
 		LeftSideSocket.LocalPosition = FVector(
-			JoistPositions[i].X,  // Same X as top socket
-			-BoardWidth / 2.0f,   // Left side
-			0.0f                  // Centered vertically
+			JoistPositions[i].X,
+			-BoardWidth / 2.0f,
+			0.0f
 		);
-		LeftSideSocket.LocalRotation = FRotator(0.0f, -90.0f, 0.0f); // Facing left
+		LeftSideSocket.LocalRotation = FRotator(0.0f, -90.0f, 0.0f);
 		LeftSideSocket.bIsOccupied = false;
 		Sockets.Add(LeftSideSocket);
 
-		// Right side face socket
 		FConstructionSocket RightSideSocket;
 		RightSideSocket.SocketName = FName(*FString::Printf(TEXT("SideFace_Right_%d"), i));
 		RightSideSocket.SocketType = EConstructionSocketType::RimBoard_Side_Face;
 		RightSideSocket.LocalPosition = FVector(
-			JoistPositions[i].X,  // Same X as top socket
-			BoardWidth / 2.0f,    // Right side
-			0.0f                  // Centered vertically
+			JoistPositions[i].X,
+			BoardWidth / 2.0f,
+			0.0f
 		);
-		RightSideSocket.LocalRotation = FRotator(0.0f, 90.0f, 0.0f); // Facing right
+		RightSideSocket.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
 		RightSideSocket.bIsOccupied = false;
 		Sockets.Add(RightSideSocket);
 	}
@@ -187,135 +173,40 @@ void ARimBoard::CreateSideFaceSockets()
 
 void ARimBoard::CreateEndCornerSockets()
 {
-	// CORNER SOCKET POSITIONING:
-	// Sockets are placed at the board END and offset to the OUTER EDGE (Y = +BoardWidth/2).
-	// This means when two boards snap corner-to-corner at 90 degrees, their outer edges
-	// meet flush (L-shape) instead of their centerlines intersecting (T-shape).
+	// CORNER SOCKET STRATEGY:
+	// Always use CALCULATED positions based on current effective length.
+	// Mesh sockets (Snap_Corner_Left/Right) are unreliable after resize because
+	// GetSocketTransform returns the original mesh-space positions, not scaled positions.
 	//
-	// If mesh sockets exist (Snap_Corner_Left, Snap_Corner_Right), those are used instead.
-	// IMPORTANT: Mesh sockets must ALSO be at the outer edge, not the centerline!
+	// By always calculating from GetEffectiveLength(), sockets are guaranteed to be
+	// at the correct board ends regardless of resizing.
 
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
-	float HalfWidth = BoardWidth / 2.0f; // 1.905 cm (half of 1.5")
+	float HalfWidth = BoardWidth / 2.0f; // 1.905 cm — OUTER EDGE offset
 
-	bool bLeftFromMesh = false;
-	bool bRightFromMesh = false;
+	// LEFT end corner socket — at outer edge to prevent T-shape
+	FConstructionSocket LeftEnd;
+	LeftEnd.SocketName = FName("EndCorner_Left");
+	LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
+	LeftEnd.LocalPosition = FVector(-HalfLen, HalfWidth, 0.0f);
+	LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
+	LeftEnd.bIsOccupied = false;
+	Sockets.Add(LeftEnd);
 
-	if (MeshComponent)
-	{
-		// Debug: List all sockets on the mesh to verify names
-		if (UStaticMesh* Mesh = MeshComponent->GetStaticMesh())
-		{
-			UE_LOG(LogTemp, Log, TEXT("RimBoard: Mesh has %d sockets:"), Mesh->Sockets.Num());
-			for (UStaticMeshSocket* Socket : Mesh->Sockets)
-			{
-				if (Socket)
-				{
-					UE_LOG(LogTemp, Log, TEXT("  - Socket: '%s' at %s"), *Socket->SocketName.ToString(), *Socket->RelativeLocation.ToString());
-				}
-			}
-		}
+	// RIGHT end corner socket — at outer edge
+	FConstructionSocket RightEnd;
+	RightEnd.SocketName = FName("EndCorner_Right");
+	RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
+	RightEnd.LocalPosition = FVector(HalfLen, HalfWidth, 0.0f);
+	RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+	RightEnd.bIsOccupied = false;
+	Sockets.Add(RightEnd);
 
-		// Try LEFT mesh socket
-		if (MeshComponent->DoesSocketExist(FName("Snap_Corner_Left")))
-		{
-			FTransform LeftSocketTransform = MeshComponent->GetSocketTransform(FName("Snap_Corner_Left"), ERelativeTransformSpace::RTS_Component);
-
-			FConstructionSocket LeftEnd;
-			LeftEnd.SocketName = FName("EndCorner_Left");
-			LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-			LeftEnd.LocalPosition = LeftSocketTransform.GetLocation();
-			LeftEnd.LocalRotation = LeftSocketTransform.GetRotation().Rotator();
-			LeftEnd.bIsOccupied = false;
-			Sockets.Add(LeftEnd);
-
-			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Left at %s, rot %s"),
-				*LeftEnd.LocalPosition.ToString(), *LeftEnd.LocalRotation.ToString());
-
-			// WARN if mesh socket is at centerline (Y near 0) — it should be at the edge
-			if (FMath::Abs(LeftEnd.LocalPosition.Y) < 1.0f)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("RimBoard: WARNING - Snap_Corner_Left Y=%.2f is near centerline! "
-					"Move it to Y=%.2f (outer edge) in the Static Mesh Editor to fix T-shape corners."),
-					LeftEnd.LocalPosition.Y, HalfWidth);
-			}
-
-			bLeftFromMesh = true;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("RimBoard: Snap_Corner_Left mesh socket NOT FOUND - using fallback"));
-		}
-
-		// Try RIGHT mesh socket
-		if (MeshComponent->DoesSocketExist(FName("Snap_Corner_Right")))
-		{
-			FTransform RightSocketTransform = MeshComponent->GetSocketTransform(FName("Snap_Corner_Right"), ERelativeTransformSpace::RTS_Component);
-
-			FConstructionSocket RightEnd;
-			RightEnd.SocketName = FName("EndCorner_Right");
-			RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-			RightEnd.LocalPosition = RightSocketTransform.GetLocation();
-			RightEnd.LocalRotation = RightSocketTransform.GetRotation().Rotator();
-			RightEnd.bIsOccupied = false;
-			Sockets.Add(RightEnd);
-
-			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Right at %s, rot %s"),
-				*RightEnd.LocalPosition.ToString(), *RightEnd.LocalRotation.ToString());
-
-			// WARN if mesh socket is at centerline
-			if (FMath::Abs(RightEnd.LocalPosition.Y) < 1.0f)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("RimBoard: WARNING - Snap_Corner_Right Y=%.2f is near centerline! "
-					"Move it to Y=%.2f (outer edge) in the Static Mesh Editor to fix T-shape corners."),
-					RightEnd.LocalPosition.Y, HalfWidth);
-			}
-
-			bRightFromMesh = true;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("RimBoard: Snap_Corner_Right mesh socket NOT FOUND - using fallback"));
-		}
-	}
-
-	// Fallback for LEFT socket if not found in mesh
-	// FIX: Y = +HalfWidth puts socket at OUTER EDGE instead of centerline (Y=0)
-	// This prevents the T-shape — boards meet edge-to-edge, not center-to-center
-	if (!bLeftFromMesh)
-	{
-		FConstructionSocket LeftEnd;
-		LeftEnd.SocketName = FName("EndCorner_Left");
-		LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		LeftEnd.LocalPosition = FVector(-HalfLen, HalfWidth, 0.0f);  // OUTER EDGE
-		LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
-		LeftEnd.bIsOccupied = false;
-		Sockets.Add(LeftEnd);
-
-		UE_LOG(LogTemp, Log, TEXT("RimBoard: Fallback LEFT corner socket at (%.2f, %.2f, 0) — OUTER EDGE"),
-			-HalfLen, HalfWidth);
-	}
-
-	// Fallback for RIGHT socket if not found in mesh
-	if (!bRightFromMesh)
-	{
-		FConstructionSocket RightEnd;
-		RightEnd.SocketName = FName("EndCorner_Right");
-		RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		RightEnd.LocalPosition = FVector(HalfLen, HalfWidth, 0.0f);  // OUTER EDGE
-		RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		RightEnd.bIsOccupied = false;
-		Sockets.Add(RightEnd);
-
-		UE_LOG(LogTemp, Log, TEXT("RimBoard: Fallback RIGHT corner socket at (%.2f, %.2f, 0) — OUTER EDGE"),
-			HalfLen, HalfWidth);
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets for %s board - Left:%s, Right:%s"),
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets CALCULATED at Left=(%.2f, %.2f, 0) Right=(%.2f, %.2f, 0) for %s board (EffLen=%.1f cm)"),
+		-HalfLen, HalfWidth, HalfLen, HalfWidth,
 		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"),
-		bLeftFromMesh ? TEXT("MESH") : TEXT("CALC"),
-		bRightFromMesh ? TEXT("MESH") : TEXT("CALC"));
+		EffectiveLen);
 }
 
 TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
@@ -325,18 +216,17 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
 
-	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f; // 24" or 16" OC
-	float StartOffset = Spacing; // Start one spacing in from the end
+	float Spacing = bUse24InchSpacing ? 60.96f : 40.64f;
+	float StartOffset = Spacing;
 
-	// Calculate how many sockets fit along the board length
 	float CurrentX = -HalfLen + StartOffset;
 
 	while (CurrentX < HalfLen - StartOffset / 2.0f)
 	{
 		FVector SocketPos = FVector(
 			CurrentX,
-			0.0f,                // Centered on width
-			BoardHeight / 2.0f   // Top face
+			0.0f,
+			BoardHeight / 2.0f
 		);
 		Positions.Add(SocketPos);
 		CurrentX += Spacing;
@@ -347,22 +237,19 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 
 void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
-	// Use standard socket snapping — corner sockets are at outer edge,
-	// so no perpendicular offset hack is needed for flush L-corners.
 	Super::UpdatePreviewPosition(NewLocation, NewRotation);
 }
 
 void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 {
-	// Clamp to valid range
 	LengthInFeet = FMath::Clamp(LengthInFeet, MinLengthFeet, MaxLengthFeet);
 
 	if (LengthInFeet != CurrentLengthFeet)
 	{
 		CurrentLengthFeet = LengthInFeet;
-		BoardLength = CurrentLengthFeet * 30.48f; // Convert feet to cm
+		BoardLength = CurrentLengthFeet * 30.48f;
 
-		// Update mesh scale using effective length (accounts for outside/inside board type)
+		// Update mesh scale
 		if (MeshComponent)
 		{
 			float EffectiveLen = GetEffectiveLength();
@@ -373,7 +260,7 @@ void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 			));
 		}
 
-		// Regenerate sockets for new length
+		// Regenerate sockets — calculated positions will use new effective length
 		RegenerateSockets();
 
 		UE_LOG(LogTemp, Log, TEXT("Rim Board length changed to: %s (%s board, effective: %.2f cm)"),
@@ -396,22 +283,14 @@ FString ARimBoard::GetLengthDisplayString() const
 void ARimBoard::ScalePiece(float ScaleDelta)
 {
 	// Rim boards: Scroll wheel scaling is DISABLED
-	// Board length is controlled automatically when closing rectangles
-	// This prevents accidental scaling that breaks corner alignment
-
-	// Keep actor scale at 1,1,1
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
-
-	// Intentionally do nothing with ScaleDelta
 }
 
 void ARimBoard::RegenerateSockets()
 {
-	// Clear existing sockets
 	Sockets.Empty();
 
-	// Recreate all sockets with new board dimensions
 	CreateBottomEndSockets();
 	CreateTopFaceSockets();
 	CreateSideFaceSockets();
@@ -424,38 +303,28 @@ void ARimBoard::ToggleBoardType()
 {
 	bIsOutsideBoard = !bIsOutsideBoard;
 
-	// Regenerate sockets to update positions
 	RegenerateSockets();
 
-	// Update mesh scale - ONLY change the length (X), preserve width and height
-	// Also adjust mesh position to keep it centered (compensate for pivot not being at center)
 	if (MeshComponent)
 	{
 		FVector MeshScale = MeshComponent->GetRelativeScale3D();
 		float OldEffectiveLen = bIsOutsideBoard ? (BoardLength - 2.0f * BoardWidth) : BoardLength;
 		float NewEffectiveLen = GetEffectiveLength();
 
-		// Calculate the length difference
 		float LengthDiff = NewEffectiveLen - OldEffectiveLen;
-
-		// Calculate the ratio to apply to X scale
 		float LengthRatio = NewEffectiveLen / OldEffectiveLen;
 
-		// Adjust mesh position to keep it centered
-		// When shrinking (LengthDiff negative), mesh pivot at one end causes that end to stay fixed
-		// We need to shift the mesh in OPPOSITE direction of the length change to center it
 		FVector CurrentMeshPos = MeshComponent->GetRelativeLocation();
 		MeshComponent->SetRelativeLocation(FVector(
-			CurrentMeshPos.X - (LengthDiff / 2.0f),  // SUBTRACT (opposite of length change)
+			CurrentMeshPos.X - (LengthDiff / 2.0f),
 			CurrentMeshPos.Y,
 			CurrentMeshPos.Z
 		));
 
-		// Only modify X (length), keep Y and Z the same
 		MeshComponent->SetRelativeScale3D(FVector(
 			MeshScale.X * LengthRatio,
-			MeshScale.Y,  // Keep width unchanged
-			MeshScale.Z   // Keep height unchanged
+			MeshScale.Y,
+			MeshScale.Z
 		));
 
 		UE_LOG(LogTemp, Warning, TEXT("RimBoard: Adjusted mesh position by %.2f cm to keep centered"), LengthDiff / 2.0f);
@@ -469,13 +338,10 @@ float ARimBoard::GetEffectiveLength() const
 {
 	if (bIsOutsideBoard)
 	{
-		// Outside boards: full length
 		return BoardLength;
 	}
 	else
 	{
-		// Inside boards: 3" shorter (7.62cm) to butt against outside boards on both ends
-		// Each end butts against an outside board's thickness (1.5" = 3.81cm)
-		return BoardLength - (2.0f * BoardWidth); // Subtract 3.81cm from each end = 7.62cm total
+		return BoardLength - (2.0f * BoardWidth);
 	}
 }
