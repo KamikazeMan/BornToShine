@@ -247,16 +247,13 @@ void UBuildingComponent::CyclePieceType()
 
 	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Cycled to %s"), *GetCurrentPieceName());
 
-	// Show length info for rim boards
+	// Show length info for rim boards (only when cycling, not every frame)
 	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
 	{
 		if (class ARimBoard* RimBoard = Cast<class ARimBoard>(CurrentPreviewPiece))
 		{
 			FString LengthInfo = RimBoard->GetLengthDisplayString();
-			UE_LOG(LogTemp, Warning, TEXT("===== RIM BOARD SELECTED ====="));
-			UE_LOG(LogTemp, Warning, TEXT("Current Length: %s"), *LengthInfo);
-			UE_LOG(LogTemp, Warning, TEXT("Use Mouse Wheel to adjust length (1-16 ft)"));
-			UE_LOG(LogTemp, Warning, TEXT("=============================="));
+			UE_LOG(LogTemp, Log, TEXT("RimBoard selected: %s (scroll wheel disabled)"), *LengthInfo);
 		}
 	}
 }

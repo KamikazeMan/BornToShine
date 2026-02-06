@@ -217,25 +217,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
-		// DEBUG: Log all corner socket evaluations to diagnose 4th board issues
-		if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("🔵 Evaluating corner socket: %s at world %s (searching %d nearby pieces)"),
-				*Socket.SocketName.ToString(),
-				*SocketWorldLocation.ToString(),
-				NearbyPieces.Num());
-
-			// Log what nearby pieces we're checking against
-			for (ABuildablePiece* Nearby : NearbyPieces)
-			{
-				if (Nearby)
-				{
-					float Dist = FVector::Dist(GetActorLocation(), Nearby->GetActorLocation());
-					UE_LOG(LogTemp, Warning, TEXT("    -> Nearby: %s (type=%d) at dist %.1fcm"),
-						*Nearby->GetName(), (int32)Nearby->PieceType, Dist);
-				}
-			}
-		}
+		// Debug logging disabled to reduce spam (runs every frame)
+		// Enable for debugging by uncommenting:
+		// if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+		// {
+		//     UE_LOG(LogTemp, Verbose, TEXT("Evaluating corner: %s"), *Socket.SocketName.ToString());
+		// }
 
 		FVector SnapLoc;
 		FRotator SnapRot;
@@ -260,16 +247,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 			// Calculate connection priority
 			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocketType);
-
-			// Log all snap candidates for corner sockets
-			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("    🎯 Found snap: %s -> %s on %s (Priority=%d, Dist=%.1fcm, BestPri=%d)"),
-					*Socket.SocketName.ToString(),
-					*TargetSocketName.ToString(),
-					*TargetPiece->GetName(),
-					Priority, Distance, BestPriority);
-			}
 
 			// Choose this snap if:
 			// 1. It has higher priority, OR
@@ -314,9 +291,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
 
 					CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
-
-					UE_LOG(LogTemp, Warning, TEXT("  🔄 Auto-rotating for corner snap: Target=%.1f° + Offset=%.1f° = New=%.1f° (Cross.Z=%.2f)"),
-						TargetRotation.Yaw, RotationOffset, CurrentActorRotation.Yaw, CrossProduct.Z);
 				}
 
 				// Transform the socket offset by the (possibly auto-rotated) rotation
@@ -327,42 +301,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapRotation = CurrentActorRotation;
 
 				// MESH SOCKET CORNER SYSTEM:
-				// Mesh sockets are placed at exact mesh edges in the Static Mesh Editor
-				// When mesh is scaled (inside boards), socket positions scale automatically
-				// No offset calculations needed - sockets define precise snap points
-				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetPiece)
-				{
-					ARimBoard* SourceRimBoard = Cast<ARimBoard>(this);
-					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
-
-					if (SourceRimBoard && TargetRimBoard)
-					{
-						bool bSourceIsInside = !SourceRimBoard->bIsOutsideBoard;
-						bool bTargetIsOutside = TargetRimBoard->bIsOutsideBoard;
-
-						// Log the snap types for debugging
-						UE_LOG(LogTemp, Warning, TEXT("  🔧 Corner snap: Source=%s, Target=%s - using mesh socket positions"),
-							bSourceIsInside ? TEXT("INSIDE") : TEXT("OUTSIDE"),
-							bTargetIsOutside ? TEXT("OUTSIDE") : TEXT("INSIDE"));
-					}
-				}
+				// Mesh sockets provide precise snap points at actual mesh edges
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
 				bFoundSnap = true;
-
-				UE_LOG(LogTemp, Warning, TEXT("SNAP FOUND! Socket: %s -> Target: %s on %s (Priority=%d)"),
-					*Socket.SocketName.ToString(),
-					*TargetSocketName.ToString(),
-					*TargetPiece->GetName(),
-					Priority);
-				UE_LOG(LogTemp, Warning, TEXT("  Target World Pos (SnapLoc): %s"), *SnapLoc.ToString());
-				UE_LOG(LogTemp, Warning, TEXT("  Socket Local Pos: %s"), *Socket.LocalPosition.ToString());
-				UE_LOG(LogTemp, Warning, TEXT("  Socket World Offset: %s"), *SocketWorldOffset.ToString());
-				UE_LOG(LogTemp, Warning, TEXT("  Final Actor Snap Location: %s, Distance: %.1fcm"),
-					*OutSnapLocation.ToString(), Distance);
 			}
 		}
 	}

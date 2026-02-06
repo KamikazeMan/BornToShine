@@ -221,24 +221,8 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check if within snap distance
 			float Distance = FVector::Dist(WorldLocation, TargetWorldLocation);
 
-			// DEBUG: Log ALL corner socket distances for diagnosis
-			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
-				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
-			{
-				if (Distance > Rule.SnapDistance)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("🔴 Corner too far: %s -> %s on %s (Dist=%.1fcm > SnapDist=%.1fcm)"),
-						*SourceSocket.SocketName.ToString(),
-						*TargetSocket.SocketName.ToString(),
-						*Piece->GetName(),
-						Distance, Rule.SnapDistance);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("🟢 Found Rim Corner Match! Distance=%.1fcm, SnapDist=%.1fcm"),
-						Distance, Rule.SnapDistance);
-				}
-			}
+			// Debug logging disabled (runs every frame - too spammy)
+			// Only log successful snaps, not every check
 
 			if (Distance > Rule.SnapDistance) continue;
 
@@ -249,13 +233,7 @@ bool ASocketManager::FindBestSnapPoint(
 				if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 				{
-					float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
-						WorldRotation.Yaw,
-						TargetWorldRotation.Yaw
-					));
-					UE_LOG(LogTemp, Warning, TEXT("   📐 Rim corner angle: %.1f degrees (auto-rotation will fix)"), AngleDiff);
-					// Skip angle validation - FindSnapPoint will auto-rotate to perpendicular
-					// This allows players to place boards in any order (parallel first, then perpendicular, etc.)
+					// Skip angle validation for rim corners - auto-rotation handles it
 				}
 				else
 				{
@@ -276,24 +254,17 @@ bool ASocketManager::FindBestSnapPoint(
 			{
 				float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(WorldRotation.Yaw, TargetWorldRotation.Yaw));
 
-				// Give BONUS for being close to 90 degrees (perpendicular)
-				// Give PENALTY for being close to 0 or 180 degrees (parallel)
-				float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);  // How far from 90°?
-				float PerpendicularBonus = 100.0f / (AngleTo90 + 1.0f);  // Closer to 90° = higher bonus
+				// Bonus for perpendicular (90°), penalty for parallel (0° or 180°)
+				float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);
+				float PerpendicularBonus = 100.0f / (AngleTo90 + 1.0f);
 
-				// OPPOSITE-END BONUS: Prefer Left→Right or Right→Left connections
-				// Same-side connections (Left→Left, Right→Right) get penalized
+				// Bonus for opposite ends (Left→Right), penalty for same-side (Left→Left)
 				bool bSourceIsLeft = SourceSocket.SocketName.ToString().Contains("Left");
 				bool bTargetIsLeft = TargetSocket.SocketName.ToString().Contains("Left");
-				bool bOppositeEnds = (bSourceIsLeft != bTargetIsLeft); // True if Left→Right or Right→Left
-
-				float OppositeEndBonus = bOppositeEnds ? 50.0f : -25.0f; // Bonus for opposite, penalty for same
+				bool bOppositeEnds = (bSourceIsLeft != bTargetIsLeft);
+				float OppositeEndBonus = bOppositeEnds ? 50.0f : -25.0f;
 
 				Score += PerpendicularBonus + OppositeEndBonus;
-
-				UE_LOG(LogTemp, Log, TEXT("  Corner score: base=%.1f + perp=%.1f + opposite=%s(%.1f) = %.1f"),
-					Score - PerpendicularBonus - OppositeEndBonus, PerpendicularBonus,
-					bOppositeEnds ? TEXT("YES") : TEXT("NO"), OppositeEndBonus, Score);
 			}
 
 			if (Score > BestScore)
