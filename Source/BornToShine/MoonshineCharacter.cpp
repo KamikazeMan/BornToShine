@@ -18,10 +18,13 @@ AMoonshineCharacter::AMoonshineCharacter()
 	// Create third person camera boom
 	ThirdPersonArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("ThirdPersonArm"));
 	ThirdPersonArm->SetupAttachment(RootComponent);
-	ThirdPersonArm->TargetArmLength = 400.0f;
+	ThirdPersonArm->TargetArmLength = 300.0f;  // Distance behind character
+	ThirdPersonArm->SetRelativeLocation(FVector(0.0f, 0.0f, 80.0f));  // Shoulder height
+	ThirdPersonArm->SocketOffset = FVector(0.0f, 50.0f, 20.0f);  // Offset right and slightly up
 	ThirdPersonArm->bUsePawnControlRotation = true;
 	ThirdPersonArm->bEnableCameraLag = true;
-	ThirdPersonArm->CameraLagSpeed = 3.0f;
+	ThirdPersonArm->CameraLagSpeed = 5.0f;
+	ThirdPersonArm->bDoCollisionTest = true;  // Camera avoids walls
 
 	// Create third person camera
 	ThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonCamera"));
@@ -41,8 +44,8 @@ AMoonshineCharacter::AMoonshineCharacter()
 	SprintSpeed = 800.0f;
 	MouseSensitivity = 1.0f;
 
-	ThirdPersonArmLength = 400.0f;
-	ThirdPersonArmOffset = FVector(0.0f, 50.0f, 50.0f);
+	ThirdPersonArmLength = 300.0f;
+	ThirdPersonArmOffset = FVector(0.0f, 50.0f, 20.0f);
 
 	// Build mode settings
 	CurrentPreviewPiece = nullptr;
