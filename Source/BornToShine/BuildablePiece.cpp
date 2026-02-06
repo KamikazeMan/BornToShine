@@ -301,8 +301,9 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapRotation = CurrentActorRotation;
 
 				// PERPENDICULAR CORNER OFFSET:
-				// When two outside boards meet at 90°, offset by half board width
-				// so the snapping board's end touches the TARGET board's SIDE face
+				// When two boards meet at 90°, offset so they're flush:
+				// - Snapping board's side face aligns with target board's end
+				// - Snapping board's end face aligns with target board's side
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
@@ -315,14 +316,32 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						// Get the target board's right vector (perpendicular to its length)
 						FVector TargetRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
 
-						// Determine which side of the target board we're on
-						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
-						// FLIP THE SIGN: Move TOWARD target's side, not away
-						float SideSign = FVector::DotProduct(ToSource, TargetRight) > 0 ? -1.0f : 1.0f;
+						// Get the target board's forward vector (along its length)
+						FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
 
-						// Offset by half the board width toward the target board's side
-						float OffsetAmount = TargetRimBoard->BoardWidth / 2.0f;
-						OutSnapLocation += TargetRight * SideSign * OffsetAmount;
+						// Determine which side of the target board we're approaching from
+						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
+						float DotRight = FVector::DotProduct(ToSource, TargetRight);
+						float SideSign = DotRight > 0 ? -1.0f : 1.0f;
+
+						// Offset perpendicular by half the TARGET board's width
+						// This moves snapping board so its centerline aligns with target's side face
+						float PerpOffset = TargetRimBoard->BoardWidth / 2.0f;
+
+						// Also offset along target's length by half the SNAPPING board's width
+						// This moves snapping board so its side face aligns with target's end
+						float LengthOffset = SourceRimBoard->BoardWidth / 2.0f;
+
+						// Determine which end of target we're near (positive or negative X in target's space)
+						float DotForward = FVector::DotProduct(ToSource, TargetForward);
+						float EndSign = DotForward > 0 ? 1.0f : -1.0f;
+
+						FVector TotalOffset = (TargetRight * SideSign * PerpOffset) +
+						                      (TargetForward * EndSign * LengthOffset);
+						OutSnapLocation += TotalOffset;
+
+						UE_LOG(LogTemp, Warning, TEXT("Corner offset: PerpOffset=%.2f, LengthOffset=%.2f, SideSign=%.1f, EndSign=%.1f"),
+							PerpOffset, LengthOffset, SideSign, EndSign);
 					}
 				}
 
