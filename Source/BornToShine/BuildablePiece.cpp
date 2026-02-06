@@ -317,7 +317,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 						// Determine which side of the target board we're on
 						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
-						float SideSign = FVector::DotProduct(ToSource, TargetRight) > 0 ? 1.0f : -1.0f;
+						// FLIP THE SIGN: Move TOWARD target's side, not away
+						float SideSign = FVector::DotProduct(ToSource, TargetRight) > 0 ? -1.0f : 1.0f;
 
 						// Offset by half the board width toward the target board's side
 						float OffsetAmount = TargetRimBoard->BoardWidth / 2.0f;
