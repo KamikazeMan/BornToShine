@@ -336,25 +336,25 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						bool bTargetIsRightSocket = TargetSocketName.ToString().Contains(TEXT("Right"));
 
 						// For flush corner: offset AWAY from target along target's length
-						// Left socket = negative X in target's space, offset further negative
-						// Right socket = positive X in target's space, offset further positive
+						// Need FULL board width to clear the overlap, not just half
 						float LengthSign = bTargetIsRightSocket ? 1.0f : -1.0f;
-						float LengthOffset = SourceRimBoard->BoardWidth / 2.0f;
+						float LengthOffset = SourceRimBoard->BoardWidth;  // FULL width to clear
 
 						// Perpendicular offset: move snapping board to the side so it doesn't overlap
-						// Direction based on the snapping board's rotation relative to target
+						// Need FULL board width perpendicular too
 						FVector SourceForward = OutSnapRotation.RotateVector(FVector::ForwardVector);
 						float DotRight = FVector::DotProduct(SourceForward, TargetRight);
 						float PerpSign = DotRight > 0.5f ? 1.0f : -1.0f;
-						float PerpOffset = TargetRimBoard->BoardWidth / 2.0f;
+						float PerpOffset = TargetRimBoard->BoardWidth;  // FULL width to clear
 
 						FVector TotalOffset = (TargetForward * LengthSign * LengthOffset) +
 						                      (TargetRight * PerpSign * PerpOffset);
 						OutSnapLocation += TotalOffset;
 
-						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | LengthOff=%.2f*%.1f | PerpOff=%.2f*%.1f"),
+						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | LengthOff=%.2f*%.1f | PerpOff=%.2f*%.1f | TotalOffset=(%.1f,%.1f,%.1f)"),
 							*Socket.SocketName.ToString(), *TargetSocketName.ToString(),
-							LengthOffset, LengthSign, PerpOffset, PerpSign);
+							LengthOffset, LengthSign, PerpOffset, PerpSign,
+							TotalOffset.X, TotalOffset.Y, TotalOffset.Z);
 					}
 				}
 

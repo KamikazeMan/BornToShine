@@ -27,10 +27,10 @@ AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 	ThirdPersonCamera->SetupAttachment(ThirdPersonArm, USpringArmComponent::SocketName);
 	ThirdPersonCamera->bUsePawnControlRotation = false;
 
-	// Create first person camera
+	// Create first person camera - pushed forward to avoid seeing body
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(RootComponent);
-	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 64.0f)); // Eye height
+	FirstPersonCamera->SetRelativeLocation(FVector(40.0f, 0.0f, 75.0f)); // Forward of head
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
 	// Create Building Component
@@ -224,14 +224,32 @@ void AMoonshineCharacter_Simple::ToggleCameraMode()
 
 	if (bIsFirstPerson)
 	{
+		// FIRST PERSON: Character body rotates with controller
 		FirstPersonCamera->SetActive(true);
 		ThirdPersonCamera->SetActive(false);
+
+		// Make character rotate with controller (so camera looks out from eyes)
+		bUseControllerRotationYaw = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+
+		// Hide character mesh so you don't see your own body
+		GetMesh()->SetOwnerNoSee(true);
+
 		UE_LOG(LogTemp, Log, TEXT("Switched to First Person"));
 	}
 	else
 	{
+		// THIRD PERSON: Character rotates toward movement direction
 		FirstPersonCamera->SetActive(false);
 		ThirdPersonCamera->SetActive(true);
+
+		// Character doesn't rotate with controller, auto-rotates to movement
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+
+		// Show character mesh again
+		GetMesh()->SetOwnerNoSee(false);
+
 		UE_LOG(LogTemp, Log, TEXT("Switched to Third Person"));
 	}
 }
