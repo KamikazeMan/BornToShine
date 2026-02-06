@@ -319,8 +319,8 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 
 void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
-	// EXPERIMENTAL: Auto-scale board when closing a rectangle
-	// Detect if both corner sockets can snap to different rim boards
+	// Auto-scale board when closing a rectangle
+	// Only triggers when BOTH corners find targets on DIFFERENT boards
 	if (PieceState == EPieceState::Preview && AConstructionPhaseManager::Instance)
 	{
 		TArray<ABuildablePiece*> NearbyPieces = AConstructionPhaseManager::Instance->GetNearbyPieces(
@@ -328,9 +328,11 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 			SnapSearchRadius
 		);
 
-		// Find target positions for each corner socket
+		// Find target positions for each corner socket - must be on DIFFERENT boards
 		FVector LeftCornerTarget = FVector::ZeroVector;
 		FVector RightCornerTarget = FVector::ZeroVector;
+		ABuildablePiece* LeftTargetBoard = nullptr;
+		ABuildablePiece* RightTargetBoard = nullptr;
 		bool bLeftFound = false;
 		bool bRightFound = false;
 
@@ -358,19 +360,21 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 						FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
 						float Distance = FVector::Dist(SocketWorldLocation, TargetWorldLocation);
 
-						if (Distance < 150.0f) // Increased search radius to find closing targets
+						if (Distance < 150.0f)
 						{
 							if (bIsLeftSocket && !bLeftFound)
 							{
 								LeftCornerTarget = TargetWorldLocation;
+								LeftTargetBoard = Piece;
 								bLeftFound = true;
-								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Left corner target found at %.1fcm"), Distance);
+								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Left corner target found at %.1fcm on %s"), Distance, *Piece->GetName());
 							}
 							else if (!bIsLeftSocket && !bRightFound)
 							{
 								RightCornerTarget = TargetWorldLocation;
+								RightTargetBoard = Piece;
 								bRightFound = true;
-								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Right corner target found at %.1fcm"), Distance);
+								UE_LOG(LogTemp, Log, TEXT("Auto-scale: Right corner target found at %.1fcm on %s"), Distance, *Piece->GetName());
 							}
 							break; // Found a match for this socket, move to next socket
 						}
@@ -381,8 +385,9 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 			}
 		}
 
-		// If BOTH corners found targets, we're closing a rectangle
-		if (bLeftFound && bRightFound)
+		// If BOTH corners found targets on DIFFERENT boards, we're closing a rectangle
+		// This prevents triggering when a new board spawns on top of a placed board
+		if (bLeftFound && bRightFound && LeftTargetBoard != RightTargetBoard)
 		{
 			bAutoScalingActive = true;
 
