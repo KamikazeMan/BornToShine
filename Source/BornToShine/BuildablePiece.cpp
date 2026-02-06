@@ -272,6 +272,8 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				{
 					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
+					FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
+					FVector TargetRight = TargetRotation.RotateVector(FVector::RightVector);
 
 					// Determine inline vs corner based on SOCKET NAMES:
 					// - Right -> Left or Left -> Right = INLINE (end-to-end extension)
@@ -280,35 +282,31 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					FString TargetSocketStr = TargetSocketName.ToString();
 					bool bSourceIsRight = SourceSocketStr.Contains(TEXT("Right"));
 					bool bTargetIsRight = TargetSocketStr.Contains(TEXT("Right"));
-					bool bOppositeEnds = (bSourceIsRight != bTargetIsRight); // Right-Left or Left-Right
+					bool bOppositeEnds = (bSourceIsRight != bTargetIsRight);
 
 					if (bOppositeEnds)
 					{
-						// INLINE EXTENSION: Opposite ends connecting (Right-Left or Left-Right)
-						// Boards should face the SAME direction for end-to-end extension
+						// INLINE EXTENSION: Right->Left or Left->Right
+						// Boards extend end-to-end in the same line
 						bIsPerpendicularSnap = false;
-
-						// For inline, keep same orientation as target (NOT 180° - that was wrong)
 						CurrentActorRotation.Yaw = TargetRotation.Yaw;
-						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s - keeping same orientation"), *SourceSocketStr, *TargetSocketStr);
+						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s"), *SourceSocketStr, *TargetSocketStr);
 					}
 					else
 					{
-						// CORNER JOINT: Same ends connecting (Left-Left or Right-Right)
+						// CORNER JOINT: Left->Left or Right->Right
+						// Boards meet at 90 degrees
 						bIsPerpendicularSnap = true;
 
-						// Calculate relative position to determine rotation direction
-						FVector TargetSocketWorldPos = SnapLoc;
-						FVector SourceSocketWorldPos = SocketWorldLocation;
-						FVector ToTarget = (TargetSocketWorldPos - SourceSocketWorldPos).GetSafeNormal();
-						FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
-
-						// Use cross product to determine which way to rotate
-						FVector CrossProduct = FVector::CrossProduct(TargetForward, ToTarget);
+						// Determine rotation: snapping board should extend AWAY from target's center
+						// Use the source socket's current world position relative to target
+						FVector SourceToTarget = (SnapLoc - SocketWorldLocation).GetSafeNormal();
+						FVector CrossProduct = FVector::CrossProduct(TargetForward, SourceToTarget);
 						float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
-
 						CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
-						UE_LOG(LogTemp, Warning, TEXT("Corner snap: %s -> %s - rotating to perpendicular"), *SourceSocketStr, *TargetSocketStr);
+
+						UE_LOG(LogTemp, Warning, TEXT("Corner snap: %s -> %s (rot offset %.0f)"),
+							*SourceSocketStr, *TargetSocketStr, RotationOffset);
 					}
 				}
 
@@ -321,7 +319,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 				// PERPENDICULAR CORNER OFFSET:
 				// Only apply when boards meet at 90° (actual corner joint)
-				// Skip for inline extensions where boards stay parallel
 				if (bIsPerpendicularSnap &&
 					Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
@@ -332,38 +329,32 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 					if (SourceRimBoard && TargetRimBoard)
 					{
-						// Get the target board's right vector (perpendicular to its length)
+						FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
 						FVector TargetRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
 
-						// Get the target board's forward vector (along its length)
-						FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+						// Determine which end of target we're at (left or right)
+						bool bTargetIsRightSocket = TargetSocketName.ToString().Contains(TEXT("Right"));
 
-						// Use target socket position relative to target center to determine which end
-						FVector TargetSocketLocalPos = TargetPiece->GetActorRotation().UnrotateVector(
-							SnapLoc - TargetPiece->GetActorLocation());
+						// For flush corner: offset AWAY from target along target's length
+						// Left socket = negative X in target's space, offset further negative
+						// Right socket = positive X in target's space, offset further positive
+						float LengthSign = bTargetIsRightSocket ? 1.0f : -1.0f;
+						float LengthOffset = SourceRimBoard->BoardWidth / 2.0f;
 
-						// Determine which side we need to offset based on approach direction
-						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
-						float DotRight = FVector::DotProduct(ToSource, TargetRight);
-						// Move AWAY from target center (so the boards don't overlap)
-						float SideSign = DotRight > 0 ? 1.0f : -1.0f;
-
-						// Offset perpendicular by half the TARGET board's width
+						// Perpendicular offset: move snapping board to the side so it doesn't overlap
+						// Direction based on the snapping board's rotation relative to target
+						FVector SourceForward = OutSnapRotation.RotateVector(FVector::ForwardVector);
+						float DotRight = FVector::DotProduct(SourceForward, TargetRight);
+						float PerpSign = DotRight > 0.5f ? 1.0f : -1.0f;
 						float PerpOffset = TargetRimBoard->BoardWidth / 2.0f;
 
-						// Also offset along target's length by half the SNAPPING board's width
-						// Move TOWARD target center (inward) so snapping board's side aligns with target's end
-						float LengthOffset = SourceRimBoard->BoardWidth / 2.0f;
-						// If target socket is at positive X (right end), move negative; if at negative X (left end), move positive
-						float EndSign = TargetSocketLocalPos.X > 0 ? -1.0f : 1.0f;
-
-						FVector TotalOffset = (TargetRight * SideSign * PerpOffset) +
-						                      (TargetForward * EndSign * LengthOffset);
+						FVector TotalOffset = (TargetForward * LengthSign * LengthOffset) +
+						                      (TargetRight * PerpSign * PerpOffset);
 						OutSnapLocation += TotalOffset;
 
-						UE_LOG(LogTemp, Warning, TEXT("Corner offset: Source=%s Target=%s | PerpOff=%.2f SideSign=%.1f | LengthOff=%.2f EndSign=%.1f (TargetSocketX=%.1f)"),
+						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | LengthOff=%.2f*%.1f | PerpOff=%.2f*%.1f"),
 							*Socket.SocketName.ToString(), *TargetSocketName.ToString(),
-							PerpOffset, SideSign, LengthOffset, EndSign, TargetSocketLocalPos.X);
+							LengthOffset, LengthSign, PerpOffset, PerpSign);
 					}
 				}
 
