@@ -295,9 +295,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					else
 					{
 						// CORNER JOINT: Left->Left or Right->Right
+						// Use actor center -> target socket direction to avoid HalfWidth bias
+						// (socket-to-socket direction is skewed by both Y offsets, causing V-shape)
 						FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
-						FVector SocketToTarget = (SnapLoc - SocketWorldLocation).GetSafeNormal();
-						FVector CrossProduct = FVector::CrossProduct(TargetForward, SocketToTarget);
+						FVector ActorToTarget = (SnapLoc - GetActorLocation()).GetSafeNormal();
+						FVector CrossProduct = FVector::CrossProduct(TargetForward, ActorToTarget);
 						float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
 						CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
 
