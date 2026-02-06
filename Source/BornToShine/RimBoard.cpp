@@ -367,16 +367,15 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 			}
 		}
 
-		// If BOTH corners found targets, we're closing a rectangle - auto-scale!
+		// If BOTH corners found targets, we're closing a rectangle
 		if (bLeftFound && bRightFound)
 		{
-			bAutoScalingActive = true; // Prevent manual scroll wheel scaling
+			bAutoScalingActive = true;
 
 			float GapDistance = FVector::Dist(LeftCornerTarget, RightCornerTarget);
 
-			// The required length is the gap distance (socket-to-socket on the board should match)
 			// Current socket-to-socket distance on mesh = 121.2 + 122.7 = 243.9cm for 8ft board
-			float CurrentSocketToSocket = 243.9f; // Approximate for 8ft
+			float CurrentSocketToSocket = 243.9f;
 			float CurrentMeshLength = GetEffectiveLength();
 
 			// Scale factor to fit the gap
@@ -384,45 +383,61 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 			float NewLength = CurrentMeshLength * ScaleFactor;
 
 			// Clamp to reasonable limits (4ft to 12ft)
-			float MinLength = 4 * 30.48f;  // 4ft in cm
-			float MaxLength = 12 * 30.48f; // 12ft in cm
+			float MinLength = 4 * 30.48f;
+			float MaxLength = 12 * 30.48f;
 			NewLength = FMath::Clamp(NewLength, MinLength, MaxLength);
 
-			// Only update if significant difference (>1cm)
+			// Update mesh scale if needed
 			if (FMath::Abs(NewLength - CurrentMeshLength) > 1.0f)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: Gap=%.1fcm, Current=%.1fcm -> New=%.1fcm (scale=%.3f)"),
-					GapDistance, CurrentMeshLength, NewLength, ScaleFactor);
+				UE_LOG(LogTemp, Warning, TEXT("🔧 Auto-scaling closing board: Gap=%.1fcm, Current=%.1fcm -> New=%.1fcm"),
+					GapDistance, CurrentMeshLength, NewLength);
 
-				// Update board length directly (continuous, not foot-based)
 				BoardLength = NewLength / (bIsOutsideBoard ? 1.0f : (1.0f - (2.0f * BoardWidth / (8 * 30.48f))));
 
-				// Update mesh scale
 				if (MeshComponent)
 				{
 					float EffectiveLen = GetEffectiveLength();
 					FVector CurrentMeshScale = MeshComponent->GetRelativeScale3D();
 					MeshComponent->SetRelativeScale3D(FVector(
 						EffectiveLen / 100.0f,
-						CurrentMeshScale.Y,  // Preserve width
-						CurrentMeshScale.Z   // Preserve height
+						CurrentMeshScale.Y,
+						CurrentMeshScale.Z
 					));
 				}
-
-				// Regenerate sockets for new length
 				RegenerateSockets();
 			}
+
+			// CRITICAL: Position board CENTERED between the two target corners
+			// This ensures BOTH corners align, not just one
+			FVector CenterPoint = (LeftCornerTarget + RightCornerTarget) / 2.0f;
+
+			// Calculate rotation to face along the line from left to right target
+			FVector Direction = (RightCornerTarget - LeftCornerTarget).GetSafeNormal();
+			FRotator TargetRotation = Direction.Rotation();
+
+			// Position the board at the center, with the correct rotation
+			SetActorLocation(CenterPoint);
+			SetActorRotation(TargetRotation);
+
+			// Mark as snapped for visual feedback
+			bIsSnapped = true;
+			PieceState = EPieceState::Preview;
+			UpdateVisualFeedback();
+
+			UE_LOG(LogTemp, Warning, TEXT("🔧 Closing board positioned: Center=%s, Rot=%.1f°"),
+				*CenterPoint.ToString(), TargetRotation.Yaw);
+
+			return; // Skip normal snap system - we've handled positioning
 		}
 		else
 		{
-			bAutoScalingActive = false; // Allow manual scaling when not closing
+			bAutoScalingActive = false;
 		}
 	}
 
-	// Use socket snapping system - let it handle all positioning
+	// Use socket snapping system for non-closing boards
 	Super::UpdatePreviewPosition(NewLocation, NewRotation);
-
-	// No manual height override - socket snapping handles everything
 }
 
 void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
@@ -468,35 +483,15 @@ FString ARimBoard::GetLengthDisplayString() const
 
 void ARimBoard::ScalePiece(float ScaleDelta)
 {
-	// For rim boards, scaling changes LENGTH only, not width/height
-	// Actor scale must stay at (1,1,1) - we use mesh component scale for dimensions
+	// Rim boards: Scroll wheel scaling is DISABLED
+	// Board length is controlled automatically when closing rectangles
+	// This prevents accidental scaling that breaks corner alignment
 
-	// IMPORTANT: If auto-scaling is active (closing a rectangle), ignore manual scaling
-	// to prevent the user from accidentally breaking the precise fit
-	if (bAutoScalingActive)
-	{
-		UE_LOG(LogTemp, Log, TEXT("RimBoard: Manual scaling ignored - auto-scaling active for rectangle closing"));
-		return;
-	}
-
-	int32 NewLength = CurrentLengthFeet;
-
-	if (ScaleDelta > 0)
-	{
-		NewLength++; // Increase by 1 foot
-	}
-	else if (ScaleDelta < 0)
-	{
-		NewLength--; // Decrease by 1 foot
-	}
-
-	SetBoardLengthFeet(NewLength);
-
-	// CRITICAL: Force actor scale back to 1,1,1 in case base class modified it
+	// Keep actor scale at 1,1,1
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard::ScalePiece called - Length now %d ft, Actor scale forced to 1,1,1"), CurrentLengthFeet);
+	// Intentionally do nothing with ScaleDelta
 }
 
 void ARimBoard::RegenerateSockets()
