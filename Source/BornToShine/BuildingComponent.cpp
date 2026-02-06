@@ -3,8 +3,10 @@
 #include "BuildingComponent.h"
 #include "BuildablePiece.h"
 #include "RimBoard.h"
+#include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 UBuildingComponent::UBuildingComponent()
@@ -42,6 +44,21 @@ void UBuildingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 void UBuildingComponent::ToggleBuildMode()
 {
 	bIsInBuildMode = !bIsInBuildMode;
+
+	// Toggle crosshair visibility
+	APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (OwnerPawn)
+	{
+		APlayerController* PC = Cast<APlayerController>(OwnerPawn->GetController());
+		if (PC)
+		{
+			ABornToShineHUD* HUD = Cast<ABornToShineHUD>(PC->GetHUD());
+			if (HUD)
+			{
+				HUD->SetCrosshairVisible(bIsInBuildMode);
+			}
+		}
+	}
 
 	if (bIsInBuildMode)
 	{

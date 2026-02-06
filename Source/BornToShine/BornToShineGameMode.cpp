@@ -1,6 +1,7 @@
 // Born To Shine - Game Mode
 
 #include "BornToShineGameMode.h"
+#include "BornToShineHUD.h"
 #include "MoonshineCharacter.h"
 #include "MoonshinePlayerController.h"
 #include "SocketManager.h"
@@ -14,6 +15,9 @@ ABornToShineGameMode::ABornToShineGameMode()
 
 	// Set default player controller
 	PlayerControllerClass = AMoonshinePlayerController::StaticClass();
+
+	// Set HUD class with crosshair
+	HUDClass = ABornToShineHUD::StaticClass();
 
 	SocketManager = nullptr;
 	PhaseManager = nullptr;

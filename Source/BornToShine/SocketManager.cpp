@@ -248,23 +248,29 @@ bool ASocketManager::FindBestSnapPoint(
 			// Calculate snap score (closer and better aligned = higher score)
 			float Score = CalculateSnapScore(WorldLocation, TargetWorldLocation, WorldRotation, TargetWorldRotation);
 
-			// SPECIAL SCORING FOR CORNER SNAPS: Prefer perpendicular (90°) and opposite ends (Left→Right)
+			// SPECIAL SCORING FOR CORNER SNAPS: Give significant boost over foundation snaps
 			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 			{
+				// BASE BOOST: Corner-to-corner snaps get priority over foundation snaps
+				// This helps when closing a rectangle (4th board connecting two corners)
+				Score += 100.0f;
+
 				float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(WorldRotation.Yaw, TargetWorldRotation.Yaw));
 
-				// Bonus for perpendicular (90°), penalty for parallel (0° or 180°)
+				// Bonus for perpendicular (90°) or parallel (0°/180°) - both are valid
 				float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);
-				float PerpendicularBonus = 100.0f / (AngleTo90 + 1.0f);
+				float AngleTo0 = FMath::Min(FMath::Abs(AngleDiff), FMath::Abs(AngleDiff - 180.0f));
+				float AlignmentBonus = FMath::Min(AngleTo90, AngleTo0);
+				Score += 50.0f / (AlignmentBonus + 1.0f);
 
-				// Bonus for opposite ends (Left→Right), penalty for same-side (Left→Left)
+				// Bonus for opposite ends (Left→Right = inline) over same-side (Left→Left = corner)
 				bool bSourceIsLeft = SourceSocket.SocketName.ToString().Contains("Left");
 				bool bTargetIsLeft = TargetSocket.SocketName.ToString().Contains("Left");
 				bool bOppositeEnds = (bSourceIsLeft != bTargetIsLeft);
-				float OppositeEndBonus = bOppositeEnds ? 50.0f : -25.0f;
+				float OppositeEndBonus = bOppositeEnds ? 30.0f : 0.0f;
 
-				Score += PerpendicularBonus + OppositeEndBonus;
+				Score += OppositeEndBonus;
 			}
 
 			if (Score > BestScore)
