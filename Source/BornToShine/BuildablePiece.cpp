@@ -263,34 +263,48 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				// to align THIS socket with the TARGET socket
 				FVector SocketLocalOffset = Socket.LocalPosition;
 				FRotator CurrentActorRotation = GetActorRotation();
+				bool bIsPerpendicularSnap = false;
 
-				// Special handling for rim-to-rim corner snaps: auto-rotate to perpendicular
+				// Special handling for rim-to-rim corner snaps
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					// No socket name filtering - let distance-based scoring pick best match
-					// Socket names (Left/Right) are in local board space and don't reflect
-					// world-space geometry after rotation. The 4-socket system (Outer/Inner)
-					// will naturally pick the correct pairing based on proximity.
-
 					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
 
-					// Calculate relative position to determine rotation direction
-					FVector TargetSocketWorldPos = SnapLoc;
-					FVector SourceSocketWorldPos = SocketWorldLocation;
-					FVector ToTarget = (TargetSocketWorldPos - SourceSocketWorldPos).GetSafeNormal();
-
-					// Get target's forward vector
+					// Check if source and target are already roughly parallel (inline extension)
+					// or if they need to be rotated perpendicular (corner joint)
+					FVector SourceForward = CurrentActorRotation.RotateVector(FVector::ForwardVector);
 					FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
+					float ParallelDot = FMath::Abs(FVector::DotProduct(SourceForward, TargetForward));
 
-					// Use cross product to determine which way to rotate
-					// If cross product Z is positive, rotate +90°, if negative, rotate -90°
-					FVector CrossProduct = FVector::CrossProduct(TargetForward, ToTarget);
-					float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
+					// If boards are roughly parallel (dot > 0.7, within ~45 degrees), keep them inline
+					// If boards are roughly perpendicular (dot < 0.3), this is a corner joint
+					if (ParallelDot > 0.7f)
+					{
+						// INLINE EXTENSION: Boards are parallel, snap end-to-end without rotation
+						// Keep current rotation, no perpendicular offset needed
+						bIsPerpendicularSnap = false;
+						UE_LOG(LogTemp, Warning, TEXT("Inline snap: ParallelDot=%.2f - keeping parallel orientation"), ParallelDot);
+					}
+					else
+					{
+						// CORNER JOINT: Boards need to be perpendicular
+						bIsPerpendicularSnap = true;
 
-					CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
+						// Calculate relative position to determine rotation direction
+						FVector TargetSocketWorldPos = SnapLoc;
+						FVector SourceSocketWorldPos = SocketWorldLocation;
+						FVector ToTarget = (TargetSocketWorldPos - SourceSocketWorldPos).GetSafeNormal();
+
+						// Use cross product to determine which way to rotate
+						FVector CrossProduct = FVector::CrossProduct(TargetForward, ToTarget);
+						float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
+
+						CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
+						UE_LOG(LogTemp, Warning, TEXT("Corner snap: ParallelDot=%.2f - rotating to perpendicular"), ParallelDot);
+					}
 				}
 
 				// Transform the socket offset by the (possibly auto-rotated) rotation
@@ -301,10 +315,10 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapRotation = CurrentActorRotation;
 
 				// PERPENDICULAR CORNER OFFSET:
-				// When two boards meet at 90°, offset so they're flush:
-				// - Snapping board's side face aligns with target board's end
-				// - Snapping board's end face aligns with target board's side
-				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+				// Only apply when boards meet at 90° (actual corner joint)
+				// Skip for inline extensions where boards stay parallel
+				if (bIsPerpendicularSnap &&
+					Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
