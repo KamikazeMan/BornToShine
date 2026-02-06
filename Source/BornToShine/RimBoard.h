@@ -100,4 +100,7 @@ private:
 	// Min and max length in feet
 	static constexpr int32 MinLengthFeet = 1;
 	static constexpr int32 MaxLengthFeet = 16;
+
+	// Flag to prevent manual scaling when auto-scaling is active (closing rectangle)
+	bool bAutoScalingActive = false;
 };

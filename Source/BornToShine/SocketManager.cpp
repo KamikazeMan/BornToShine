@@ -270,7 +270,7 @@ bool ASocketManager::FindBestSnapPoint(
 			// Calculate snap score (closer and better aligned = higher score)
 			float Score = CalculateSnapScore(WorldLocation, TargetWorldLocation, WorldRotation, TargetWorldRotation);
 
-			// SPECIAL SCORING FOR CORNER SNAPS: Prefer perpendicular (90°) over parallel (0°)
+			// SPECIAL SCORING FOR CORNER SNAPS: Prefer perpendicular (90°) and opposite ends (Left→Right)
 			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 			{
@@ -281,10 +281,19 @@ bool ASocketManager::FindBestSnapPoint(
 				float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);  // How far from 90°?
 				float PerpendicularBonus = 100.0f / (AngleTo90 + 1.0f);  // Closer to 90° = higher bonus
 
-				Score += PerpendicularBonus;
+				// OPPOSITE-END BONUS: Prefer Left→Right or Right→Left connections
+				// Same-side connections (Left→Left, Right→Right) get penalized
+				bool bSourceIsLeft = SourceSocket.SocketName.ToString().Contains("Left");
+				bool bTargetIsLeft = TargetSocket.SocketName.ToString().Contains("Left");
+				bool bOppositeEnds = (bSourceIsLeft != bTargetIsLeft); // True if Left→Right or Right→Left
 
-				UE_LOG(LogTemp, Log, TEXT("  Corner score adjusted: base=%.1f + perpendicular bonus=%.1f = %.1f"),
-					Score - PerpendicularBonus, PerpendicularBonus, Score);
+				float OppositeEndBonus = bOppositeEnds ? 50.0f : -25.0f; // Bonus for opposite, penalty for same
+
+				Score += PerpendicularBonus + OppositeEndBonus;
+
+				UE_LOG(LogTemp, Log, TEXT("  Corner score: base=%.1f + perp=%.1f + opposite=%s(%.1f) = %.1f"),
+					Score - PerpendicularBonus - OppositeEndBonus, PerpendicularBonus,
+					bOppositeEnds ? TEXT("YES") : TEXT("NO"), OppositeEndBonus, Score);
 			}
 
 			if (Score > BestScore)

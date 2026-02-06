@@ -370,6 +370,8 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 		// If BOTH corners found targets, we're closing a rectangle - auto-scale!
 		if (bLeftFound && bRightFound)
 		{
+			bAutoScalingActive = true; // Prevent manual scroll wheel scaling
+
 			float GapDistance = FVector::Dist(LeftCornerTarget, RightCornerTarget);
 
 			// The required length is the gap distance (socket-to-socket on the board should match)
@@ -410,6 +412,10 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 				// Regenerate sockets for new length
 				RegenerateSockets();
 			}
+		}
+		else
+		{
+			bAutoScalingActive = false; // Allow manual scaling when not closing
 		}
 	}
 
@@ -464,6 +470,14 @@ void ARimBoard::ScalePiece(float ScaleDelta)
 {
 	// For rim boards, scaling changes LENGTH only, not width/height
 	// Actor scale must stay at (1,1,1) - we use mesh component scale for dimensions
+
+	// IMPORTANT: If auto-scaling is active (closing a rectangle), ignore manual scaling
+	// to prevent the user from accidentally breaking the precise fit
+	if (bAutoScalingActive)
+	{
+		UE_LOG(LogTemp, Log, TEXT("RimBoard: Manual scaling ignored - auto-scaling active for rectangle closing"));
+		return;
+	}
 
 	int32 NewLength = CurrentLengthFeet;
 
