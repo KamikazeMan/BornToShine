@@ -273,37 +273,42 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
 
-					// Check if source and target are already roughly parallel (inline extension)
-					// or if they need to be rotated perpendicular (corner joint)
-					FVector SourceForward = CurrentActorRotation.RotateVector(FVector::ForwardVector);
-					FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
-					float ParallelDot = FMath::Abs(FVector::DotProduct(SourceForward, TargetForward));
+					// Determine inline vs corner based on SOCKET NAMES:
+					// - Right -> Left or Left -> Right = INLINE (end-to-end extension)
+					// - Left -> Left or Right -> Right = CORNER (90° joint)
+					FString SourceSocketStr = Socket.SocketName.ToString();
+					FString TargetSocketStr = TargetSocketName.ToString();
+					bool bSourceIsRight = SourceSocketStr.Contains(TEXT("Right"));
+					bool bTargetIsRight = TargetSocketStr.Contains(TEXT("Right"));
+					bool bOppositeEnds = (bSourceIsRight != bTargetIsRight); // Right-Left or Left-Right
 
-					// If boards are roughly parallel (dot > 0.7, within ~45 degrees), keep them inline
-					// If boards are roughly perpendicular (dot < 0.3), this is a corner joint
-					if (ParallelDot > 0.7f)
+					if (bOppositeEnds)
 					{
-						// INLINE EXTENSION: Boards are parallel, snap end-to-end without rotation
-						// Keep current rotation, no perpendicular offset needed
+						// INLINE EXTENSION: Opposite ends connecting (Right-Left or Left-Right)
+						// Rotate to match target's orientation (parallel, facing same/opposite direction)
 						bIsPerpendicularSnap = false;
-						UE_LOG(LogTemp, Warning, TEXT("Inline snap: ParallelDot=%.2f - keeping parallel orientation"), ParallelDot);
+
+						// For inline, rotate to be parallel with target (180° offset since ends face each other)
+						CurrentActorRotation.Yaw = TargetRotation.Yaw + 180.0f;
+						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s - rotating to parallel"), *SourceSocketStr, *TargetSocketStr);
 					}
 					else
 					{
-						// CORNER JOINT: Boards need to be perpendicular
+						// CORNER JOINT: Same ends connecting (Left-Left or Right-Right)
 						bIsPerpendicularSnap = true;
 
 						// Calculate relative position to determine rotation direction
 						FVector TargetSocketWorldPos = SnapLoc;
 						FVector SourceSocketWorldPos = SocketWorldLocation;
 						FVector ToTarget = (TargetSocketWorldPos - SourceSocketWorldPos).GetSafeNormal();
+						FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
 
 						// Use cross product to determine which way to rotate
 						FVector CrossProduct = FVector::CrossProduct(TargetForward, ToTarget);
 						float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
 
 						CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
-						UE_LOG(LogTemp, Warning, TEXT("Corner snap: ParallelDot=%.2f - rotating to perpendicular"), ParallelDot);
+						UE_LOG(LogTemp, Warning, TEXT("Corner snap: %s -> %s - rotating to perpendicular"), *SourceSocketStr, *TargetSocketStr);
 					}
 				}
 
