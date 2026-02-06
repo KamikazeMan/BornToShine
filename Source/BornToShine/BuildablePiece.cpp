@@ -285,12 +285,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					if (bOppositeEnds)
 					{
 						// INLINE EXTENSION: Opposite ends connecting (Right-Left or Left-Right)
-						// Rotate to match target's orientation (parallel, facing same/opposite direction)
+						// Boards should face the SAME direction for end-to-end extension
 						bIsPerpendicularSnap = false;
 
-						// For inline, rotate to be parallel with target (180° offset since ends face each other)
-						CurrentActorRotation.Yaw = TargetRotation.Yaw + 180.0f;
-						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s - rotating to parallel"), *SourceSocketStr, *TargetSocketStr);
+						// For inline, keep same orientation as target (NOT 180° - that was wrong)
+						CurrentActorRotation.Yaw = TargetRotation.Yaw;
+						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s - keeping same orientation"), *SourceSocketStr, *TargetSocketStr);
 					}
 					else
 					{
