@@ -225,13 +225,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
-		// Debug logging disabled to reduce spam (runs every frame)
-		// Enable for debugging by uncommenting:
-		// if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
-		// {
-		//     UE_LOG(LogTemp, Verbose, TEXT("Evaluating corner: %s"), *Socket.SocketName.ToString());
-		// }
-
 		FVector SnapLoc;
 		FRotator SnapRot;
 		ABuildablePiece* TargetPiece;
@@ -271,7 +264,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				// to align THIS socket with the TARGET socket
 				FVector SocketLocalOffset = Socket.LocalPosition;
 				FRotator CurrentActorRotation = GetActorRotation();
-				bool bIsPerpendicularSnap = false;
 
 				// Special handling for rim-to-rim corner snaps
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
@@ -280,8 +272,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				{
 					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
-					FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
-					FVector TargetRight = TargetRotation.RotateVector(FVector::RightVector);
 
 					// Determine inline vs corner based on SOCKET NAMES:
 					// - Right -> Left or Left -> Right = INLINE (end-to-end extension)
@@ -296,7 +286,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					{
 						// INLINE EXTENSION: Right->Left or Left->Right
 						// Boards extend end-to-end in the same line
-						bIsPerpendicularSnap = false;
 						CurrentActorRotation.Yaw = TargetRotation.Yaw;
 						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s"), *SourceSocketStr, *TargetSocketStr);
 					}
@@ -304,12 +293,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					{
 						// CORNER JOINT: Left->Left or Right->Right
 						// Boards meet at 90 degrees
-						bIsPerpendicularSnap = true;
+						// Corner sockets are at the outer edge (Y = +HalfWidth),
+						// so when they meet, the board edges are flush — no extra offset needed.
 
-						// Determine rotation: snapping board should extend AWAY from target's center
-						// Use the source socket's current world position relative to target
-						FVector SourceToTarget = (SnapLoc - SocketWorldLocation).GetSafeNormal();
-						FVector CrossProduct = FVector::CrossProduct(TargetForward, SourceToTarget);
+						FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
+						FVector SocketToTarget = (SnapLoc - SocketWorldLocation).GetSafeNormal();
+						FVector CrossProduct = FVector::CrossProduct(TargetForward, SocketToTarget);
 						float RotationOffset = (CrossProduct.Z > 0) ? 90.0f : -90.0f;
 						CurrentActorRotation.Yaw = TargetRotation.Yaw + RotationOffset;
 
@@ -325,46 +314,11 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// PERPENDICULAR CORNER OFFSET:
-				// Only apply when boards meet at 90° (actual corner joint)
-				if (bIsPerpendicularSnap &&
-					Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
-					TargetPiece)
-				{
-					ARimBoard* SourceRimBoard = Cast<ARimBoard>(this);
-					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
-
-					if (SourceRimBoard && TargetRimBoard)
-					{
-						FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
-						FVector TargetRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
-
-						// Determine which end of target we're at (left or right)
-						bool bTargetIsRightSocket = TargetSocketName.ToString().Contains(TEXT("Right"));
-
-						// For flush corner, use HALF board width for both offsets
-						// This moves the board so edges meet, not centerlines
-						float HalfWidth = TargetRimBoard->BoardWidth / 2.0f;
-
-						// Length offset: move AWAY from target's center along target's length
-						float LengthSign = bTargetIsRightSocket ? 1.0f : -1.0f;
-
-						// Perpendicular offset: direction depends on rotation direction
-						// If rotated +90°, offset in +Right direction; if -90°, offset in -Right direction
-						float RotDiff = FMath::FindDeltaAngleDegrees(TargetPiece->GetActorRotation().Yaw, OutSnapRotation.Yaw);
-						float PerpSign = RotDiff > 0 ? 1.0f : -1.0f;
-
-						FVector TotalOffset = (TargetForward * LengthSign * HalfWidth) +
-						                      (TargetRight * PerpSign * HalfWidth);
-						OutSnapLocation += TotalOffset;
-
-						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | HalfWidth=%.2f | LengthSign=%.1f PerpSign=%.1f (RotDiff=%.0f) | TotalOffset=(%.1f,%.1f,%.1f)"),
-							*Socket.SocketName.ToString(), *TargetSocketName.ToString(),
-							HalfWidth, LengthSign, PerpSign, RotDiff,
-							TotalOffset.X, TotalOffset.Y, TotalOffset.Z);
-					}
-				}
+				// NO PERPENDICULAR OFFSET NEEDED:
+				// Corner sockets are now placed at the board's outer edge (Y = +HalfWidth)
+				// instead of the centerline (Y = 0). When two edge sockets meet, the boards
+				// are automatically flush. The old perpendicular offset block has been removed
+				// because it was compensating for centerline sockets and would now double-offset.
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;

@@ -187,13 +187,17 @@ void ARimBoard::CreateSideFaceSockets()
 
 void ARimBoard::CreateEndCornerSockets()
 {
-	// MESH SOCKET SYSTEM:
-	// Use mesh-defined sockets (Snap_Corner_Left, Snap_Corner_Right) for precise positioning
-	// These sockets are placed at exact mesh edges in the Static Mesh Editor
-	// Falls back to calculated positions for each socket that doesn't exist
+	// CORNER SOCKET POSITIONING:
+	// Sockets are placed at the board END and offset to the OUTER EDGE (Y = +BoardWidth/2).
+	// This means when two boards snap corner-to-corner at 90 degrees, their outer edges
+	// meet flush (L-shape) instead of their centerlines intersecting (T-shape).
+	//
+	// If mesh sockets exist (Snap_Corner_Left, Snap_Corner_Right), those are used instead.
+	// IMPORTANT: Mesh sockets must ALSO be at the outer edge, not the centerline!
 
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
+	float HalfWidth = BoardWidth / 2.0f; // 1.905 cm (half of 1.5")
 
 	bool bLeftFromMesh = false;
 	bool bRightFromMesh = false;
@@ -229,6 +233,14 @@ void ARimBoard::CreateEndCornerSockets()
 			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Left at %s, rot %s"),
 				*LeftEnd.LocalPosition.ToString(), *LeftEnd.LocalRotation.ToString());
 
+			// WARN if mesh socket is at centerline (Y near 0) — it should be at the edge
+			if (FMath::Abs(LeftEnd.LocalPosition.Y) < 1.0f)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("RimBoard: WARNING - Snap_Corner_Left Y=%.2f is near centerline! "
+					"Move it to Y=%.2f (outer edge) in the Static Mesh Editor to fix T-shape corners."),
+					LeftEnd.LocalPosition.Y, HalfWidth);
+			}
+
 			bLeftFromMesh = true;
 		}
 		else
@@ -252,6 +264,14 @@ void ARimBoard::CreateEndCornerSockets()
 			UE_LOG(LogTemp, Log, TEXT("RimBoard: Using MESH socket Snap_Corner_Right at %s, rot %s"),
 				*RightEnd.LocalPosition.ToString(), *RightEnd.LocalRotation.ToString());
 
+			// WARN if mesh socket is at centerline
+			if (FMath::Abs(RightEnd.LocalPosition.Y) < 1.0f)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("RimBoard: WARNING - Snap_Corner_Right Y=%.2f is near centerline! "
+					"Move it to Y=%.2f (outer edge) in the Static Mesh Editor to fix T-shape corners."),
+					RightEnd.LocalPosition.Y, HalfWidth);
+			}
+
 			bRightFromMesh = true;
 		}
 		else
@@ -261,15 +281,20 @@ void ARimBoard::CreateEndCornerSockets()
 	}
 
 	// Fallback for LEFT socket if not found in mesh
+	// FIX: Y = +HalfWidth puts socket at OUTER EDGE instead of centerline (Y=0)
+	// This prevents the T-shape — boards meet edge-to-edge, not center-to-center
 	if (!bLeftFromMesh)
 	{
 		FConstructionSocket LeftEnd;
 		LeftEnd.SocketName = FName("EndCorner_Left");
 		LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		LeftEnd.LocalPosition = FVector(-HalfLen, 0.0f, 0.0f);
+		LeftEnd.LocalPosition = FVector(-HalfLen, HalfWidth, 0.0f);  // OUTER EDGE
 		LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 		LeftEnd.bIsOccupied = false;
 		Sockets.Add(LeftEnd);
+
+		UE_LOG(LogTemp, Log, TEXT("RimBoard: Fallback LEFT corner socket at (%.2f, %.2f, 0) — OUTER EDGE"),
+			-HalfLen, HalfWidth);
 	}
 
 	// Fallback for RIGHT socket if not found in mesh
@@ -278,10 +303,13 @@ void ARimBoard::CreateEndCornerSockets()
 		FConstructionSocket RightEnd;
 		RightEnd.SocketName = FName("EndCorner_Right");
 		RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-		RightEnd.LocalPosition = FVector(HalfLen, 0.0f, 0.0f);
+		RightEnd.LocalPosition = FVector(HalfLen, HalfWidth, 0.0f);  // OUTER EDGE
 		RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 		RightEnd.bIsOccupied = false;
 		Sockets.Add(RightEnd);
+
+		UE_LOG(LogTemp, Log, TEXT("RimBoard: Fallback RIGHT corner socket at (%.2f, %.2f, 0) — OUTER EDGE"),
+			HalfLen, HalfWidth);
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets for %s board - Left:%s, Right:%s"),
@@ -319,8 +347,8 @@ TArray<FVector> ARimBoard::CalculateJoistSocketPositions() const
 
 void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
 {
-	// Use standard socket snapping - the perpendicular corner offset in
-	// BuildablePiece::FindSnapPoint handles flush corner alignment
+	// Use standard socket snapping — corner sockets are at outer edge,
+	// so no perpendicular offset hack is needed for flush L-corners.
 	Super::UpdatePreviewPosition(NewLocation, NewRotation);
 }
 
