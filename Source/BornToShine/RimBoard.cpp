@@ -199,6 +199,19 @@ void ARimBoard::CreateEndCornerSockets()
 
 	if (MeshComponent)
 	{
+		// Debug: List all sockets on the mesh to verify names
+		if (UStaticMesh* Mesh = MeshComponent->GetStaticMesh())
+		{
+			UE_LOG(LogTemp, Log, TEXT("RimBoard: Mesh has %d sockets:"), Mesh->Sockets.Num());
+			for (UStaticMeshSocket* Socket : Mesh->Sockets)
+			{
+				if (Socket)
+				{
+					UE_LOG(LogTemp, Log, TEXT("  - Socket: '%s' at %s"), *Socket->SocketName.ToString(), *Socket->RelativeLocation.ToString());
+				}
+			}
+		}
+
 		// Try LEFT mesh socket
 		if (MeshComponent->DoesSocketExist(FName("Snap_Corner_Left")))
 		{
