@@ -343,25 +343,25 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						// Determine which end of target we're at (left or right)
 						bool bTargetIsRightSocket = TargetSocketName.ToString().Contains(TEXT("Right"));
 
-						// For flush corner: offset AWAY from target along target's length
-						// Need FULL board width to clear the overlap, not just half
+						// For flush corner, use HALF board width for both offsets
+						// This moves the board so edges meet, not centerlines
+						float HalfWidth = TargetRimBoard->BoardWidth / 2.0f;
+
+						// Length offset: move AWAY from target's center along target's length
 						float LengthSign = bTargetIsRightSocket ? 1.0f : -1.0f;
-						float LengthOffset = SourceRimBoard->BoardWidth;  // FULL width to clear
 
-						// Perpendicular offset: move snapping board to the side so it doesn't overlap
-						// Need FULL board width perpendicular too
-						FVector SourceForward = OutSnapRotation.RotateVector(FVector::ForwardVector);
-						float DotRight = FVector::DotProduct(SourceForward, TargetRight);
-						float PerpSign = DotRight > 0.5f ? 1.0f : -1.0f;
-						float PerpOffset = TargetRimBoard->BoardWidth;  // FULL width to clear
+						// Perpendicular offset: direction depends on rotation direction
+						// If rotated +90°, offset in +Right direction; if -90°, offset in -Right direction
+						float RotDiff = FMath::FindDeltaAngleDegrees(TargetPiece->GetActorRotation().Yaw, OutSnapRotation.Yaw);
+						float PerpSign = RotDiff > 0 ? 1.0f : -1.0f;
 
-						FVector TotalOffset = (TargetForward * LengthSign * LengthOffset) +
-						                      (TargetRight * PerpSign * PerpOffset);
+						FVector TotalOffset = (TargetForward * LengthSign * HalfWidth) +
+						                      (TargetRight * PerpSign * HalfWidth);
 						OutSnapLocation += TotalOffset;
 
-						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | LengthOff=%.2f*%.1f | PerpOff=%.2f*%.1f | TotalOffset=(%.1f,%.1f,%.1f)"),
+						UE_LOG(LogTemp, Warning, TEXT("Corner offset: %s->%s | HalfWidth=%.2f | LengthSign=%.1f PerpSign=%.1f (RotDiff=%.0f) | TotalOffset=(%.1f,%.1f,%.1f)"),
 							*Socket.SocketName.ToString(), *TargetSocketName.ToString(),
-							LengthOffset, LengthSign, PerpOffset, PerpSign,
+							HalfWidth, LengthSign, PerpSign, RotDiff,
 							TotalOffset.X, TotalOffset.Y, TotalOffset.Z);
 					}
 				}
