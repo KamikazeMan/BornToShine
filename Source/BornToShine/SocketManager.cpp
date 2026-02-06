@@ -199,6 +199,13 @@ bool ASocketManager::FindBestSnapPoint(
 
 	FSocketCompatibilityRule Rule = GetCompatibilityRule(SourceSocket.SocketType);
 
+	// Debug: Check if we have any nearby pieces
+	if (NearbyPieces.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FindBestSnapPoint: No nearby pieces found for socket %s"), *SourceSocket.SocketName.ToString());
+		return false;
+	}
+
 	for (ABuildablePiece* Piece : NearbyPieces)
 	{
 		if (!Piece) continue;

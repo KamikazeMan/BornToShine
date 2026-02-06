@@ -193,19 +193,27 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 	if (NearbyPieces.Num() == 0)
 	{
-		// Only log once per second to avoid spam
+		// Debug: Log when no nearby pieces (throttled to reduce spam)
 		static float LastLogTime = 0.0f;
 		float CurrentTime = GetWorld()->GetTimeSeconds();
-		if (CurrentTime - LastLogTime > 1.0f)
+		if (CurrentTime - LastLogTime > 2.0f)
 		{
-			UE_LOG(LogTemp, Verbose, TEXT("%s: No nearby pieces within %.0fcm"), *GetName(), SnapSearchRadius);
+			UE_LOG(LogTemp, Warning, TEXT("%s: No nearby pieces within %.0fcm of (%.1f, %.1f, %.1f)"),
+				*GetName(), SnapSearchRadius, GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
 			LastLogTime = CurrentTime;
 		}
 		return false;
 	}
 
-	UE_LOG(LogTemp, Verbose, TEXT("%s: Searching %d nearby pieces with %d sockets"),
-		*GetName(), NearbyPieces.Num(), Sockets.Num());
+	// Debug: Log search info
+	static float LastSearchLogTime = 0.0f;
+	float CurrentTime = GetWorld()->GetTimeSeconds();
+	if (CurrentTime - LastSearchLogTime > 2.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s: Searching %d nearby pieces with %d sockets"),
+			*GetName(), NearbyPieces.Num(), Sockets.Num());
+		LastSearchLogTime = CurrentTime;
+	}
 
 	// Try each socket on this piece to find the best snap
 	bool bFoundSnap = false;
