@@ -216,14 +216,32 @@ void AMoonshineCharacter::ToggleCameraMode()
 
 	if (bIsFirstPerson)
 	{
+		// FIRST PERSON: Character body rotates with controller
 		FirstPersonCamera->SetActive(true);
 		ThirdPersonCamera->SetActive(false);
+
+		// Make character rotate with controller (so camera looks out from eyes)
+		bUseControllerRotationYaw = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+
+		// Hide character mesh so you don't see your own body
+		GetMesh()->SetOwnerNoSee(true);
+
 		UE_LOG(LogTemp, Log, TEXT("Switched to First Person"));
 	}
 	else
 	{
+		// THIRD PERSON: Character rotates toward movement direction
 		FirstPersonCamera->SetActive(false);
 		ThirdPersonCamera->SetActive(true);
+
+		// Character doesn't rotate with controller, auto-rotates to movement
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+
+		// Show character mesh again
+		GetMesh()->SetOwnerNoSee(false);
+
 		UE_LOG(LogTemp, Log, TEXT("Switched to Third Person"));
 	}
 }
