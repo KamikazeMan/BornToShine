@@ -57,7 +57,6 @@ public:
 	void Remove();
 
 	// Update piece position for preview (handles snapping)
-	// Virtual to allow overriding (e.g., foundation grid snapping)
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	virtual void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation);
 
@@ -104,6 +103,16 @@ protected:
 
 	// Find best snap point near current location
 	bool FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapRotation);
+
+	// Try to snap both ends of a rim board to two different target pieces (spanning board)
+	// Returns true if dual-end snap was found (3rd/4th board closing a rectangle)
+	bool TryDualEndCornerSnap(
+		const TArray<ABuildablePiece*>& NearbyPieces,
+		FVector& OutSnapLocation,
+		FRotator& OutSnapRotation,
+		ABuildablePiece*& OutTargetPiece,
+		FName& OutTargetSocketName
+	);
 
 	// Determine socket connection priority (higher = preferred)
 	int32 GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const;
@@ -175,7 +184,6 @@ protected:
 	FLinearColor NailedColor;
 
 	// Final material to use when piece is nailed/permanently placed
-	// Set this in Blueprint to your concrete/wood material
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Materials")
 	class UMaterialInterface* NailedMaterial;
 

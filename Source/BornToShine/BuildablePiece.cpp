@@ -70,7 +70,6 @@ void ABuildablePiece::Tick(float DeltaTime)
 void ABuildablePiece::InitializeSockets()
 {
 	// Override in child classes to add specific sockets
-	// This base implementation does nothing
 }
 
 FConstructionSocket* ABuildablePiece::GetSocketByName(FName SocketName)
@@ -104,13 +103,10 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 	{
 		PieceState = EPieceState::Preview;
 
-		// Enable collision only for tracing, not physics
 		if (MeshComponent)
 		{
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-			// Don't collide with pawns (characters) to prevent pushing them
 			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-			// Also ignore physics objects to prevent interference
 			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
 		}
 	}
@@ -118,11 +114,9 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 	{
 		PieceState = EPieceState::Placed;
 
-		// Enable full collision
 		if (MeshComponent)
 		{
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-			// Restore collision with pawns and physics
 			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Block);
 		}
@@ -153,14 +147,12 @@ void ABuildablePiece::UpdatePreviewPosition(const FVector& NewLocation, const FR
 		{
 			// Corner snap: Use the full auto-rotated SnapRotation
 			SetActorRotation(SnapRotation);
-			UE_LOG(LogTemp, Verbose, TEXT("Using auto-rotation for corner snap: %.1f°"), SnapRotation.Yaw);
 		}
 		else
 		{
 			// Normal snap: Preserve user's Yaw rotation
-			// Only use snap rotation for pitch/roll alignment
 			FRotator FinalRotation = SnapRotation;
-			FinalRotation.Yaw = NewRotation.Yaw; // Keep user's horizontal rotation
+			FinalRotation.Yaw = NewRotation.Yaw;
 			SetActorRotation(FinalRotation);
 		}
 
@@ -193,7 +185,6 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 
 	if (NearbyPieces.Num() == 0)
 	{
-		// Debug: Log when no nearby pieces (throttled to reduce spam)
 		static float LastLogTime = 0.0f;
 		float CurrentTime = GetWorld()->GetTimeSeconds();
 		if (CurrentTime - LastLogTime > 2.0f)
@@ -205,7 +196,7 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		return false;
 	}
 
-	// Debug: Log search info
+	// Debug: Log search info (throttled)
 	static float LastSearchLogTime = 0.0f;
 	float CurrentTime = GetWorld()->GetTimeSeconds();
 	if (CurrentTime - LastSearchLogTime > 2.0f)
@@ -215,10 +206,35 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		LastSearchLogTime = CurrentTime;
 	}
 
-	// Try each socket on this piece to find the best snap
+	// ============================================================
+	// DUAL-END CORNER DETECTION (for 3rd/4th rim boards)
+	// Before single-socket snapping, check if BOTH ends of this rim board
+	// can reach corner sockets on two DIFFERENT placed boards.
+	// If so, this is a spanning board and we do two-point alignment.
+	// ============================================================
+	if (PieceType == EPieceType::RimBoard)
+	{
+		FVector DualSnapLocation;
+		FRotator DualSnapRotation;
+		ABuildablePiece* DualSnapPiece;
+		FName DualSnapSocketName;
+
+		if (TryDualEndCornerSnap(NearbyPieces, DualSnapLocation, DualSnapRotation, DualSnapPiece, DualSnapSocketName))
+		{
+			OutSnapLocation = DualSnapLocation;
+			OutSnapRotation = DualSnapRotation;
+			SnappedToPiece = DualSnapPiece;
+			SnappedToSocketName = DualSnapSocketName;
+			return true;
+		}
+	}
+
+	// ============================================================
+	// STANDARD SINGLE-SOCKET SNAPPING
+	// ============================================================
 	bool bFoundSnap = false;
 	float BestDistance = FLT_MAX;
-	int32 BestPriority = -1; // Track connection priority
+	int32 BestPriority = -1;
 
 	for (const FConstructionSocket& Socket : Sockets)
 	{
@@ -243,15 +259,9 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 		{
 			float Distance = FVector::Dist(SocketWorldLocation, SnapLoc);
 
-			// Get target socket type to determine priority
 			EConstructionSocketType TargetSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
-
-			// Calculate connection priority
 			int32 Priority = GetSocketConnectionPriority(Socket.SocketType, TargetSocketType);
 
-			// Choose this snap if:
-			// 1. It has higher priority, OR
-			// 2. Same priority but closer distance
 			bool bIsBetter = (Priority > BestPriority) ||
 			                 (Priority == BestPriority && Distance < BestDistance);
 
@@ -260,22 +270,16 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				BestDistance = Distance;
 				BestPriority = Priority;
 
-				// CRITICAL: Calculate where THIS actor's origin should be
-				// to align THIS socket with the TARGET socket
 				FVector SocketLocalOffset = Socket.LocalPosition;
 				FRotator CurrentActorRotation = GetActorRotation();
 
-				// Special handling for rim-to-rim corner snaps
+				// Special handling for rim-to-rim corner snaps (single-end)
 				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 					TargetPiece)
 				{
-					// Get target piece rotation
 					FRotator TargetRotation = TargetPiece->GetActorRotation();
 
-					// Determine inline vs corner based on SOCKET NAMES:
-					// - Right -> Left or Left -> Right = INLINE (end-to-end extension)
-					// - Left -> Left or Right -> Right = CORNER (90° joint)
 					FString SourceSocketStr = Socket.SocketName.ToString();
 					FString TargetSocketStr = TargetSocketName.ToString();
 					bool bSourceIsRight = SourceSocketStr.Contains(TEXT("Right"));
@@ -285,17 +289,12 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					if (bOppositeEnds)
 					{
 						// INLINE EXTENSION: Right->Left or Left->Right
-						// Boards extend end-to-end in the same line
 						CurrentActorRotation.Yaw = TargetRotation.Yaw;
 						UE_LOG(LogTemp, Warning, TEXT("Inline snap: %s -> %s"), *SourceSocketStr, *TargetSocketStr);
 					}
 					else
 					{
 						// CORNER JOINT: Left->Left or Right->Right
-						// Boards meet at 90 degrees
-						// Corner sockets are at the outer edge (Y = +HalfWidth),
-						// so when they meet, the board edges are flush — no extra offset needed.
-
 						FVector TargetForward = TargetRotation.RotateVector(FVector::ForwardVector);
 						FVector SocketToTarget = (SnapLoc - SocketWorldLocation).GetSafeNormal();
 						FVector CrossProduct = FVector::CrossProduct(TargetForward, SocketToTarget);
@@ -307,18 +306,9 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 					}
 				}
 
-				// Transform the socket offset by the (possibly auto-rotated) rotation
 				FVector SocketWorldOffset = CurrentActorRotation.RotateVector(SocketLocalOffset);
-
-				// Actor position = Target socket position - socket offset in world space
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
-
-				// NO PERPENDICULAR OFFSET NEEDED:
-				// Corner sockets are now placed at the board's outer edge (Y = +HalfWidth)
-				// instead of the centerline (Y = 0). When two edge sockets meet, the boards
-				// are automatically flush. The old perpendicular offset block has been removed
-				// because it was compensating for centerline sockets and would now double-offset.
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
@@ -330,19 +320,223 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 	return bFoundSnap;
 }
 
+bool ABuildablePiece::TryDualEndCornerSnap(
+	const TArray<ABuildablePiece*>& NearbyPieces,
+	FVector& OutSnapLocation,
+	FRotator& OutSnapRotation,
+	ABuildablePiece*& OutTargetPiece,
+	FName& OutTargetSocketName)
+{
+	// Find our Left and Right EndCorner sockets
+	FConstructionSocket* LeftCornerSocket = nullptr;
+	FConstructionSocket* RightCornerSocket = nullptr;
+
+	for (FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+		{
+			if (Socket.SocketName.ToString().Contains(TEXT("Left")))
+			{
+				LeftCornerSocket = &Socket;
+			}
+			else if (Socket.SocketName.ToString().Contains(TEXT("Right")))
+			{
+				RightCornerSocket = &Socket;
+			}
+		}
+	}
+
+	if (!LeftCornerSocket || !RightCornerSocket) return false;
+
+	// Get world positions of both corner sockets
+	FVector LeftWorldPos = GetActorTransform().TransformPosition(LeftCornerSocket->LocalPosition);
+	FVector RightWorldPos = GetActorTransform().TransformPosition(RightCornerSocket->LocalPosition);
+
+	// Search for valid corner targets for EACH end
+	struct FCornerCandidate
+	{
+		ABuildablePiece* TargetPiece;
+		FName TargetSocketName;
+		FVector TargetWorldPos;
+		FRotator TargetWorldRot;
+		float Distance;
+	};
+
+	// Expanded search radius for dual-end detection
+	float DualSearchRadius = SnapSearchRadius * 2.0f;
+
+	TArray<FCornerCandidate> LeftCandidates;
+	TArray<FCornerCandidate> RightCandidates;
+
+	for (ABuildablePiece* Piece : NearbyPieces)
+	{
+		if (!Piece) continue;
+
+		TArray<FConstructionSocket> TargetSockets = Piece->GetAllSockets();
+
+		for (const FConstructionSocket& TargetSocket : TargetSockets)
+		{
+			if (TargetSocket.bIsOccupied) continue;
+			if (TargetSocket.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+
+			FVector TargetWorldPos = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
+			FRotator TargetWorldRot = Piece->GetActorRotation() + TargetSocket.LocalRotation;
+
+			// Check distance to LEFT end
+			float LeftDist = FVector::Dist(LeftWorldPos, TargetWorldPos);
+			if (LeftDist < DualSearchRadius)
+			{
+				FCornerCandidate Candidate;
+				Candidate.TargetPiece = Piece;
+				Candidate.TargetSocketName = TargetSocket.SocketName;
+				Candidate.TargetWorldPos = TargetWorldPos;
+				Candidate.TargetWorldRot = TargetWorldRot;
+				Candidate.Distance = LeftDist;
+				LeftCandidates.Add(Candidate);
+			}
+
+			// Check distance to RIGHT end
+			float RightDist = FVector::Dist(RightWorldPos, TargetWorldPos);
+			if (RightDist < DualSearchRadius)
+			{
+				FCornerCandidate Candidate;
+				Candidate.TargetPiece = Piece;
+				Candidate.TargetSocketName = TargetSocket.SocketName;
+				Candidate.TargetWorldPos = TargetWorldPos;
+				Candidate.TargetWorldRot = TargetWorldRot;
+				Candidate.Distance = RightDist;
+				RightCandidates.Add(Candidate);
+			}
+		}
+	}
+
+	// Need candidates for each end
+	if (LeftCandidates.Num() == 0 || RightCandidates.Num() == 0) return false;
+
+	// Find the best pair where left and right connect to DIFFERENT target pieces
+	FCornerCandidate BestLeft;
+	FCornerCandidate BestRight;
+	bool bFoundValidPair = false;
+	float BestPairScore = -1.0f;
+
+	for (const FCornerCandidate& LC : LeftCandidates)
+	{
+		for (const FCornerCandidate& RC : RightCandidates)
+		{
+			// Must be different target pieces (spanning between two boards)
+			if (LC.TargetPiece == RC.TargetPiece) continue;
+
+			// Score: prefer closer total distance
+			float PairScore = 2000.0f / (LC.Distance + RC.Distance + 1.0f);
+
+			if (PairScore > BestPairScore)
+			{
+				BestPairScore = PairScore;
+				BestLeft = LC;
+				BestRight = RC;
+				bFoundValidPair = true;
+			}
+		}
+	}
+
+	if (!bFoundValidPair) return false;
+
+	// ============================================================
+	// TWO-POINT ALIGNMENT
+	// Position and rotate the board so its corner sockets land on both targets.
+	// ============================================================
+
+	FVector TargetLeftPos = BestLeft.TargetWorldPos;
+	FVector TargetRightPos = BestRight.TargetWorldPos;
+
+	// Direction from left target to right target
+	FVector SpanDirection = (TargetRightPos - TargetLeftPos).GetSafeNormal();
+
+	// Board rotation aligns X-axis (length) with span direction
+	FRotator SpanRotation = SpanDirection.Rotation();
+
+	// Calculate actor origin from left socket alignment
+	FVector LeftLocalOffset = SpanRotation.RotateVector(LeftCornerSocket->LocalPosition);
+	FVector ActorPosition = TargetLeftPos - LeftLocalOffset;
+
+	// Check how well the right end lines up
+	FVector RightLocalOffset = SpanRotation.RotateVector(RightCornerSocket->LocalPosition);
+	FVector PredictedRightPos = ActorPosition + RightLocalOffset;
+	float RightError = FVector::Dist(PredictedRightPos, TargetRightPos);
+
+	// Auto-resize the rim board to fit the gap if needed
+	ARimBoard* RimBoard = Cast<ARimBoard>(this);
+	if (RimBoard && RightError > 5.0f)
+	{
+		// Calculate the gap distance between the two target sockets
+		float GapDistance = FVector::Dist(TargetLeftPos, TargetRightPos);
+
+		// Current socket span
+		float CurrentSocketSpan = FVector::Dist(LeftCornerSocket->LocalPosition, RightCornerSocket->LocalPosition);
+
+		// We need socket span ≈ gap distance
+		// EffectiveLength ≈ socket span (sockets are near the ends)
+		// For outside boards: EffectiveLength = LengthFeet * 30.48
+		float NeededLengthCm = GapDistance;
+		int32 NeededLengthFeet = FMath::RoundToInt(NeededLengthCm / 30.48f);
+		NeededLengthFeet = FMath::Clamp(NeededLengthFeet, 1, 16);
+
+		if (NeededLengthFeet != RimBoard->GetBoardLengthFeet())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Dual-end snap: Auto-resizing board from %d ft to %d ft (gap=%.1f cm)"),
+				RimBoard->GetBoardLengthFeet(), NeededLengthFeet, GapDistance);
+			RimBoard->SetBoardLengthFeet(NeededLengthFeet);
+
+			// Re-find sockets after resize (they moved)
+			LeftCornerSocket = nullptr;
+			RightCornerSocket = nullptr;
+			for (FConstructionSocket& Socket : Sockets)
+			{
+				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+				{
+					if (Socket.SocketName.ToString().Contains(TEXT("Left")))
+						LeftCornerSocket = &Socket;
+					else if (Socket.SocketName.ToString().Contains(TEXT("Right")))
+						RightCornerSocket = &Socket;
+				}
+			}
+
+			if (LeftCornerSocket && RightCornerSocket)
+			{
+				// Recalculate position with new socket locations
+				LeftLocalOffset = SpanRotation.RotateVector(LeftCornerSocket->LocalPosition);
+				ActorPosition = TargetLeftPos - LeftLocalOffset;
+
+				RightLocalOffset = SpanRotation.RotateVector(RightCornerSocket->LocalPosition);
+				PredictedRightPos = ActorPosition + RightLocalOffset;
+				RightError = FVector::Dist(PredictedRightPos, TargetRightPos);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("DUAL-END SNAP: Left->%s on %s, Right->%s on %s | Yaw=%.1f | Error=%.2f cm"),
+		*BestLeft.TargetSocketName.ToString(), *BestLeft.TargetPiece->GetName(),
+		*BestRight.TargetSocketName.ToString(), *BestRight.TargetPiece->GetName(),
+		SpanRotation.Yaw, RightError);
+
+	OutSnapLocation = ActorPosition;
+	OutSnapRotation = SpanRotation;
+	OutTargetPiece = BestLeft.TargetPiece;
+	OutTargetSocketName = BestLeft.TargetSocketName;
+
+	return true;
+}
+
 int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const
 {
 	// Rim-to-Rim corner connections (HIGHEST PRIORITY)
-	// Must win over foundation to enable auto-rotation and proper corner alignment
-	// Z height will be maintained at foundation level separately
 	if ((SocketA == EConstructionSocketType::RimBoard_End_Corner &&
 		 SocketB == EConstructionSocketType::RimBoard_End_Corner))
 	{
-		return 1000; // Highest priority - enables auto-rotation and corner snapping
+		return 1000;
 	}
 
 	// Rim-to-Rim side connections (HIGH PRIORITY)
-	// For perpendicular joists
 	if ((SocketA == EConstructionSocketType::RimBoard_Side_Face &&
 		 SocketB == EConstructionSocketType::RimBoard_Side_Face))
 	{
@@ -350,7 +544,6 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 	}
 
 	// Joist-to-Rim connections (HIGH PRIORITY)
-	// Joists connecting to rim boards
 	if ((SocketA == EConstructionSocketType::Joist_End &&
 		 (SocketB == EConstructionSocketType::RimBoard_Top_Face ||
 		  SocketB == EConstructionSocketType::RimBoard_Side_Face)) ||
@@ -362,7 +555,6 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)
-	// Only for initial placement when no other rim boards nearby
 	if ((SocketA == EConstructionSocketType::RimBoard_Bottom_End &&
 		 (SocketB == EConstructionSocketType::Foundation_Corner ||
 		  SocketB == EConstructionSocketType::Foundation_Side)) ||
@@ -370,10 +562,9 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		  SocketA == EConstructionSocketType::Foundation_Side) &&
 		 SocketB == EConstructionSocketType::RimBoard_Bottom_End))
 	{
-		return 10; // Low priority - corners should always override
+		return 10;
 	}
 
-	// Default priority for other connections
 	return 0;
 }
 
@@ -394,14 +585,12 @@ bool ABuildablePiece::TryPlace()
 {
 	if (PieceState != EPieceState::Preview) return false;
 
-	// Check if placement is valid
 	if (!IsPlacementValid())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Cannot place piece - invalid placement"));
 		return false;
 	}
 
-	// Change state to placed (or nailed if auto-nail is enabled)
 	if (bAutoNailOnPlace)
 	{
 		PieceState = EPieceState::Nailed;
@@ -411,7 +600,6 @@ bool ABuildablePiece::TryPlace()
 		PieceState = EPieceState::Placed;
 	}
 
-	// Register with construction phase manager
 	if (AConstructionPhaseManager::Instance)
 	{
 		AConstructionPhaseManager::Instance->RegisterPlacedPiece(this);
@@ -422,7 +610,6 @@ bool ABuildablePiece::TryPlace()
 		UE_LOG(LogTemp, Error, TEXT("ConstructionPhaseManager not found! Add BP_ConstructionPhaseManager to your level!"));
 	}
 
-	// If snapped, occupy the target socket
 	if (bIsSnapped && SnappedToPiece != nullptr)
 	{
 		SnappedToPiece->OccupySocket(SnappedToSocketName, this);
@@ -446,24 +633,20 @@ void ABuildablePiece::NailInPlace()
 
 void ABuildablePiece::Remove()
 {
-	// Unregister from construction phase manager
 	if (AConstructionPhaseManager::Instance)
 	{
 		AConstructionPhaseManager::Instance->UnregisterPiece(this);
 	}
 
-	// Free any occupied sockets
 	if (bIsSnapped && SnappedToPiece != nullptr)
 	{
 		SnappedToPiece->FreeSocket(SnappedToSocketName);
 	}
 
-	// Free our own sockets
 	for (FConstructionSocket& Socket : Sockets)
 	{
 		if (Socket.bIsOccupied && Socket.ConnectedPiece.IsValid())
 		{
-			// The connected piece should handle its own cleanup
 			Socket.bIsOccupied = false;
 			Socket.ConnectedPiece = nullptr;
 		}
@@ -476,43 +659,26 @@ bool ABuildablePiece::IsPlacementValid() const
 {
 	if (!AConstructionPhaseManager::Instance) return false;
 
-	// Check if this piece type can be placed in current phase
 	if (!AConstructionPhaseManager::Instance->CanPlacePieceType(PieceType))
-	{
 		return false;
-	}
 
-	// Check prerequisites
 	if (!AConstructionPhaseManager::Instance->CheckPrerequisites(PieceType, GetActorLocation()))
-	{
 		return false;
-	}
 
-	// Check if piece is supported (not floating)
 	if (!IsSupported())
-	{
 		return false;
-	}
 
-	// If we require snapping, check if snapped
-	// (For now, all pieces should snap except foundation)
 	if (PieceType != EPieceType::Foundation && !bIsSnapped)
-	{
 		return false;
-	}
 
 	return true;
 }
 
 bool ABuildablePiece::IsSupported() const
 {
-	// Foundation blocks don't need support
 	if (PieceType == EPieceType::Foundation)
-	{
 		return true;
-	}
 
-	// Other pieces must be snapped to something
 	return bIsSnapped;
 }
 
@@ -520,7 +686,6 @@ void ABuildablePiece::UpdateVisualFeedback()
 {
 	if (!MeshComponent) return;
 
-	// If nailed and we have a final material, switch to it
 	if (PieceState == EPieceState::Nailed && NailedMaterial)
 	{
 		MeshComponent->SetMaterial(0, NailedMaterial);
@@ -528,7 +693,6 @@ void ABuildablePiece::UpdateVisualFeedback()
 		return;
 	}
 
-	// Otherwise use dynamic material with color feedback
 	if (!DynamicMaterial) return;
 
 	FLinearColor TargetColor;
@@ -538,32 +702,23 @@ void ABuildablePiece::UpdateVisualFeedback()
 		case EPieceState::Preview:
 			TargetColor = IsPlacementValid() ? ValidPlacementColor : InvalidPlacementColor;
 			break;
-
 		case EPieceState::Placed:
 			TargetColor = PlacedColor;
 			break;
-
 		case EPieceState::Nailed:
 			TargetColor = NailedColor;
 			break;
-
 		default:
 			TargetColor = FLinearColor::White;
 			break;
 	}
 
-	// Update material color and opacity
 	DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), TargetColor);
 
-	// Set transparency for preview mode
 	if (PieceState == EPieceState::Preview)
-	{
 		MeshComponent->SetRenderCustomDepth(true);
-	}
 	else
-	{
 		MeshComponent->SetRenderCustomDepth(false);
-	}
 }
 
 void ABuildablePiece::OccupySocket(FName SocketName, ABuildablePiece* ConnectingPiece)
@@ -595,8 +750,7 @@ void ABuildablePiece::RotateLeft()
 	FRotator NewRotation = GetActorRotation();
 	NewRotation.Yaw -= RotationStep;
 	SetActorRotation(NewRotation);
-
-	bIsSnapped = false; // Clear snap state when manually rotating
+	bIsSnapped = false;
 	UE_LOG(LogTemp, Log, TEXT("RotateLeft: New rotation Yaw=%.1f"), NewRotation.Yaw);
 }
 
@@ -607,7 +761,6 @@ void ABuildablePiece::RotateRight()
 	FRotator NewRotation = GetActorRotation();
 	NewRotation.Yaw += RotationStep;
 	SetActorRotation(NewRotation);
-
 	bIsSnapped = false;
 	UE_LOG(LogTemp, Log, TEXT("RotateRight: New rotation Yaw=%.1f"), NewRotation.Yaw);
 }
@@ -619,7 +772,6 @@ void ABuildablePiece::RotateFront()
 	FRotator NewRotation = GetActorRotation();
 	NewRotation.Pitch += RotationStep;
 	SetActorRotation(NewRotation);
-
 	bIsSnapped = false;
 }
 
@@ -630,7 +782,6 @@ void ABuildablePiece::RotateBack()
 	FRotator NewRotation = GetActorRotation();
 	NewRotation.Pitch -= RotationStep;
 	SetActorRotation(NewRotation);
-
 	bIsSnapped = false;
 }
 
@@ -641,7 +792,6 @@ void ABuildablePiece::RotateRoll(float Angle)
 	FRotator NewRotation = GetActorRotation();
 	NewRotation.Roll += Angle;
 	SetActorRotation(NewRotation);
-
 	bIsSnapped = false;
 }
 
@@ -649,7 +799,6 @@ void ABuildablePiece::ScalePiece(float ScaleDelta)
 {
 	if (PieceState == EPieceState::Nailed) return;
 
-	// Calculate new scale
 	float NewScaleValue = CurrentScale.X + ScaleDelta;
 	NewScaleValue = FMath::Clamp(NewScaleValue, MinScale, MaxScale);
 
