@@ -319,29 +319,32 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 						// Get the target board's forward vector (along its length)
 						FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
 
-						// Determine which side of the target board we're approaching from
+						// Use target socket position relative to target center to determine which end
+						FVector TargetSocketLocalPos = TargetPiece->GetActorRotation().UnrotateVector(
+							SnapLoc - TargetPiece->GetActorLocation());
+
+						// Determine which side we need to offset based on approach direction
 						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
 						float DotRight = FVector::DotProduct(ToSource, TargetRight);
-						float SideSign = DotRight > 0 ? -1.0f : 1.0f;
+						// Move AWAY from target center (so the boards don't overlap)
+						float SideSign = DotRight > 0 ? 1.0f : -1.0f;
 
 						// Offset perpendicular by half the TARGET board's width
-						// This moves snapping board so its centerline aligns with target's side face
 						float PerpOffset = TargetRimBoard->BoardWidth / 2.0f;
 
 						// Also offset along target's length by half the SNAPPING board's width
-						// This moves snapping board so its side face aligns with target's end
+						// Move TOWARD target center (inward) so snapping board's side aligns with target's end
 						float LengthOffset = SourceRimBoard->BoardWidth / 2.0f;
-
-						// Determine which end of target we're near (positive or negative X in target's space)
-						float DotForward = FVector::DotProduct(ToSource, TargetForward);
-						float EndSign = DotForward > 0 ? 1.0f : -1.0f;
+						// If target socket is at positive X (right end), move negative; if at negative X (left end), move positive
+						float EndSign = TargetSocketLocalPos.X > 0 ? -1.0f : 1.0f;
 
 						FVector TotalOffset = (TargetRight * SideSign * PerpOffset) +
 						                      (TargetForward * EndSign * LengthOffset);
 						OutSnapLocation += TotalOffset;
 
-						UE_LOG(LogTemp, Warning, TEXT("Corner offset: PerpOffset=%.2f, LengthOffset=%.2f, SideSign=%.1f, EndSign=%.1f"),
-							PerpOffset, LengthOffset, SideSign, EndSign);
+						UE_LOG(LogTemp, Warning, TEXT("Corner offset: Source=%s Target=%s | PerpOff=%.2f SideSign=%.1f | LengthOff=%.2f EndSign=%.1f (TargetSocketX=%.1f)"),
+							*Socket.SocketName.ToString(), *TargetSocketName.ToString(),
+							PerpOffset, SideSign, LengthOffset, EndSign, TargetSocketLocalPos.X);
 					}
 				}
 
