@@ -300,8 +300,30 @@ bool ABuildablePiece::FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapR
 				OutSnapLocation = SnapLoc - SocketWorldOffset;
 				OutSnapRotation = CurrentActorRotation;
 
-				// MESH SOCKET CORNER SYSTEM:
-				// Mesh sockets provide precise snap points at actual mesh edges
+				// PERPENDICULAR CORNER OFFSET:
+				// When two outside boards meet at 90°, offset by half board width
+				// so the snapping board's end touches the TARGET board's SIDE face
+				if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+					TargetSocketType == EConstructionSocketType::RimBoard_End_Corner &&
+					TargetPiece)
+				{
+					ARimBoard* SourceRimBoard = Cast<ARimBoard>(this);
+					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
+
+					if (SourceRimBoard && TargetRimBoard)
+					{
+						// Get the target board's right vector (perpendicular to its length)
+						FVector TargetRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
+
+						// Determine which side of the target board we're on
+						FVector ToSource = (OutSnapLocation - TargetPiece->GetActorLocation()).GetSafeNormal();
+						float SideSign = FVector::DotProduct(ToSource, TargetRight) > 0 ? 1.0f : -1.0f;
+
+						// Offset by half the board width toward the target board's side
+						float OffsetAmount = TargetRimBoard->BoardWidth / 2.0f;
+						OutSnapLocation += TargetRight * SideSign * OffsetAmount;
+					}
+				}
 
 				SnappedToPiece = TargetPiece;
 				SnappedToSocketName = TargetSocketName;
