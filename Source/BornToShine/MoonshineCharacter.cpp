@@ -33,10 +33,10 @@ AMoonshineCharacter::AMoonshineCharacter()
 	ThirdPersonCamera->SetupAttachment(ThirdPersonArm, USpringArmComponent::SocketName);
 	ThirdPersonCamera->bUsePawnControlRotation = false;
 
-	// Create first person camera
+	// Create first person camera - pushed forward to avoid seeing body
 	FirstPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCamera->SetupAttachment(RootComponent);
-	FirstPersonCamera->SetRelativeLocation(FVector(0.0f, 0.0f, 64.0f)); // Eye height
+	FirstPersonCamera->SetRelativeLocation(FVector(40.0f, 0.0f, 75.0f)); // Forward of head, eye height
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
 	// Default settings
