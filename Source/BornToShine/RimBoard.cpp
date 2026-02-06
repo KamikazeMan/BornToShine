@@ -391,7 +391,14 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 		{
 			bAutoScalingActive = true;
 
-			float GapDistance = FVector::Dist(LeftCornerTarget, RightCornerTarget);
+			// IMPORTANT: Target sockets are at the CENTER of the perpendicular boards
+			// We need to offset each target by half the board width toward the gap center
+			// so the closing board's ends touch the SIDES of the perpendicular boards
+			FVector GapDirection = (RightCornerTarget - LeftCornerTarget).GetSafeNormal();
+			FVector AdjustedLeftTarget = LeftCornerTarget + GapDirection * (BoardWidth / 2.0f);
+			FVector AdjustedRightTarget = RightCornerTarget - GapDirection * (BoardWidth / 2.0f);
+
+			float GapDistance = FVector::Dist(AdjustedLeftTarget, AdjustedRightTarget);
 
 			// Current socket-to-socket distance on mesh = 121.2 + 122.7 = 243.9cm for 8ft board
 			float CurrentSocketToSocket = 243.9f;
@@ -427,12 +434,12 @@ void ARimBoard::UpdatePreviewPosition(const FVector& NewLocation, const FRotator
 				RegenerateSockets();
 			}
 
-			// CRITICAL: Position board CENTERED between the two target corners
-			// This ensures BOTH corners align, not just one
-			FVector CenterPoint = (LeftCornerTarget + RightCornerTarget) / 2.0f;
+			// CRITICAL: Position board CENTERED between the ADJUSTED target corners
+			// (targets offset by half board width so ends touch perpendicular board sides)
+			FVector CenterPoint = (AdjustedLeftTarget + AdjustedRightTarget) / 2.0f;
 
 			// Calculate rotation to face along the line from left to right target
-			FVector Direction = (RightCornerTarget - LeftCornerTarget).GetSafeNormal();
+			FVector Direction = (AdjustedRightTarget - AdjustedLeftTarget).GetSafeNormal();
 			FRotator TargetRotation = Direction.Rotation();
 
 			// Position the board at the center, with the correct rotation
