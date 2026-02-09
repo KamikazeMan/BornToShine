@@ -40,18 +40,11 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
     TrackedBoards.AddUnique(Board);
     RecalculateState();
 
-    // When L-shape is detected (2 boards at 90°), the 2nd board is a "butt" board.
-    // Convert it to an inside board so it's shorter by BoardWidth at each end,
-    // fitting between the through boards (1 and 3) with flush corners.
+    // When L-shape is detected (2 boards at 90°), extend Board 2's mesh
+    // by HalfWidth on each end so the board face sits flush against Board 1.
     if (CurrentState == ERectangleState::LShape && TrackedBoards.Num() == 2)
     {
-        // The most recently placed board is the butt board (Board 2)
-        if (Board->bIsOutsideBoard)
-        {
-            Board->ToggleBoardType(); // Outside -> Inside (shorter by 2*BoardWidth)
-            UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Converted Board 2 to INSIDE board (effective length: %.2f cm)"),
-                Board->GetEffectiveLength());
-        }
+        Board->ExtendMeshForFlushCorners();
     }
 
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board placed. Tracking %d boards. State: %d"),
@@ -488,28 +481,25 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
 
     FBoardSuggestion Suggestion = GetActiveSuggestion();
 
-    // 1. If closing the rectangle (U-shape -> Complete), this is Board 4 — a butt board.
-    // Convert to inside board BEFORE setting length so GetEffectiveLength() is correct.
-    if (CurrentState == ERectangleState::UShape && Board->bIsOutsideBoard)
-    {
-        Board->ToggleBoardType(); // Outside -> Inside (shorter by 2*BoardWidth)
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Converted Board 4 to INSIDE board (effective length: %.2f cm)"),
-            Board->GetEffectiveLength());
-    }
-
-    // 2. Resize to the suggested length
+    // 1. Resize to the suggested length
     if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Board->GetBoardLengthFeet())
     {
         Board->SetBoardLengthFeet(Suggestion.LengthFeet);
         UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Resized board to %d ft"), Suggestion.LengthFeet);
     }
 
-    // 3. Set exact position and rotation — no snap detection involved
+    // 2. Set exact position and rotation — no snap detection involved
     Board->SetActorLocation(Suggestion.Position);
     Board->SetActorRotation(Suggestion.Rotation);
 
     // 4. Mark as placed
     Board->SetPreviewMode(false);
+
+    // 4b. Board 4 (closing board) — extend mesh for flush corners
+    if (CurrentState == ERectangleState::UShape)
+    {
+        Board->ExtendMeshForFlushCorners();
+    }
 
     // 5. Occupy target sockets (bidirectional — mark both sides of each connection)
     if (Suggestion.LeftTargetPiece)

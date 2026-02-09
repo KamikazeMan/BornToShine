@@ -330,6 +330,25 @@ void ARimBoard::ToggleBoardType()
 		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"), GetEffectiveLength());
 }
 
+void ARimBoard::ExtendMeshForFlushCorners()
+{
+	if (!MeshComponent) return;
+
+	// Extend the visual mesh by one BoardWidth total (HalfWidth per end)
+	// so the board face reaches past the centerline snap point to sit flush
+	// against the perpendicular board at each corner.
+	// Actor position and sockets are NOT changed — only the visual mesh grows.
+	float VisualLength = GetEffectiveLength() + BoardWidth;
+	MeshComponent->SetRelativeScale3D(FVector(
+		VisualLength / 100.0f,
+		BoardWidth / 100.0f,
+		BoardHeight / 100.0f
+	));
+
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Extended mesh for flush corners (visual: %.2f cm, effective: %.2f cm, extension: %.2f cm per end)"),
+		VisualLength, GetEffectiveLength(), GetBoardHalfWidth());
+}
+
 float ARimBoard::GetEffectiveLength() const
 {
 	if (bIsOutsideBoard)

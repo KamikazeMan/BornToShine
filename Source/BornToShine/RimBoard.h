@@ -69,6 +69,10 @@ public:
 	// Get half board width for flush offset calculations
 	float GetBoardHalfWidth() const { return BoardWidth / 2.0f; }
 
+	// Extend the visual mesh by HalfWidth on each end for flush corner joints.
+	// Actor position and sockets are unchanged — only the mesh scale increases.
+	void ExtendMeshForFlushCorners();
+
 	// Socket generation
 	void CreateBottomEndSockets();
 	void CreateTopFaceSockets();
