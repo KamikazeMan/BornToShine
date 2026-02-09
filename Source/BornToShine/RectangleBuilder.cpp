@@ -317,16 +317,8 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
     // Board3's length matches Board1
     int32 Board3LengthFeet = Board1->GetBoardLengthFeet();
 
-    // Step 4: Apply flush offset — shift Board3 by HalfWidth perpendicular to itself,
-    // toward the rectangle interior (toward Board1). This makes Board3's face sit flush
-    // against Board2's end face at corner C, eliminating the centerline overlap.
-    float HalfWidth = Board1->GetBoardHalfWidth(); // 1.905 cm for 2x6
-    FVector Board3Right = Board3Rotation.RotateVector(FVector::RightVector);
-    FVector ToInterior = (Board1->GetActorLocation() - Board3Center).GetSafeNormal();
-    float FlushDot = FVector::DotProduct(ToInterior, Board3Right);
-    float FlushSign = (FlushDot > 0) ? 1.0f : -1.0f;
-    FVector FlushOffset = Board3Right * HalfWidth * FlushSign;
-    Board3Center += FlushOffset;
+    // No position flush offset — boards stay centered on foundations.
+    // The half-width overlap at corners is structurally correct.
 
     Suggestion.Position = Board3Center;
     Suggestion.Rotation = Board3Rotation;
@@ -335,10 +327,9 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
     Suggestion.LengthFeet = Board3LengthFeet;
     Suggestion.bIsValid = true;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft, FlushOffset=(%.3f, %.3f, %.3f) | Corners: Shared=(%.1f,%.1f,%.1f) B1Far=(%.1f,%.1f,%.1f) B2Far=(%.1f,%.1f,%.1f) 4th=(%.1f,%.1f,%.1f)"),
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft | Corners: Shared=(%.1f,%.1f,%.1f) B1Far=(%.1f,%.1f,%.1f) B2Far=(%.1f,%.1f,%.1f) 4th=(%.1f,%.1f,%.1f)"),
         Board3Center.X, Board3Center.Y, Board3Center.Z,
         Board3Rotation.Yaw, Board3LengthFeet,
-        FlushOffset.X, FlushOffset.Y, FlushOffset.Z,
         SharedCorner.X, SharedCorner.Y, SharedCorner.Z,
         Board1FarEnd.X, Board1FarEnd.Y, Board1FarEnd.Z,
         Board2FarEnd.X, Board2FarEnd.Y, Board2FarEnd.Z,
@@ -406,16 +397,8 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
     // Position is midpoint of the two open corners
     FVector MidPoint = (Pos1 + Pos2) / 2.0f;
 
-    // Apply flush offset — shift Board4 by HalfWidth perpendicular to itself,
-    // toward the rectangle interior (toward the centroid of the 3 existing boards).
-    float HalfWidth = Board1->GetBoardHalfWidth(); // 1.905 cm for 2x6
-    FVector Board4Right = Board4Rot.RotateVector(FVector::RightVector);
-    FVector Centroid = (Board1->GetActorLocation() + Board2->GetActorLocation() + Board3->GetActorLocation()) / 3.0f;
-    FVector ToInterior = (Centroid - MidPoint).GetSafeNormal();
-    float FlushDot = FVector::DotProduct(ToInterior, Board4Right);
-    float FlushSign = (FlushDot > 0) ? 1.0f : -1.0f;
-    FVector FlushOffset = Board4Right * HalfWidth * FlushSign;
-    MidPoint += FlushOffset;
+    // No position flush offset — boards stay centered on foundations.
+    // The half-width overlap at corners is structurally correct.
 
     Suggestion.Position = MidPoint;
     Suggestion.Rotation = Board4Rot;
@@ -426,9 +409,8 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
     Suggestion.RightTargetSocket = OpenCorners[1].SocketName;
     Suggestion.bIsValid = true;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 4 (closing) suggestion - Pos=(%.1f, %.1f, %.1f), Len=%dft, FlushOffset=(%.3f, %.3f, %.3f)"),
-        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z, LengthFeet,
-        FlushOffset.X, FlushOffset.Y, FlushOffset.Z);
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 4 (closing) suggestion - Pos=(%.1f, %.1f, %.1f), Len=%dft"),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z, LengthFeet);
 
     return Suggestion;
 }
