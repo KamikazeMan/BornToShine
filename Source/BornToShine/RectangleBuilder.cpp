@@ -216,58 +216,91 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
 
     if (!Board1 || !Board2) return Suggestion;
 
-    // Find the open corner sockets (not connected to each other)
-    // Board1 has two corner sockets. One is connected to Board2. The other is open.
-    // Board2 has two corner sockets. One is connected to Board1. The other is open.
-    // Board 3 should span from Board2's open corner, parallel to Board1.
+    // GOAL: Board 3 is parallel to Board 1, starts at Board 2's far end.
+    //
+    // L-shape layout (example):
+    //   Board1 runs along X-axis
+    //   Board2 runs along Y-axis, connected at Board1's right end
+    //   Board3 should run parallel to Board1 (same yaw), starting at Board2's far end
+    //
+    // We need:
+    //   1. Board2's open (far) corner socket world position = Board3's connecting end
+    //   2. Board1's rotation = Board3's rotation (parallel)
+    //   3. Board3's actor position = corner pos + offset to board center along Board1's direction
 
-    FConstructionSocket* OpenSocket1 = nullptr;
+    // Find the connected and open corner sockets on Board2
+    TArray<FConstructionSocket> Sockets2 = Board2->GetAllSockets();
+    FConstructionSocket* ConnectedSocket2 = nullptr;
     FConstructionSocket* OpenSocket2 = nullptr;
 
-    TArray<FConstructionSocket> Sockets1 = Board1->GetAllSockets();
-    TArray<FConstructionSocket> Sockets2 = Board2->GetAllSockets();
-
-    // Find open corner on Board1
-    for (FConstructionSocket& S : Sockets1)
-    {
-        if (S.SocketType == EConstructionSocketType::RimBoard_End_Corner && !S.bIsOccupied)
-        {
-            OpenSocket1 = &S;
-            break;
-        }
-    }
-
-    // Find open corner on Board2
     for (FConstructionSocket& S : Sockets2)
     {
-        if (S.SocketType == EConstructionSocketType::RimBoard_End_Corner && !S.bIsOccupied)
+        if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+        if (S.bIsOccupied && S.ConnectedPiece.Get() == Board1)
+        {
+            ConnectedSocket2 = &S;
+        }
+        else if (!S.bIsOccupied)
         {
             OpenSocket2 = &S;
-            break;
         }
     }
 
-    if (!OpenSocket1 || !OpenSocket2) return Suggestion;
+    if (!OpenSocket2) return Suggestion;
 
-    // Board 3 connects to Board2's open corner (90 degree turn)
-    // Its other end should be parallel to Board1, at the same distance as Board2's length
-    FVector OpenPos2 = Board2->GetActorTransform().TransformPosition(OpenSocket2->LocalPosition);
+    // Board2's open corner = where Board3's connecting end goes
+    FVector Board2OpenCornerWorld = Board2->GetActorTransform().TransformPosition(OpenSocket2->LocalPosition);
 
-    // Board 3 should be parallel to Board1
+    // Board3 is parallel to Board1
     FRotator Board3Rotation = Board1->GetActorRotation();
 
-    // Calculate where Board3's connecting end goes
-    Suggestion.Position = OpenPos2;
+    // Determine which direction Board3 should extend from the corner.
+    // Board1's open corner tells us which way the rectangle is "growing".
+    // Board3 should extend in the SAME direction as Board1 (from its connected end toward its open end).
+    TArray<FConstructionSocket> Sockets1 = Board1->GetAllSockets();
+    FConstructionSocket* ConnectedSocket1 = nullptr;
+    FConstructionSocket* OpenSocket1 = nullptr;
+
+    for (FConstructionSocket& S : Sockets1)
+    {
+        if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+        if (S.bIsOccupied && S.ConnectedPiece.Get() == Board2)
+        {
+            ConnectedSocket1 = &S;
+        }
+        else if (!S.bIsOccupied)
+        {
+            OpenSocket1 = &S;
+        }
+    }
+
+    if (!ConnectedSocket1 || !OpenSocket1) return Suggestion;
+
+    // Direction Board1 extends: from connected end toward open end (in world space)
+    FVector Board1ConnectedWorld = Board1->GetActorTransform().TransformPosition(ConnectedSocket1->LocalPosition);
+    FVector Board1OpenWorld = Board1->GetActorTransform().TransformPosition(OpenSocket1->LocalPosition);
+    FVector Board1Direction = (Board1OpenWorld - Board1ConnectedWorld).GetSafeNormal();
+
+    // Board3's length matches Board1
+    int32 Board3LengthFeet = Board1->GetBoardLengthFeet();
+    float Board3HalfLength = (Board3LengthFeet * 30.48f) / 2.0f;
+
+    // Board3's connecting end is at Board2's open corner.
+    // The connecting socket is at -HalfLen along the board's local X-axis.
+    // So the actor center = corner position + Board1Direction * HalfLength
+    // (Board3 extends away from the corner in the same direction as Board1)
+    FVector Board3Center = Board2OpenCornerWorld + Board1Direction * Board3HalfLength;
+
+    Suggestion.Position = Board3Center;
     Suggestion.Rotation = Board3Rotation;
     Suggestion.LeftTargetPiece = Board2;
     Suggestion.LeftTargetSocket = OpenSocket2->SocketName;
-
-    // Length should match Board1's length (to form a rectangle)
-    Suggestion.LengthFeet = Board1->GetBoardLengthFeet();
+    Suggestion.LengthFeet = Board3LengthFeet;
     Suggestion.bIsValid = true;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Len=%dft, parallel to Board1"),
-        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z, Suggestion.LengthFeet);
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft, parallel to Board1"),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw, Suggestion.LengthFeet);
 
     return Suggestion;
 }
