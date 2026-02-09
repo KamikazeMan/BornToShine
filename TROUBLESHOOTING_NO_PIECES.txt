@@ -1,0 +1,70 @@
+// Quick test file - delete after debugging
+
+/*
+TROUBLESHOOTING "No Pieces Available" ERROR:
+
+1. CHECK WHICH CHARACTER YOU'RE USING:
+   - Open BP_GameMode
+   - Look at "Default Pawn Class"
+   - Should be BP_Character or BP_Character_Simple
+
+2. CHECK BLUEPRINT SETUP:
+
+   If using BP_Character (original MoonshineCharacter):
+   - Open BP_Character
+   - Find "Available Piece Types" array in Details
+   - Add BP_FoundationBlock as Element 0
+   - COMPILE AND SAVE
+
+   If using BP_Character_Simple (new version):
+   - Open BP_Character_Simple
+   - Select "BuildingComponent" in Components panel
+   - In Details panel, find "Available Piece Types"
+   - Add BP_FoundationBlock as Element 0
+   - COMPILE AND SAVE
+
+3. VERIFY BP_FoundationBlock EXISTS:
+   - Search in Content Browser for "BP_Foundation"
+   - Should exist and be based on FoundationBlock C++ class
+   - Open it to verify it has a mesh component
+
+4. TEST IN EDITOR:
+   - Hit Play
+   - Open Output Log (Window → Developer Tools → Output Log)
+   - Look for these messages:
+     - "GameMode: Socket Manager initialized"
+     - "GameMode: Construction Phase Manager initialized"
+   - Press B key
+   - Should see either:
+     - "Entered build mode" + "Spawned preview piece" ✅
+     - "No piece types available" ❌
+
+5. IF STILL NOT WORKING:
+   Try this debugging:
+
+   a) Open BP_Character (or BP_Character_Simple)
+   b) In Event Graph, add this debug node:
+
+      Event BeginPlay
+      └─> Print String: "Available Pieces: {AvailablePieceTypes.Length}"
+
+   c) This will show how many pieces the character has at runtime
+   d) If it shows 0, the Blueprint isn't saving the array properly
+
+6. NUCLEAR OPTION - Recreate Character:
+   - Delete BP_Character
+   - Right-click → Blueprint Class
+   - Search for MoonshineCharacter_Simple
+   - Name it BP_Character_New
+   - Add BuildingComponent → Available Piece Types → BP_FoundationBlock
+   - Compile and Save
+   - Update BP_GameMode to use BP_Character_New
+   - Test again
+
+COMMON MISTAKES:
+- Adding BP_FoundationBlock to the wrong place (character vs component)
+- Not compiling/saving after changes
+- BP_FoundationBlock class doesn't exist
+- Using wrong character in GameMode
+- Array element is set to "None" instead of BP_FoundationBlock
+*/
