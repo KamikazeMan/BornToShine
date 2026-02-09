@@ -259,14 +259,21 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
         }
     }
 
-    // Find Board2's open (C) corner socket
+    // Find Board2's far (C) corner socket.
+    // NOTE: Board2's sockets may NOT be marked as occupied (CommitPlacement only marks
+    // the target piece's socket, not the source piece's). So we can't rely on bIsOccupied.
+    // Instead, pick the corner socket FARTHEST from SharedCorner — that's the far end.
     TArray<FConstructionSocket> Sockets2 = Board2->GetAllSockets();
+    float BestDist = -1.0f;
     for (const FConstructionSocket& S : Sockets2)
     {
         if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
-        if (!S.bIsOccupied)
+        FVector WorldPos = Board2->GetActorTransform().TransformPosition(S.LocalPosition);
+        float Dist = FVector::Dist(WorldPos, SharedCorner);
+        if (Dist > BestDist)
         {
-            Board2FarEnd = Board2->GetActorTransform().TransformPosition(S.LocalPosition);
+            BestDist = Dist;
+            Board2FarEnd = WorldPos;
             Board2OpenSocketName = S.SocketName;
             bFoundBoard2Far = true;
         }
@@ -450,14 +457,58 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     // 3. Mark as placed
     Board->SetPreviewMode(false);
 
-    // 4. Occupy target sockets
+    // 4. Occupy target sockets (bidirectional — mark both sides of each connection)
     if (Suggestion.LeftTargetPiece)
     {
         Suggestion.LeftTargetPiece->OccupySocket(Suggestion.LeftTargetSocket, Board);
+
+        // Also mark this board's nearest corner socket as connected to the left target
+        TArray<FConstructionSocket> BoardSockets = Board->GetAllSockets();
+        FName NearestSocketName = NAME_None;
+        float NearestDist = FLT_MAX;
+        FVector TargetSocketWorld = Suggestion.LeftTargetPiece->GetActorTransform().TransformPosition(
+            Suggestion.LeftTargetPiece->GetSocketByName(Suggestion.LeftTargetSocket)->LocalPosition);
+        for (const FConstructionSocket& S : BoardSockets)
+        {
+            if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+            FVector WorldPos = Board->GetActorTransform().TransformPosition(S.LocalPosition);
+            float Dist = FVector::Dist(WorldPos, TargetSocketWorld);
+            if (Dist < NearestDist)
+            {
+                NearestDist = Dist;
+                NearestSocketName = S.SocketName;
+            }
+        }
+        if (NearestSocketName != NAME_None)
+        {
+            Board->OccupySocket(NearestSocketName, Suggestion.LeftTargetPiece);
+        }
     }
     if (Suggestion.RightTargetPiece)
     {
         Suggestion.RightTargetPiece->OccupySocket(Suggestion.RightTargetSocket, Board);
+
+        // Also mark this board's nearest corner socket as connected to the right target
+        TArray<FConstructionSocket> BoardSockets = Board->GetAllSockets();
+        FName NearestSocketName = NAME_None;
+        float NearestDist = FLT_MAX;
+        FVector TargetSocketWorld = Suggestion.RightTargetPiece->GetActorTransform().TransformPosition(
+            Suggestion.RightTargetPiece->GetSocketByName(Suggestion.RightTargetSocket)->LocalPosition);
+        for (const FConstructionSocket& S : BoardSockets)
+        {
+            if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+            FVector WorldPos = Board->GetActorTransform().TransformPosition(S.LocalPosition);
+            float Dist = FVector::Dist(WorldPos, TargetSocketWorld);
+            if (Dist < NearestDist)
+            {
+                NearestDist = Dist;
+                NearestSocketName = S.SocketName;
+            }
+        }
+        if (NearestSocketName != NAME_None)
+        {
+            Board->OccupySocket(NearestSocketName, Suggestion.RightTargetPiece);
+        }
     }
 
     // 5. Register with PhaseManager

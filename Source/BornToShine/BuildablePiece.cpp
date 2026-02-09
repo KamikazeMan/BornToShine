@@ -642,6 +642,12 @@ void ABuildablePiece::CommitPlacement()
 	if (bIsSnapped && SnappedToPiece != nullptr)
 	{
 		SnappedToPiece->OccupySocket(SnappedToSocketName, this);
+
+		// Also mark THIS piece's source socket as occupied (bidirectional)
+		if (CurrentSnapCandidate.SourceSocketName != NAME_None)
+		{
+			OccupySocket(CurrentSnapCandidate.SourceSocketName, SnappedToPiece);
+		}
 	}
 
 	// For dual-end snaps, also occupy the second target socket
