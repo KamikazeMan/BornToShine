@@ -444,6 +444,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			bool bCandidateIsInline = false;
 
 			// Special handling for rim-to-rim corner snaps (single-end)
+			float CornerRotationSign = 0.0f; // Track which direction the corner extends
 			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TgtSocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TargetPiece)
@@ -487,13 +488,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// Dot product: if player is looking along target's right vector, extend right (+90)
 					// If looking against it, extend left (-90)
 					float DotResult = FVector::DotProduct(PieceToCamera, TargetRight);
-					float RotationSign = (DotResult > 0) ? 90.0f : -90.0f;
-					CandidateRotation.Yaw = TargetRotation.Yaw + RotationSign;
+					CornerRotationSign = (DotResult > 0) ? 90.0f : -90.0f;
+					CandidateRotation.Yaw = TargetRotation.Yaw + CornerRotationSign;
 
 					bCandidateIsCorner = true;
 
 					UE_LOG(LogTemp, Warning, TEXT("Corner snap candidate: %s -> %s (dot=%.2f, rot offset %.0f)"),
-						*SourceSocketStr, *TargetSocketStr, DotResult, RotationSign);
+						*SourceSocketStr, *TargetSocketStr, DotResult, CornerRotationSign);
 				}
 			}
 
@@ -501,6 +502,29 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			FVector SocketLocalOffset = Socket.LocalPosition;
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
 			FVector CandidateLocation = SnapLoc - SocketWorldOffset;
+
+			// Apply flush offset for corner joints so board faces sit flush
+			// instead of overlapping at centerlines. Shift by HalfWidth along
+			// the target board's forward direction (the axis that passes through
+			// the incoming board's cross-section at the corner).
+			if (bCandidateIsCorner && TargetPiece)
+			{
+				ARimBoard* TargetRim = Cast<ARimBoard>(TargetPiece);
+				if (TargetRim)
+				{
+					float HalfWidth = TargetRim->GetBoardHalfWidth(); // 1.905 cm
+					FVector TargetForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+					// The sign matches the corner rotation direction:
+					// +90 rotation means extending in +Right direction, so flush shift is +Forward
+					// -90 rotation means extending in -Right direction, so flush shift is -Forward
+					float FlushSign = (CornerRotationSign > 0) ? 1.0f : -1.0f;
+					FVector FlushOffset = TargetForward * HalfWidth * FlushSign;
+					CandidateLocation += FlushOffset;
+
+					UE_LOG(LogTemp, Log, TEXT("Corner flush offset: %.3f cm along target forward (sign=%.0f)"),
+						HalfWidth, FlushSign);
+				}
+			}
 
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;
