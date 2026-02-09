@@ -384,6 +384,19 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
     // Position is midpoint of the two open corners
     FVector MidPoint = (Pos1 + Pos2) / 2.0f;
 
+    // Apply flush offset to tighten corners.
+    // Board4 needs to shift inward (toward the opposite side of the rectangle)
+    // by HalfWidth (1.905cm). The inward direction is perpendicular to the span,
+    // pointing toward Board2 (the opposite side).
+    FVector Perp = FVector(-SpanDir.Y, SpanDir.X, 0.0f);
+    FVector ToBoard2 = Board2->GetActorLocation() - MidPoint;
+    if (FVector::DotProduct(Perp, ToBoard2) < 0.0f)
+    {
+        Perp = -Perp;
+    }
+    float FlushOffset = Board2->GetBoardHalfWidth(); // 1.905cm for 2x6
+    MidPoint += Perp * FlushOffset;
+
     Suggestion.Position = MidPoint;
     Suggestion.Rotation = Board4Rot;
     Suggestion.LengthFeet = LengthFeet;
