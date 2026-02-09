@@ -40,11 +40,12 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
     TrackedBoards.AddUnique(Board);
     RecalculateState();
 
-    // When L-shape is detected (2 boards at 90°), extend Board 2's mesh
-    // by HalfWidth on each end so the board face sits flush against Board 1.
+    // When L-shape is detected (2 boards at 90°), extend BOTH boards' meshes
+    // by HalfWidth on each end so board faces sit flush at the corner.
     if (CurrentState == ERectangleState::LShape && TrackedBoards.Num() == 2)
     {
-        Board->ExtendMeshForFlushCorners();
+        TrackedBoards[0]->ExtendMeshForFlushCorners(); // Board 1
+        TrackedBoards[1]->ExtendMeshForFlushCorners(); // Board 2
     }
 
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board placed. Tracking %d boards. State: %d"),
@@ -495,11 +496,8 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     // 4. Mark as placed
     Board->SetPreviewMode(false);
 
-    // 4b. Board 4 (closing board) — extend mesh for flush corners
-    if (CurrentState == ERectangleState::UShape)
-    {
-        Board->ExtendMeshForFlushCorners();
-    }
+    // 4b. Extend mesh for flush corners on boards placed via suggestion (3 and 4)
+    Board->ExtendMeshForFlushCorners();
 
     // 5. Occupy target sockets (bidirectional — mark both sides of each connection)
     if (Suggestion.LeftTargetPiece)
