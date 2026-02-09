@@ -344,25 +344,21 @@ void ARimBoard::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
 
-	// Extend the visual mesh by one BoardWidth total (HalfWidth per end)
-	// so the board face reaches past the centerline snap point to sit flush
-	// against the perpendicular board at each corner.
-	// Only change the X axis (length). Preserve existing Y (width) and Z (height).
+	// The BP mesh is already the correct board size at scale (1,1,1).
+	// Extend X by the ratio (EffectiveLength + BoardWidth) / EffectiveLength
+	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
 	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	float VisualLength = GetEffectiveLength() + BoardWidth;
-
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard: ExtendMesh BEFORE scale=(%.4f, %.4f, %.4f)"),
-		CurrentScale3D.X, CurrentScale3D.Y, CurrentScale3D.Z);
+	float EffLen = GetEffectiveLength();
+	float Ratio = (EffLen + BoardWidth) / EffLen;
 
 	MeshComponent->SetRelativeScale3D(FVector(
-		VisualLength / 100.0f,
+		CurrentScale3D.X * Ratio,
 		CurrentScale3D.Y,
 		CurrentScale3D.Z
 	));
 
-	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) visual=%.2f cm"),
-		NewScale3D.X, NewScale3D.Y, NewScale3D.Z, VisualLength);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
+		Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
 }
 
 float ARimBoard::GetEffectiveLength() const
