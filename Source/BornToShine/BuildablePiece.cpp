@@ -300,6 +300,29 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						// Must be different target pieces (spanning between two boards)
 						if (LC.TargetPiece == RC.TargetPiece) continue;
 
+						// CRITICAL: Validate that the two target corners form a roughly straight span.
+						// For dual-end to work (board 4 closing a rectangle), the span direction
+						// between the two open corners must be roughly parallel to one of the target boards.
+						// If it's diagonal (~45°), this is an L-shape where single-end snap should handle it.
+						FVector SpanDir = (RC.TargetWorldPos - LC.TargetWorldPos).GetSafeNormal();
+
+						// Check alignment against both target boards
+						FVector LC_Forward = LC.TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+						FVector RC_Forward = RC.TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+
+						float DotLC = FMath::Abs(FVector::DotProduct(SpanDir, LC_Forward));
+						float DotRC = FMath::Abs(FVector::DotProduct(SpanDir, RC_Forward));
+
+						// The span should be roughly parallel to at least one target board
+						// (dot product near 1.0 = parallel, near 0.0 = perpendicular, 0.707 = 45° diagonal)
+						// Require at least 0.8 alignment (~37° tolerance) with one of the boards
+						float BestAlignment = FMath::Max(DotLC, DotRC);
+						if (BestAlignment < 0.8f)
+						{
+							// Span is diagonal — skip this pair (let single-end corner snap handle it)
+							continue;
+						}
+
 						float PairScore = 2000.0f / (LC.Distance + RC.Distance + 1.0f);
 
 						if (PairScore > BestPairScore)
