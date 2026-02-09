@@ -40,6 +40,20 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
     TrackedBoards.AddUnique(Board);
     RecalculateState();
 
+    // When L-shape is detected (2 boards at 90°), the 2nd board is a "butt" board.
+    // Convert it to an inside board so it's shorter by BoardWidth at each end,
+    // fitting between the through boards (1 and 3) with flush corners.
+    if (CurrentState == ERectangleState::LShape && TrackedBoards.Num() == 2)
+    {
+        // The most recently placed board is the butt board (Board 2)
+        if (Board->bIsOutsideBoard)
+        {
+            Board->ToggleBoardType(); // Outside -> Inside (shorter by 2*BoardWidth)
+            UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Converted Board 2 to INSIDE board (effective length: %.2f cm)"),
+                Board->GetEffectiveLength());
+        }
+    }
+
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board placed. Tracking %d boards. State: %d"),
         TrackedBoards.Num(), (int32)CurrentState);
 }
@@ -474,21 +488,30 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
 
     FBoardSuggestion Suggestion = GetActiveSuggestion();
 
-    // 1. Resize to the suggested length
+    // 1. If closing the rectangle (U-shape -> Complete), this is Board 4 — a butt board.
+    // Convert to inside board BEFORE setting length so GetEffectiveLength() is correct.
+    if (CurrentState == ERectangleState::UShape && Board->bIsOutsideBoard)
+    {
+        Board->ToggleBoardType(); // Outside -> Inside (shorter by 2*BoardWidth)
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Converted Board 4 to INSIDE board (effective length: %.2f cm)"),
+            Board->GetEffectiveLength());
+    }
+
+    // 2. Resize to the suggested length
     if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Board->GetBoardLengthFeet())
     {
         Board->SetBoardLengthFeet(Suggestion.LengthFeet);
         UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Resized board to %d ft"), Suggestion.LengthFeet);
     }
 
-    // 2. Set exact position and rotation — no snap detection involved
+    // 3. Set exact position and rotation — no snap detection involved
     Board->SetActorLocation(Suggestion.Position);
     Board->SetActorRotation(Suggestion.Rotation);
 
-    // 3. Mark as placed
+    // 4. Mark as placed
     Board->SetPreviewMode(false);
 
-    // 4. Occupy target sockets (bidirectional — mark both sides of each connection)
+    // 5. Occupy target sockets (bidirectional — mark both sides of each connection)
     if (Suggestion.LeftTargetPiece)
     {
         Suggestion.LeftTargetPiece->OccupySocket(Suggestion.LeftTargetSocket, Board);
@@ -542,7 +565,7 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
         }
     }
 
-    // 5. Register with PhaseManager
+    // 6. Register with PhaseManager
     if (AConstructionPhaseManager::Instance)
     {
         AConstructionPhaseManager::Instance->RegisterPlacedPiece(Board);
