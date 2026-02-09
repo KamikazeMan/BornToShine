@@ -292,15 +292,6 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
     // Step 3: Board3 center is midpoint of C and D
     FVector Board3Center = (Board2FarEnd + FourthCorner) / 2.0f;
 
-    // Step 4: Apply flush offset to tighten corners.
-    // Sockets are at centerline (Y=0), so the parallelogram gives us centerline positions.
-    // Board3 needs to shift perpendicular to its length, toward the inside of the
-    // rectangle, by HalfWidth (1.905cm) to create flush corner joints.
-    // The "inward" direction is from Board2's far end toward the shared corner (along Board2).
-    FVector InwardDir = (SharedCorner - Board2FarEnd).GetSafeNormal();
-    float FlushOffset = Board1->GetBoardHalfWidth(); // 1.905cm for 2x6
-    Board3Center += InwardDir * FlushOffset;
-
     // Board3 is parallel to Board1 (same rotation)
     FRotator Board3Rotation = Board1->GetActorRotation();
 
@@ -383,19 +374,6 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
 
     // Position is midpoint of the two open corners
     FVector MidPoint = (Pos1 + Pos2) / 2.0f;
-
-    // Apply flush offset to tighten corners.
-    // Board4 needs to shift inward (toward the opposite side of the rectangle)
-    // by HalfWidth (1.905cm). The inward direction is perpendicular to the span,
-    // pointing toward Board2 (the opposite side).
-    FVector Perp = FVector(-SpanDir.Y, SpanDir.X, 0.0f);
-    FVector ToBoard2 = Board2->GetActorLocation() - MidPoint;
-    if (FVector::DotProduct(Perp, ToBoard2) < 0.0f)
-    {
-        Perp = -Perp;
-    }
-    float FlushOffset = Board2->GetBoardHalfWidth(); // 1.905cm for 2x6
-    MidPoint += Perp * FlushOffset;
 
     Suggestion.Position = MidPoint;
     Suggestion.Rotation = Board4Rot;
