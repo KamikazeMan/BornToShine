@@ -198,12 +198,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// DUAL-END CORNER DETECTION (for 3rd/4th rim boards)
-	// Check if BOTH ends of this rim board can reach corner sockets
-	// on two DIFFERENT placed boards. If so, record as a dual-end candidate.
+	// DUAL-END CORNER DETECTION (for closing board only — board 4)
+	// Only fires when 3+ rim boards are already placed (U-shape).
+	// With only 2 boards (L-shape), single-end corner snap handles board 3.
 	// NOTE: No mutation here -- AutoResizeLengthFeet is recorded, not applied.
 	// ============================================================
-	if (PieceType == EPieceType::RimBoard)
+	int32 PlacedRimBoardCount = 0;
+	for (ABuildablePiece* Piece : NearbyPieces)
+	{
+		if (Piece && Piece->GetPieceType() == EPieceType::RimBoard)
+		{
+			PlacedRimBoardCount++;
+		}
+	}
+
+	if (PieceType == EPieceType::RimBoard && PlacedRimBoardCount >= 3)
 	{
 		// Find our Left and Right EndCorner sockets
 		const FConstructionSocket* LeftCornerSocket = nullptr;
