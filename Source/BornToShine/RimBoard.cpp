@@ -13,6 +13,17 @@ ARimBoard::ARimBoard()
 	// Set piece type
 	PieceType = EPieceType::RimBoard;
 
+	// Create a plain scene root so actor transform always has scale (1,1,1).
+	// MeshComponent (created by parent ABuildablePiece) becomes a child.
+	// This lets us scale the mesh for visuals without GetActorTransform()
+	// scaling socket local positions in TransformPosition() calls.
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
+	SetRootComponent(SceneRoot);
+	if (MeshComponent)
+	{
+		MeshComponent->SetupAttachment(SceneRoot);
+	}
+
 	// 2x6 lumber actual dimensions
 	BoardWidth = 3.81f;   // 1.5 inches
 	BoardHeight = 13.97f; // 5.5 inches
@@ -29,11 +40,10 @@ ARimBoard::ARimBoard()
 	// Rim boards are wood - require manual nailing
 	bAutoNailOnPlace = false;
 
-	// CRITICAL: Force actor scale to (1,1,1) - we use mesh scale for dimensions
-	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
+	// Actor scale stays at (1,1,1) — SceneRoot is unscaled
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Set mesh scale to match dimensions
+	// Set mesh scale to match dimensions (only affects MeshComponent, not actor transform)
 	if (MeshComponent)
 	{
 		MeshComponent->SetRelativeScale3D(FVector(

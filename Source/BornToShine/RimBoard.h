@@ -96,6 +96,12 @@ public:
 	virtual void ScalePiece(float ScaleDelta) override;
 
 private:
+	// Scene root component — keeps actor transform at scale (1,1,1)
+	// so GetActorTransform().TransformPosition() doesn't scale socket positions.
+	// MeshComponent is a child of this and can be scaled independently for visuals.
+	UPROPERTY(VisibleAnywhere)
+	class USceneComponent* SceneRoot;
+
 	// Helper to calculate socket positions along the board
 	TArray<FVector> CalculateJoistSocketPositions() const;
 
