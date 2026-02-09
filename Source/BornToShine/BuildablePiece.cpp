@@ -8,6 +8,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "GameFramework/PlayerController.h"
+#include "SnapRuleTable.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -589,8 +590,44 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	}
 
 	// Set actor location and rotation from candidate
-	SetActorLocation(Candidate.SnapLocation);
+	FVector FinalLocation = Candidate.SnapLocation;
 	SetActorRotation(Candidate.SnapRotation);
+
+	// Apply post-snap flush offset for corner joints.
+	// Sockets are at centerline (Y=0), so without this offset the boards
+	// would overlap at their centerlines. The flush offset pushes the incoming
+	// board by one HalfWidth perpendicular to the target board so faces are flush.
+	if (Candidate.bIsCornerSnap && !Candidate.bIsDualEndSnap && Candidate.TargetPiece && ASnapRuleTable::Instance)
+	{
+		FSnapRule Rule;
+		if (ASnapRuleTable::Instance->GetSnapRule(
+			Candidate.SourceSocketType, Candidate.TargetSocketType,
+			Candidate.SourceSocketName, Candidate.TargetSocketName, Rule))
+		{
+			if (Rule.ConnectionType == ESnapConnectionType::Corner_90 && !Rule.FlushOffset.IsNearlyZero())
+			{
+				// Determine direction: use the rotation sign we already computed
+				// The incoming board extends to one side of the target board.
+				// The sign is baked into the candidate rotation (TargetYaw +/- 90).
+				float YawDiff = FMath::FindDeltaAngleDegrees(
+					Candidate.TargetPiece->GetActorRotation().Yaw,
+					Candidate.SnapRotation.Yaw);
+				bool bExtendRight = (YawDiff > 0.0f);
+
+				FVector FlushWorldOffset = ASnapRuleTable::CalculateFlushOffset(
+					Rule.FlushOffset.Y, // BoardHalfWidth stored in FlushOffset.Y
+					Candidate.TargetPiece->GetActorRotation(),
+					bExtendRight);
+
+				FinalLocation += FlushWorldOffset;
+
+				UE_LOG(LogTemp, Log, TEXT("ApplySnap: Flush offset (%.2f, %.2f, %.2f) applied for corner joint"),
+					FlushWorldOffset.X, FlushWorldOffset.Y, FlushWorldOffset.Z);
+			}
+		}
+	}
+
+	SetActorLocation(FinalLocation);
 
 	// Update snap state
 	bIsSnapped = true;
