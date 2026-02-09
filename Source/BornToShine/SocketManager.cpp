@@ -1,6 +1,7 @@
 // Born To Shine - Socket Compatibility Manager
 
 #include "SocketManager.h"
+#include "SnapRuleTable.h"
 #include "BuildablePiece.h"
 #include "Kismet/KismetMathLibrary.h"
 
@@ -255,26 +256,46 @@ bool ASocketManager::FindBestSnapPoint(
 			// Calculate snap score (closer and better aligned = higher score)
 			float Score = CalculateSnapScore(WorldLocation, TargetWorldLocation, WorldRotation, TargetWorldRotation);
 
-			// SPECIAL SCORING FOR CORNER SNAPS
-			if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+			// RULE-BASED PRIORITY SCORING
+			// Use SnapRuleTable for priority-based scoring when available,
+			// falling back to hardcoded values if the rule table is not in the level.
+			if (ASnapRuleTable::Instance)
+			{
+				FSnapRule SnapRule;
+				if (ASnapRuleTable::Instance->GetSnapRule(
+					SourceSocket.SocketType, TargetSocket.SocketType,
+					SourceSocket.SocketName, TargetSocket.SocketName, SnapRule))
+				{
+					Score += SnapRule.Priority;
+
+					// Small alignment bonus for corner snaps
+					if (SnapRule.ConnectionType == ESnapConnectionType::Corner_90 ||
+						SnapRule.ConnectionType == ESnapConnectionType::Inline_0)
+					{
+						float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(WorldRotation.Yaw, TargetWorldRotation.Yaw));
+						float AngleTo90 = FMath::Abs(AngleDiff - 90.0f);
+						float AngleTo0 = FMath::Min(FMath::Abs(AngleDiff), FMath::Abs(AngleDiff - 180.0f));
+						float AlignmentBonus = 20.0f / (FMath::Min(AngleTo90, AngleTo0) + 1.0f);
+						Score += AlignmentBonus;
+					}
+				}
+			}
+			else if (SourceSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner)
 			{
-				// Determine connection type
+				// FALLBACK: Hardcoded scoring when SnapRuleTable is not present
 				bool bSourceIsLeft = SourceSocket.SocketName.ToString().Contains("Left");
 				bool bTargetIsLeft = TargetSocket.SocketName.ToString().Contains("Left");
 				bool bSameSide = (bSourceIsLeft == bTargetIsLeft);  // Left-Left or Right-Right = CORNER
-				bool bOppositeSide = !bSameSide;  // Left-Right or Right-Left = INLINE
 
 				if (bSameSide)
 				{
 					// CORNER JOINT (Left-Left or Right-Right): HIGH priority
-					// This is the main case for building rectangle corners
 					Score += 150.0f;
 				}
 				else
 				{
 					// INLINE EXTENSION (Left-Right or Right-Left): LOWER priority
-					// This is for extending walls, should not beat corners
 					Score += 80.0f;
 				}
 

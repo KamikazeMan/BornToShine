@@ -3,6 +3,7 @@
 #include "BuildingComponent.h"
 #include "BuildablePiece.h"
 #include "RimBoard.h"
+#include "RectangleBuilder.h"
 #include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
@@ -28,6 +29,14 @@ UBuildingComponent::UBuildingComponent()
 void UBuildingComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Find or create the RectangleBuilder component on the owning actor
+	RectangleBuilder = GetOwner()->FindComponentByClass<URectangleBuilderComponent>();
+	if (!RectangleBuilder)
+	{
+		RectangleBuilder = NewObject<URectangleBuilderComponent>(GetOwner());
+		RectangleBuilder->RegisterComponent();
+	}
 }
 
 void UBuildingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -213,6 +222,12 @@ void UBuildingComponent::PlaceCurrentPiece()
 		PlacedPieces.Add(CurrentPreviewPiece);
 		LastPlacedPiece = CurrentPreviewPiece;
 
+		// Notify RectangleBuilder if this is a rim board
+		if (RectangleBuilder && CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
+		{
+			RectangleBuilder->OnRimBoardPlaced(Cast<ARimBoard>(LastPlacedPiece));
+		}
+
 		// Spawn new preview
 		CurrentPreviewPiece = nullptr;
 		SpawnPreviewPiece();
@@ -244,6 +259,12 @@ void UBuildingComponent::RemoveLastPlacedPiece()
 {
 	if (LastPlacedPiece)
 	{
+		// Notify RectangleBuilder before removing if this is a rim board
+		if (RectangleBuilder && LastPlacedPiece->GetPieceType() == EPieceType::RimBoard)
+		{
+			RectangleBuilder->OnRimBoardRemoved(Cast<ARimBoard>(LastPlacedPiece));
+		}
+
 		LastPlacedPiece->Remove();
 		PlacedPieces.Remove(LastPlacedPiece);
 		LastPlacedPiece = nullptr;

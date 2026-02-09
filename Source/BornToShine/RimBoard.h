@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BuildablePiece.h"
 #include "ConstructionTypes.h"
+#include "SnapRuleTable.h"
 #include "RimBoard.generated.h"
 
 /**
@@ -64,6 +65,9 @@ public:
 	// Get the effective length accounting for outside/inside type
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	float GetEffectiveLength() const;
+
+	// Get half board width for flush offset calculations
+	float GetBoardHalfWidth() const { return BoardWidth / 2.0f; }
 
 	// Socket generation
 	void CreateBottomEndSockets();

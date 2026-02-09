@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "ConstructionTypes.h"
+#include "SnapRuleTable.h"
 #include "SocketManager.generated.h"
 
 /**

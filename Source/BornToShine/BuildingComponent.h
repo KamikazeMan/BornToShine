@@ -7,6 +7,8 @@
 #include "ConstructionTypes.h"
 #include "BuildingComponent.generated.h"
 
+class URectangleBuilderComponent;
+
 /**
  * Component that handles all building system functionality
  * Attach to any character to give them building abilities
@@ -123,4 +125,8 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Building")
 	float SnapSearchRadius;
+
+	// Rectangle builder for tracking L/U/rectangle shapes
+	UPROPERTY()
+	URectangleBuilderComponent* RectangleBuilder;
 };

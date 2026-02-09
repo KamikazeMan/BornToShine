@@ -180,31 +180,38 @@ void ARimBoard::CreateEndCornerSockets()
 	//
 	// By always calculating from GetEffectiveLength(), sockets are guaranteed to be
 	// at the correct board ends regardless of resizing.
+	//
+	// CENTERLINE POSITIONING (Y=0):
+	// Sockets are placed on the board's centerline rather than at the outer edge.
+	// The flush offset that makes corner joints sit correctly is now applied
+	// post-snap by the SnapRuleTable system, keeping socket positions clean
+	// and geometry-independent.
 
 	float EffectiveLen = GetEffectiveLength();
 	float HalfLen = EffectiveLen / 2.0f;
-	float HalfWidth = BoardWidth / 2.0f; // 1.905 cm — OUTER EDGE offset
 
-	// LEFT end corner socket — at outer edge to prevent T-shape
+	// LEFT end corner socket — on centerline (Y=0)
+	// Flush offset for corner joints is handled post-snap by SnapRuleTable
 	FConstructionSocket LeftEnd;
 	LeftEnd.SocketName = FName("EndCorner_Left");
 	LeftEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	LeftEnd.LocalPosition = FVector(-HalfLen, HalfWidth, 0.0f);
+	LeftEnd.LocalPosition = FVector(-HalfLen, 0.0f, 0.0f);
 	LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	LeftEnd.bIsOccupied = false;
 	Sockets.Add(LeftEnd);
 
-	// RIGHT end corner socket — at outer edge
+	// RIGHT end corner socket — on centerline (Y=0)
+	// Flush offset for corner joints is handled post-snap by SnapRuleTable
 	FConstructionSocket RightEnd;
 	RightEnd.SocketName = FName("EndCorner_Right");
 	RightEnd.SocketType = EConstructionSocketType::RimBoard_End_Corner;
-	RightEnd.LocalPosition = FVector(HalfLen, HalfWidth, 0.0f);
+	RightEnd.LocalPosition = FVector(HalfLen, 0.0f, 0.0f);
 	RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	RightEnd.bIsOccupied = false;
 	Sockets.Add(RightEnd);
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets CALCULATED at Left=(%.2f, %.2f, 0) Right=(%.2f, %.2f, 0) for %s board (EffLen=%.1f cm)"),
-		-HalfLen, HalfWidth, HalfLen, HalfWidth,
+	UE_LOG(LogTemp, Log, TEXT("RimBoard: Corner sockets on CENTERLINE at Left=(%.2f, 0, 0) Right=(%.2f, 0, 0) for %s board (EffLen=%.1f cm). Flush offset handled by SnapRuleTable."),
+		-HalfLen, HalfLen,
 		bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"),
 		EffectiveLen);
 }
