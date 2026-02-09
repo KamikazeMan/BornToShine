@@ -3,6 +3,7 @@
 #include "RectangleBuilder.h"
 #include "RimBoard.h"
 #include "BuildablePiece.h"
+#include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -410,14 +411,128 @@ TArray<FConstructionSocket> URectangleBuilderComponent::GetOpenCornerSockets(ARi
     return OpenSockets;
 }
 
+bool URectangleBuilderComponent::HasActiveSuggestion() const
+{
+    return (CurrentState == ERectangleState::LShape || CurrentState == ERectangleState::UShape)
+        && CurrentSuggestions.Num() > 0
+        && CurrentSuggestions[0].bIsValid;
+}
+
+FBoardSuggestion URectangleBuilderComponent::GetActiveSuggestion() const
+{
+    if (HasActiveSuggestion())
+    {
+        return CurrentSuggestions[0];
+    }
+    return FBoardSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
+{
+    if (!Board || !HasActiveSuggestion()) return false;
+
+    FBoardSuggestion Suggestion = GetActiveSuggestion();
+
+    // 1. Resize to the suggested length
+    if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Board->GetBoardLengthFeet())
+    {
+        Board->SetBoardLengthFeet(Suggestion.LengthFeet);
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Resized board to %d ft"), Suggestion.LengthFeet);
+    }
+
+    // 2. Set exact position and rotation — no snap detection involved
+    Board->SetActorLocation(Suggestion.Position);
+    Board->SetActorRotation(Suggestion.Rotation);
+
+    // 3. Mark as placed
+    Board->SetPreviewMode(false);
+
+    // 4. Occupy target sockets
+    if (Suggestion.LeftTargetPiece)
+    {
+        Suggestion.LeftTargetPiece->OccupySocket(Suggestion.LeftTargetSocket, Board);
+    }
+    if (Suggestion.RightTargetPiece)
+    {
+        Suggestion.RightTargetPiece->OccupySocket(Suggestion.RightTargetSocket, Board);
+    }
+
+    // 5. Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Board);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board placed via suggestion at (%.1f, %.1f, %.1f) Yaw=%.1f"),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z, Suggestion.Rotation.Yaw);
+
+    return true;
+}
+
+void URectangleBuilderComponent::SpawnGhostForSuggestion(const FBoardSuggestion& Suggestion)
+{
+    if (!Suggestion.bIsValid) return;
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    // Spawn a simple actor with a scaled cube mesh as ghost preview
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    AActor* Ghost = World->SpawnActor<AActor>(AActor::StaticClass(), Suggestion.Position, Suggestion.Rotation, SpawnParams);
+    if (!Ghost) return;
+
+    UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(Ghost);
+    MeshComp->SetupAttachment(Ghost->GetRootComponent());
+    MeshComp->RegisterComponent();
+
+    // Use engine cube mesh scaled to board dimensions
+    UStaticMesh* CubeMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+    if (CubeMesh)
+    {
+        MeshComp->SetStaticMesh(CubeMesh);
+
+        // Scale to board dimensions (length x width x height)
+        float BoardLengthCm = Suggestion.LengthFeet * 30.48f;
+        MeshComp->SetRelativeScale3D(FVector(
+            BoardLengthCm / 100.0f,
+            3.81f / 100.0f,    // Board width (1.5")
+            13.97f / 100.0f    // Board height (5.5")
+        ));
+    }
+
+    // Make it translucent
+    if (GhostMaterial)
+    {
+        MeshComp->SetMaterial(0, GhostMaterial);
+    }
+    else
+    {
+        // Create a simple translucent material
+        UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(
+            MeshComp->GetMaterial(0), Ghost);
+        if (DynMat)
+        {
+            DynMat->SetVectorParameterValue(FName("BaseColor"), FLinearColor(0.2f, 0.5f, 1.0f, 0.3f));
+            MeshComp->SetMaterial(0, DynMat);
+        }
+    }
+
+    MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    GhostActors.Add(Ghost);
+}
+
 void URectangleBuilderComponent::UpdateGhostPreviews()
 {
-    // Ghost previews are rendered by spawning translucent board meshes
-    // at suggested positions. This runs at 4Hz (TickInterval = 0.25).
+    // Clear old ghosts and respawn — runs at 4Hz
+    ClearGhostPreviews();
 
-    // For now, just log suggestions. Full ghost mesh spawning requires
-    // a reference to the rim board mesh asset, which should be set in Blueprint.
-    // The BuildingComponent can query GetGhostPreviews() to render them.
+    for (const FBoardSuggestion& Suggestion : CurrentSuggestions)
+    {
+        SpawnGhostForSuggestion(Suggestion);
+    }
 }
 
 void URectangleBuilderComponent::ClearGhostPreviews()

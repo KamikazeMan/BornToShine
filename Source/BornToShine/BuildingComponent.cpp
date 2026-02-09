@@ -133,6 +133,28 @@ void UBuildingComponent::UpdatePreviewPosition()
 {
 	if (!CurrentPreviewPiece) return;
 
+	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
+	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
+	// detection. Position the preview exactly where the suggestion says.
+	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
+	{
+		FBoardSuggestion Suggestion = RectangleBuilder->GetActiveSuggestion();
+
+		// Resize the preview board to match the suggestion
+		ARimBoard* PreviewRim = Cast<ARimBoard>(CurrentPreviewPiece);
+		if (PreviewRim && Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != PreviewRim->GetBoardLengthFeet())
+		{
+			PreviewRim->SetBoardLengthFeet(Suggestion.LengthFeet);
+		}
+
+		// Set the preview directly at the suggested transform — no snap detection
+		CurrentPreviewPiece->SetActorLocation(Suggestion.Position);
+		CurrentPreviewPiece->SetActorRotation(Suggestion.Rotation);
+		return;
+	}
+
+	// Normal path: raycast + snap detection
 	FVector PlacementLocation;
 	FVector PlacementNormal;
 
@@ -215,10 +237,31 @@ void UBuildingComponent::PlaceCurrentPiece()
 {
 	if (!bIsInBuildMode || !CurrentPreviewPiece) return;
 
-	// Try to place the piece
+	// RECTANGLE BUILDER PATH: When a suggestion is active, bypass TryPlace entirely.
+	// Place the board exactly where the RectangleBuilder calculated, with correct length.
+	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::RimBoard)
+	{
+		ARimBoard* RimBoard = Cast<ARimBoard>(CurrentPreviewPiece);
+		if (RimBoard && RectangleBuilder->ApplySuggestionToBoard(RimBoard))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			// Notify RectangleBuilder — this will advance the state (LShape -> UShape -> Complete)
+			RectangleBuilder->OnRimBoardPlaced(RimBoard);
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Board placed via RectangleBuilder suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
+	// Normal path: snap-based placement
 	if (CurrentPreviewPiece->TryPlace())
 	{
-		// Add to placed pieces list
 		PlacedPieces.Add(CurrentPreviewPiece);
 		LastPlacedPiece = CurrentPreviewPiece;
 
@@ -228,7 +271,6 @@ void UBuildingComponent::PlaceCurrentPiece()
 			RectangleBuilder->OnRimBoardPlaced(Cast<ARimBoard>(LastPlacedPiece));
 		}
 
-		// Spawn new preview
 		CurrentPreviewPiece = nullptr;
 		SpawnPreviewPiece();
 

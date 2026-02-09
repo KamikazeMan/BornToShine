@@ -101,6 +101,17 @@ public:
     // Check if a specific position/rotation matches a suggestion (for auto-snap)
     bool MatchesSuggestion(const FVector& Position, float Tolerance, FBoardSuggestion& OutSuggestion) const;
 
+    // Does the RectangleBuilder have an active suggestion for the next board?
+    // When true, BuildingComponent should bypass normal snap detection and use the suggestion directly.
+    bool HasActiveSuggestion() const;
+
+    // Get the primary (first) active suggestion
+    FBoardSuggestion GetActiveSuggestion() const;
+
+    // Apply a suggestion to a rim board: sets its length, position, rotation, and commits placement.
+    // Returns true if successful. Called by BuildingComponent instead of TryPlace().
+    bool ApplySuggestionToBoard(ARimBoard* Board);
+
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
     TArray<FBoardSuggestion> GetGhostPreviews() const { return CurrentSuggestions; }
@@ -153,4 +164,5 @@ private:
     // Spawn/update ghost preview actors
     void UpdateGhostPreviews();
     void ClearGhostPreviews();
+    void SpawnGhostForSuggestion(const FBoardSuggestion& Suggestion);
 };
