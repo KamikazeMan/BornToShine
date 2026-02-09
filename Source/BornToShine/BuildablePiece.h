@@ -101,18 +101,23 @@ protected:
 	// Update visual feedback (color, transparency)
 	virtual void UpdateVisualFeedback();
 
-	// Find best snap point near current location
-	bool FindSnapPoint(FVector& OutSnapLocation, FRotator& OutSnapRotation);
+	// ============================================================
+	// SNAP PIPELINE: Phase-separated detection -> selection -> application
+	// ============================================================
 
-	// Try to snap both ends of a rim board to two different target pieces (spanning board)
-	// Returns true if dual-end snap was found (3rd/4th board closing a rectangle)
-	bool TryDualEndCornerSnap(
-		const TArray<ABuildablePiece*>& NearbyPieces,
-		FVector& OutSnapLocation,
-		FRotator& OutSnapRotation,
-		ABuildablePiece*& OutTargetPiece,
-		FName& OutTargetSocketName
-	);
+	// Phase 1: Pure detection (const, no state mutation)
+	// Returns ALL valid snap candidates for this piece's current position
+	TArray<FSnapCandidate> DetectSnapCandidates() const;
+
+	// Phase 2: Selection (const, no state mutation)
+	// Picks the best candidate using priority + distance as tiebreaker
+	FSnapCandidate SelectBestCandidate(const TArray<FSnapCandidate>& Candidates) const;
+
+	// Phase 3: Apply snap (mutates state: sets position, rotation, handles resize)
+	void ApplySnap(const FSnapCandidate& Candidate);
+
+	// Phase 4: Commit placement (called when player confirms: occupies sockets, registers piece)
+	void CommitPlacement();
 
 	// Determine socket connection priority (higher = preferred)
 	int32 GetSocketConnectionPriority(EConstructionSocketType SocketA, EConstructionSocketType SocketB) const;
@@ -154,6 +159,10 @@ protected:
 	// Target socket name this is snapped to
 	UPROPERTY(BlueprintReadOnly, Category = "Construction")
 	FName SnappedToSocketName;
+
+	// Current snap candidate (result of the latest snap pipeline run)
+	UPROPERTY()
+	FSnapCandidate CurrentSnapCandidate;
 
 	// Snap search radius
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")

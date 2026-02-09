@@ -132,35 +132,21 @@ void ABuildablePiece::UpdatePreviewPosition(const FVector& NewLocation, const FR
 	SetActorLocation(NewLocation);
 	SetActorRotation(NewRotation);
 
-	// Try to find a snap point
-	FVector SnapLocation;
-	FRotator SnapRotation;
+	// Phase 1: Pure detection (no mutation)
+	TArray<FSnapCandidate> Candidates = DetectSnapCandidates();
 
-	if (FindSnapPoint(SnapLocation, SnapRotation))
+	// Phase 2: Selection (no mutation)
+	FSnapCandidate Best = SelectBestCandidate(Candidates);
+
+	// Phase 3: Apply (mutation happens here, separated from detection)
+	if (Best.IsValid())
 	{
-		SetActorLocation(SnapLocation);
-
-		// Check if this is a rim-to-rim corner snap (auto-rotation case)
-		bool bIsCornerSnap = SnappedToSocketName.ToString().Contains("EndCorner");
-
-		if (bIsCornerSnap)
-		{
-			// Corner snap: Use the full auto-rotated SnapRotation
-			SetActorRotation(SnapRotation);
-		}
-		else
-		{
-			// Normal snap: Preserve user's Yaw rotation
-			FRotator FinalRotation = SnapRotation;
-			FinalRotation.Yaw = NewRotation.Yaw;
-			SetActorRotation(FinalRotation);
-		}
-
-		bIsSnapped = true;
+		ApplySnap(Best);
 	}
 	else
 	{
 		bIsSnapped = false;
+		CurrentSnapCandidate = FSnapCandidate();
 	}
 }
 

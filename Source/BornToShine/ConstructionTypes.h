@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "ConstructionTypes.generated.h"
 
+// Forward declaration for FSnapCandidate
+class ABuildablePiece;
+
 /**
  * Defines the type of construction piece
  */
@@ -180,4 +183,88 @@ struct FSocketCompatibilityRule
 		, MaxAlignmentAngle(5.0f)
 	{
 	}
+};
+
+/**
+ * Pure data struct holding all snap detection results for a single candidate.
+ * Used by the phase-separated snap pipeline: Detect -> Select -> Apply
+ */
+USTRUCT(BlueprintType)
+struct FSnapCandidate
+{
+	GENERATED_BODY()
+
+	// Which socket on the source piece matched
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	FName SourceSocketName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	EConstructionSocketType SourceSocketType;
+
+	// Which socket on the target piece matched
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	FName TargetSocketName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	EConstructionSocketType TargetSocketType;
+
+	// The target piece
+	UPROPERTY()
+	ABuildablePiece* TargetPiece;
+
+	// Computed final position/rotation for the source actor
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	FVector SnapLocation;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	FRotator SnapRotation;
+
+	// Scoring
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	float Score;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	int32 Priority;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	float Distance;
+
+	// Connection type info
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	bool bIsCornerSnap;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	bool bIsInlineSnap;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	bool bIsDualEndSnap;
+
+	// For dual-end snaps
+	UPROPERTY()
+	ABuildablePiece* SecondTargetPiece;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	FName SecondTargetSocketName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Snap")
+	int32 AutoResizeLengthFeet; // 0 = no resize needed
+
+	FSnapCandidate()
+		: SourceSocketType(EConstructionSocketType::None)
+		, TargetSocketType(EConstructionSocketType::None)
+		, TargetPiece(nullptr)
+		, SnapLocation(FVector::ZeroVector)
+		, SnapRotation(FRotator::ZeroRotator)
+		, Score(0.f)
+		, Priority(0)
+		, Distance(FLT_MAX)
+		, bIsCornerSnap(false)
+		, bIsInlineSnap(false)
+		, bIsDualEndSnap(false)
+		, SecondTargetPiece(nullptr)
+		, AutoResizeLengthFeet(0)
+	{
+	}
+
+	bool IsValid() const { return TargetPiece != nullptr; }
 };
