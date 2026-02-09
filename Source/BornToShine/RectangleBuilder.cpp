@@ -236,10 +236,14 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
 
     if (!Board1 || !Board2) return Suggestion;
 
-    // PARALLELOGRAM METHOD:
-    // Given an L-shape with 3 known corners (SharedCorner, Board1FarEnd, Board2FarEnd),
-    // the 4th corner is: D = A + C - B (parallelogram property).
-    // Board3 goes from C to D, with center at midpoint.
+    // ACTOR TRANSFORM METHOD:
+    // Compute Board 3 from the clean actor positions and rotations of Board 1 and Board 2,
+    // NOT from socket world positions (which accumulate snap rounding errors).
+    //
+    // Board 3 is parallel to Board 1:
+    //   - Same rotation as Board 1 (exact Yaw)
+    //   - Same position along Board 1's forward axis (same actor X for Yaw=0)
+    //   - Offset along Board 2's forward axis by Board 2's effective length
     //
     // Layout:
     //   A ----Board1---- B (shared corner)
@@ -248,40 +252,44 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
     //                     |
     //   D ----Board3---- C
 
-    // Step 1: Find the 3 corner positions from socket world positions.
-    // SharedCorner (B): Board1's socket connected to Board2
-    // Board1FarEnd (A): Board1's open socket
-    // Board2FarEnd (C): Board2's open socket
+    // Board 3 rotation = Board 1 rotation (exactly parallel)
+    FRotator Board3Rotation = Board1->GetActorRotation();
 
-    FVector SharedCorner = FVector::ZeroVector;   // B
-    FVector Board1FarEnd = FVector::ZeroVector;    // A
-    FVector Board2FarEnd = FVector::ZeroVector;    // C
+    // Board 3 length = Board 1 length
+    int32 Board3LengthFeet = Board1->GetBoardLengthFeet();
+
+    // Compute Board 3 center position:
+    // Start from Board 1's center, then offset along Board 2's forward direction
+    // by Board 2's effective length.
+    FVector Board1Center = Board1->GetActorLocation();
+    FVector Board2Forward = Board2->GetActorRotation().RotateVector(FVector::ForwardVector);
+    float Board2Length = Board2->GetEffectiveLength();
+
+    // Determine which direction Board 2 extends from the shared corner.
+    // Board 2's forward might point toward or away from Board 1's shared end.
+    // Use the sign: if Board 2's forward points away from Board 1 center, offset in +forward.
+    // Otherwise offset in -forward.
+    FVector Board2Center = Board2->GetActorLocation();
+    FVector Board1ToBoard2 = (Board2Center - Board1Center).GetSafeNormal();
+    float ForwardDot = FVector::DotProduct(Board1ToBoard2, Board2Forward);
+
+    // Board 3 center = Board 1 center + Board2Length along the appropriate direction
+    FVector OffsetDir = (ForwardDot > 0) ? Board2Forward : -Board2Forward;
+    FVector Board3Center = Board1Center + OffsetDir * Board2Length;
+
+    // Find Board 2's open socket name for the connection reference
     FName Board2OpenSocketName = NAME_None;
-    bool bFoundShared = false;
-    bool bFoundBoard1Far = false;
-    bool bFoundBoard2Far = false;
-
-    // Find Board1's connected (B) and open (A) corner sockets
+    FVector SharedCorner = FVector::ZeroVector;
     TArray<FConstructionSocket> Sockets1 = Board1->GetAllSockets();
     for (const FConstructionSocket& S : Sockets1)
     {
-        if (S.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
-        if (S.bIsOccupied && S.ConnectedPiece.Get() == Board2)
+        if (S.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+            S.bIsOccupied && S.ConnectedPiece.Get() == Board2)
         {
             SharedCorner = Board1->GetActorTransform().TransformPosition(S.LocalPosition);
-            bFoundShared = true;
-        }
-        else if (!S.bIsOccupied)
-        {
-            Board1FarEnd = Board1->GetActorTransform().TransformPosition(S.LocalPosition);
-            bFoundBoard1Far = true;
+            break;
         }
     }
-
-    // Find Board2's far (C) corner socket.
-    // NOTE: Board2's sockets may NOT be marked as occupied (CommitPlacement only marks
-    // the target piece's socket, not the source piece's). So we can't rely on bIsOccupied.
-    // Instead, pick the corner socket FARTHEST from SharedCorner — that's the far end.
     TArray<FConstructionSocket> Sockets2 = Board2->GetAllSockets();
     float BestDist = -1.0f;
     for (const FConstructionSocket& S : Sockets2)
@@ -292,33 +300,9 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
         if (Dist > BestDist)
         {
             BestDist = Dist;
-            Board2FarEnd = WorldPos;
             Board2OpenSocketName = S.SocketName;
-            bFoundBoard2Far = true;
         }
     }
-
-    if (!bFoundShared || !bFoundBoard1Far || !bFoundBoard2Far)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Could not find all 3 corners (Shared=%d, B1Far=%d, B2Far=%d)"),
-            bFoundShared, bFoundBoard1Far, bFoundBoard2Far);
-        return Suggestion;
-    }
-
-    // Step 2: Compute 4th corner using parallelogram property: D = A + C - B
-    FVector FourthCorner = Board1FarEnd + Board2FarEnd - SharedCorner;
-
-    // Step 3: Board3 center is midpoint of C and D
-    FVector Board3Center = (Board2FarEnd + FourthCorner) / 2.0f;
-
-    // Board3 is parallel to Board1 (same rotation)
-    FRotator Board3Rotation = Board1->GetActorRotation();
-
-    // Board3's length matches Board1
-    int32 Board3LengthFeet = Board1->GetBoardLengthFeet();
-
-    // No position flush offset — boards stay centered on foundations.
-    // The half-width overlap at corners is structurally correct.
 
     Suggestion.Position = Board3Center;
     Suggestion.Rotation = Board3Rotation;
@@ -327,13 +311,13 @@ FBoardSuggestion URectangleBuilderComponent::CalculateThirdBoardSuggestion(ARimB
     Suggestion.LengthFeet = Board3LengthFeet;
     Suggestion.bIsValid = true;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft | Corners: Shared=(%.1f,%.1f,%.1f) B1Far=(%.1f,%.1f,%.1f) B2Far=(%.1f,%.1f,%.1f) 4th=(%.1f,%.1f,%.1f)"),
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 3 suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft | B1Center=(%.1f,%.1f,%.1f) B2Center=(%.1f,%.1f,%.1f) B2Fwd=(%.3f,%.3f,%.3f) B2Len=%.1f"),
         Board3Center.X, Board3Center.Y, Board3Center.Z,
         Board3Rotation.Yaw, Board3LengthFeet,
-        SharedCorner.X, SharedCorner.Y, SharedCorner.Z,
-        Board1FarEnd.X, Board1FarEnd.Y, Board1FarEnd.Z,
-        Board2FarEnd.X, Board2FarEnd.Y, Board2FarEnd.Z,
-        FourthCorner.X, FourthCorner.Y, FourthCorner.Z);
+        Board1Center.X, Board1Center.Y, Board1Center.Z,
+        Board2Center.X, Board2Center.Y, Board2Center.Z,
+        Board2Forward.X, Board2Forward.Y, Board2Forward.Z,
+        Board2Length);
 
     return Suggestion;
 }
@@ -345,16 +329,50 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
 
     if (!Board1 || !Board2 || !Board3) return Suggestion;
 
-    // Find the two remaining open corner sockets across all three boards
-    // These are where the 4th board connects
-    struct FOpenCorner
-    {
-        ARimBoard* Board;
-        FName SocketName;
-        FVector WorldPos;
-    };
+    // ACTOR TRANSFORM METHOD:
+    // Board 4 is parallel to Board 2:
+    //   - Same rotation as Board 2 (exact Yaw)
+    //   - Same position along Board 2's forward axis (same actor Y for Yaw=-90)
+    //   - Offset along Board 1's forward axis by Board 1's effective length
+    //     in the direction from Board 2 toward Board 1's far end
+    //
+    // Layout:
+    //   A ----Board1---- B (shared corner)
+    //   |                 |
+    // Board4            Board2
+    //   |                 |
+    //   D ----Board3---- C
 
-    TArray<FOpenCorner> OpenCorners;
+    // Board 4 rotation = Board 2 rotation (exactly parallel)
+    FRotator Board4Rotation = Board2->GetActorRotation();
+
+    // Board 4 length = Board 2 length
+    int32 Board4LengthFeet = Board2->GetBoardLengthFeet();
+
+    // Compute Board 4 center position:
+    // Start from Board 2's center, offset along Board 1's forward direction
+    // by Board 1's effective length, toward Board 1's far end (away from shared corner).
+    FVector Board2Center = Board2->GetActorLocation();
+    FVector Board1Forward = Board1->GetActorRotation().RotateVector(FVector::ForwardVector);
+    float Board1Length = Board1->GetEffectiveLength();
+
+    // Determine which direction along Board 1 leads to the far end (away from Board 2).
+    // The shared corner is near Board 2, so we offset in the OPPOSITE direction.
+    FVector Board1Center = Board1->GetActorLocation();
+    FVector Board2ToBoard1 = (Board1Center - Board2Center).GetSafeNormal();
+    float ForwardDot = FVector::DotProduct(Board2ToBoard1, Board1Forward);
+
+    // Board 4 center = Board 2 center + Board1Length along the direction away from Board 2
+    // (toward the far end of Board 1 where Board 4 should be)
+    FVector OffsetDir = (ForwardDot > 0) ? Board1Forward : -Board1Forward;
+    FVector Board4Center = Board2Center + OffsetDir * Board1Length;
+
+    // Find open sockets on Board 1 and Board 3 for connection references
+    // Board 4 connects to Board 1's open end and Board 3's open end
+    ARimBoard* LeftBoard = nullptr;
+    FName LeftSocket = NAME_None;
+    ARimBoard* RightBoard = nullptr;
+    FName RightSocket = NAME_None;
 
     ARimBoard* AllBoards[3] = { Board1, Board2, Board3 };
     for (ARimBoard* Board : AllBoards)
@@ -364,53 +382,41 @@ FBoardSuggestion URectangleBuilderComponent::CalculateFourthBoardSuggestion(
         {
             if (S.SocketType == EConstructionSocketType::RimBoard_End_Corner && !S.bIsOccupied)
             {
-                FOpenCorner Corner;
-                Corner.Board = Board;
-                Corner.SocketName = S.SocketName;
-                Corner.WorldPos = Board->GetActorTransform().TransformPosition(S.LocalPosition);
-                OpenCorners.Add(Corner);
+                if (!LeftBoard)
+                {
+                    LeftBoard = Board;
+                    LeftSocket = S.SocketName;
+                }
+                else if (!RightBoard)
+                {
+                    RightBoard = Board;
+                    RightSocket = S.SocketName;
+                }
             }
         }
     }
 
-    // Need exactly 2 open corners for the closing board
-    if (OpenCorners.Num() != 2)
+    if (!LeftBoard || !RightBoard)
     {
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Expected 2 open corners, found %d"), OpenCorners.Num());
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Could not find 2 open corner sockets for Board 4"));
         return Suggestion;
     }
 
-    FVector Pos1 = OpenCorners[0].WorldPos;
-    FVector Pos2 = OpenCorners[1].WorldPos;
-
-    // Direction from corner 1 to corner 2
-    FVector SpanDir = (Pos2 - Pos1).GetSafeNormal();
-    float SpanDist = FVector::Dist(Pos1, Pos2);
-
-    // Calculate length in feet (1 foot = 30.48 cm)
-    int32 LengthFeet = FMath::RoundToInt(SpanDist / 30.48f);
-    LengthFeet = FMath::Clamp(LengthFeet, 1, 16);
-
-    // Board 4 rotation aligns with the span
-    FRotator Board4Rot = SpanDir.Rotation();
-
-    // Position is midpoint of the two open corners
-    FVector MidPoint = (Pos1 + Pos2) / 2.0f;
-
-    // No position flush offset — boards stay centered on foundations.
-    // The half-width overlap at corners is structurally correct.
-
-    Suggestion.Position = MidPoint;
-    Suggestion.Rotation = Board4Rot;
-    Suggestion.LengthFeet = LengthFeet;
-    Suggestion.LeftTargetPiece = OpenCorners[0].Board;
-    Suggestion.LeftTargetSocket = OpenCorners[0].SocketName;
-    Suggestion.RightTargetPiece = OpenCorners[1].Board;
-    Suggestion.RightTargetSocket = OpenCorners[1].SocketName;
+    Suggestion.Position = Board4Center;
+    Suggestion.Rotation = Board4Rotation;
+    Suggestion.LengthFeet = Board4LengthFeet;
+    Suggestion.LeftTargetPiece = LeftBoard;
+    Suggestion.LeftTargetSocket = LeftSocket;
+    Suggestion.RightTargetPiece = RightBoard;
+    Suggestion.RightTargetSocket = RightSocket;
     Suggestion.bIsValid = true;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 4 (closing) suggestion - Pos=(%.1f, %.1f, %.1f), Len=%dft"),
-        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z, LengthFeet);
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board 4 (closing) suggestion - Pos=(%.1f, %.1f, %.1f), Rot=%.1f, Len=%dft | B2Center=(%.1f,%.1f,%.1f) B1Fwd=(%.3f,%.3f,%.3f) B1Len=%.1f"),
+        Board4Center.X, Board4Center.Y, Board4Center.Z,
+        Board4Rotation.Yaw, Board4LengthFeet,
+        Board2Center.X, Board2Center.Y, Board2Center.Z,
+        Board1Forward.X, Board1Forward.Y, Board1Forward.Z,
+        Board1Length);
 
     return Suggestion;
 }
