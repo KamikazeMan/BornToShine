@@ -318,11 +318,6 @@ bool ASocketManager::FindBestSnapPoint(
 				OutTargetPiece = Piece;
 				OutTargetSocketName = TargetSocket.SocketName;
 				bFoundValidSnap = true;
-
-				UE_LOG(LogTemp, Log, TEXT("Snap candidate: %s -> %s (dist=%.1f, score=%.1f)"),
-					*SourceSocket.SocketName.ToString(),
-					*TargetSocket.SocketName.ToString(),
-					Distance, Score);
 			}
 		}
 	}

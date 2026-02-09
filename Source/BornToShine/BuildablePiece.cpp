@@ -398,11 +398,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					DualCandidate.SecondTargetSocketName = BestRight.TargetSocketName;
 					DualCandidate.AutoResizeLengthFeet = NeededResizeFeet;
 
-					UE_LOG(LogTemp, Warning, TEXT("DUAL-END CANDIDATE: Left->%s on %s, Right->%s on %s | Yaw=%.1f | AutoResize=%d ft"),
-						*BestLeft.TargetSocketName.ToString(), *BestLeft.TargetPiece->GetName(),
-						*BestRight.TargetSocketName.ToString(), *BestRight.TargetPiece->GetName(),
-						SpanRotation.Yaw, NeededResizeFeet);
-
 					Candidates.Add(DualCandidate);
 				}
 			}
@@ -461,7 +456,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// INLINE EXTENSION: Right->Left or Left->Right
 					CandidateRotation.Yaw = TargetRotation.Yaw;
 					bCandidateIsInline = true;
-					UE_LOG(LogTemp, Warning, TEXT("Inline snap candidate: %s -> %s"), *SourceSocketStr, *TargetSocketStr);
 				}
 				else
 				{
@@ -491,9 +485,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateRotation.Yaw = TargetRotation.Yaw + RotationSign;
 
 					bCandidateIsCorner = true;
-
-					UE_LOG(LogTemp, Warning, TEXT("Corner snap candidate: %s -> %s (dot=%.2f, rot offset %.0f)"),
-						*SourceSocketStr, *TargetSocketStr, DotResult, RotationSign);
 				}
 			}
 

@@ -314,27 +314,16 @@ void ARimBoard::ToggleBoardType()
 
 	if (MeshComponent)
 	{
-		FVector MeshScale = MeshComponent->GetRelativeScale3D();
-		float OldEffectiveLen = bIsOutsideBoard ? (BoardLength - 2.0f * BoardWidth) : BoardLength;
-		float NewEffectiveLen = GetEffectiveLength();
-
-		float LengthDiff = NewEffectiveLen - OldEffectiveLen;
-		float LengthRatio = NewEffectiveLen / OldEffectiveLen;
-
-		FVector CurrentMeshPos = MeshComponent->GetRelativeLocation();
-		MeshComponent->SetRelativeLocation(FVector(
-			CurrentMeshPos.X - (LengthDiff / 2.0f),
-			CurrentMeshPos.Y,
-			CurrentMeshPos.Z
-		));
-
+		// Set mesh scale directly from new effective length — same approach as SetBoardLengthFeet().
+		// The mesh is a centered unit cube, so rescaling keeps it centered automatically.
+		// No position adjustment needed.
+		float EffectiveLen = GetEffectiveLength();
 		MeshComponent->SetRelativeScale3D(FVector(
-			MeshScale.X * LengthRatio,
-			MeshScale.Y,
-			MeshScale.Z
+			EffectiveLen / 100.0f,
+			BoardWidth / 100.0f,
+			BoardHeight / 100.0f
 		));
-
-		UE_LOG(LogTemp, Warning, TEXT("RimBoard: Adjusted mesh position by %.2f cm to keep centered"), LengthDiff / 2.0f);
+		MeshComponent->SetRelativeLocation(FVector::ZeroVector);
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("RimBoard: Toggled to %s board (effective length: %.2f cm)"),
