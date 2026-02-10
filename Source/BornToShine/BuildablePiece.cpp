@@ -635,7 +635,18 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 
 	// Set actor location and rotation from candidate
 	FVector FinalLocation = Candidate.SnapLocation;
-	SetActorRotation(Candidate.SnapRotation);
+	FRotator FinalRotation = Candidate.SnapRotation;
+
+	// Force plywood perfectly flat — only yaw varies
+	if (PieceType == EPieceType::Plywood)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD ROTATION BEFORE: Pitch=%.2f Yaw=%.2f Roll=%.2f"),
+			FinalRotation.Pitch, FinalRotation.Yaw, FinalRotation.Roll);
+		FinalRotation.Pitch = 0.0f;
+		FinalRotation.Roll = 0.0f;
+	}
+
+	SetActorRotation(FinalRotation);
 
 	// Corner joints: boards stay at centerline positions (centered on foundation).
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
