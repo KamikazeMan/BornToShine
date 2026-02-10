@@ -28,6 +28,21 @@ void APlywoodSheet::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Scale mesh to cover rim board overhang on frame edges.
+	// The frame outer dimension = board center-to-center + one rim board width,
+	// so standard 4x8 sheets are slightly too small. Extending the mesh by
+	// RimBoardWidth across both axes covers the overhang on all frame edges.
+	if (MeshComponent)
+	{
+		const float RimBoardWidth = 3.81f; // 1.5 inch = 2x6 lumber width
+		float OverhangScale = (SheetLength + RimBoardWidth) / SheetLength;
+		FVector CurrentScale = MeshComponent->GetRelativeScale3D();
+		MeshComponent->SetRelativeScale3D(CurrentScale * FVector(OverhangScale, OverhangScale, 1.0f));
+
+		UE_LOG(LogTemp, Log, TEXT("PLYWOOD: Mesh scaled by %.4f to cover rim board overhang (%.1fcm -> %.1fcm x %.1fcm -> %.1fcm)"),
+			OverhangScale, SheetLength, SheetLength + RimBoardWidth, SheetWidth, SheetWidth * OverhangScale);
+	}
+
 	// Diagnostic: Print mesh bounds to verify centering
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{

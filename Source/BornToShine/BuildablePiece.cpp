@@ -628,25 +628,27 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 				if (ParallelCount >= 2 && PerpCount >= 2)
 				{
-					const float SheetShort = 121.92f; // 4ft
+					const float SheetShort = 121.92f; // 4ft nominal
 
 					// Center plywood along forward axis to span between perp boards
 					float PlywoodFwd = (SpanMin + SpanMax) / 2.0f;
 
-					// Tile short axis: two slots centered on the frame, butting up exactly
-					float FrameRgtCenter = (TileMin + TileMax) / 2.0f;
-					int32 NumSheets = FMath::Max(1, FMath::RoundToInt((TileMax - TileMin) / SheetShort));
+					// Frame-fitted slot spacing: divide actual frame width by number
+					// of sheets so each slot covers its portion of the frame exactly.
+					// The mesh is pre-scaled to match this effective width.
+					float FrameWidth = TileMax - TileMin;
+					int32 NumSheets = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
+					float EffSlotWidth = FrameWidth / NumSheets;
 
 					// Pick the slot closest to the player's current placement
 					FVector CurrentOffset = CandidateLocation - RefOrigin;
 					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
 
-					float BestSlot = FrameRgtCenter;
+					float BestSlot = TileMin + EffSlotWidth * 0.5f;
 					float BestDist = FLT_MAX;
 					for (int32 si = 0; si < NumSheets; si++)
 					{
-						// Slots are symmetric around center: center ± (i+0.5)*SheetShort
-						float SlotCenter = FrameRgtCenter + ((si - (NumSheets - 1) / 2.0f) * SheetShort);
+						float SlotCenter = TileMin + EffSlotWidth * (si + 0.5f);
 						float D = FMath::Abs(CurrentRgt - SlotCenter);
 						if (D < BestDist)
 						{
@@ -659,9 +661,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
 					CandidateLocation.Z = SavedZ;
 
-					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d Ctr=(%.1f,%.1f)"),
+					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d EffW=%.1f Ctr=(%.1f,%.1f)"),
 						TileMin, TileMax, SpanMin, SpanMax,
-						(int32)((BestSlot - TileMin) / SheetShort) + 1, NumSheets,
+						(int32)((BestSlot - TileMin) / EffSlotWidth) + 1, NumSheets,
+						EffSlotWidth,
 						CandidateLocation.X, CandidateLocation.Y);
 				}
 			}
