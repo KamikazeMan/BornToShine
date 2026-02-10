@@ -561,78 +561,72 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Plywood XY alignment: compute position from frame rectangle
-			// Find all rim boards, compute bounding box, tile sheets to cover floor
+			// Classify rim boards as parallel or perpendicular to plywood,
+			// then use each group's WIDTH (not length) in the cross-axis
 			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
 				(TgtSocketType == EConstructionSocketType::RimBoard_Top_Face ||
 				 TgtSocketType == EConstructionSocketType::Joist_Top_Face) &&
 				TargetPiece)
 			{
-				// Use plywood's aligned rotation as reference frame
 				FVector RefFwd = CandidateRotation.RotateVector(FVector::ForwardVector);
 				FVector RefRgt = CandidateRotation.RotateVector(FVector::RightVector);
 				FVector RefOrigin = TargetPiece->GetActorLocation();
+				const float HalfW = 3.81f / 2.0f; // Rim board half-width
 
-				// Compute frame bounding box from all rim board corners
-				float MinFwd = FLT_MAX, MaxFwd = -FLT_MAX;
-				float MinRgt = FLT_MAX, MaxRgt = -FLT_MAX;
-				int32 RimCount = 0;
+				// Parallel boards define tiling range (right axis, 4ft sheets)
+				// Perpendicular boards define spanning range (forward axis, 8ft sheet)
+				float TileMin = FLT_MAX, TileMax = -FLT_MAX;
+				float SpanMin = FLT_MAX, SpanMax = -FLT_MAX;
+				int32 ParallelCount = 0, PerpCount = 0;
 
 				for (ABuildablePiece* P : NearbyPieces)
 				{
 					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
-					RimCount++;
 
-					ARimBoard* Rim = Cast<ARimBoard>(P);
-					float HalfLen = Rim ? Rim->GetEffectiveLength() / 2.0f : 121.92f;
-					const float HalfW = 3.81f / 2.0f;
+					FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
+					float Dot = FMath::Abs(FVector::DotProduct(BoardFwd, RefFwd));
+					FVector LocalCenter = P->GetActorLocation() - RefOrigin;
 
-					FVector C = P->GetActorLocation();
-					FRotator R = P->GetActorRotation();
-					FVector Fwd = R.RotateVector(FVector::ForwardVector);
-					FVector Rgt = R.RotateVector(FVector::RightVector);
-
-					// 4 corners of rim board footprint
-					FVector Corners[4] = {
-						C + Fwd * HalfLen + Rgt * HalfW,
-						C + Fwd * HalfLen - Rgt * HalfW,
-						C - Fwd * HalfLen + Rgt * HalfW,
-						C - Fwd * HalfLen - Rgt * HalfW
-					};
-
-					for (int32 ci = 0; ci < 4; ci++)
+					if (Dot > 0.7f)
 					{
-						FVector Local = Corners[ci] - RefOrigin;
-						float F = FVector::DotProduct(Local, RefFwd);
-						float RR = FVector::DotProduct(Local, RefRgt);
-						MinFwd = FMath::Min(MinFwd, F);
-						MaxFwd = FMath::Max(MaxFwd, F);
-						MinRgt = FMath::Min(MinRgt, RR);
-						MaxRgt = FMath::Max(MaxRgt, RR);
+						// Parallel board — its outer faces (width) define tiling range
+						ParallelCount++;
+						float CenterRgt = FVector::DotProduct(LocalCenter, RefRgt);
+						TileMin = FMath::Min(TileMin, CenterRgt - HalfW);
+						TileMax = FMath::Max(TileMax, CenterRgt + HalfW);
+					}
+					else
+					{
+						// Perpendicular board — its outer faces (width) define span range
+						PerpCount++;
+						float CenterFwd = FVector::DotProduct(LocalCenter, RefFwd);
+						SpanMin = FMath::Min(SpanMin, CenterFwd - HalfW);
+						SpanMax = FMath::Max(SpanMax, CenterFwd + HalfW);
 					}
 				}
 
-				if (RimCount >= 4 && MinFwd < MaxFwd && MinRgt < MaxRgt)
+				if (ParallelCount >= 2 && PerpCount >= 2)
 				{
-					float FrameFwdCenter = (MinFwd + MaxFwd) / 2.0f;
 					const float SheetShort = 121.92f; // 4ft
 
-					// Center plywood along its long axis (forward) to span the frame
-					float PlywoodFwd = FrameFwdCenter;
+					// Center plywood along forward axis to span between perp boards
+					float PlywoodFwd = (SpanMin + SpanMax) / 2.0f;
 
-					// Tile the short axis: compute slot positions starting from MinRgt edge
-					int32 NumSheets = FMath::CeilToInt((MaxRgt - MinRgt) / SheetShort);
-					if (NumSheets < 1) NumSheets = 1;
+					// Tile short axis: two slots centered on the frame, butting up exactly
+					float FrameRgtCenter = (TileMin + TileMax) / 2.0f;
+					int32 NumSheets = FMath::Max(1, FMath::RoundToInt((TileMax - TileMin) / SheetShort));
 
 					// Pick the slot closest to the player's current placement
 					FVector CurrentOffset = CandidateLocation - RefOrigin;
 					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
 
-					float BestSlot = MinRgt + SheetShort / 2.0f;
+					float BestSlot = FrameRgtCenter;
 					float BestDist = FLT_MAX;
 					for (int32 si = 0; si < NumSheets; si++)
 					{
-						float SlotCenter = MinRgt + SheetShort / 2.0f + si * SheetShort;
+						// Slots are symmetric around center: center ± (i+0.5)*SheetShort
+						float SlotCenter = FrameRgtCenter + ((si - (NumSheets - 1) / 2.0f) * SheetShort);
 						float D = FMath::Abs(CurrentRgt - SlotCenter);
 						if (D < BestDist)
 						{
@@ -645,9 +639,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
 					CandidateLocation.Z = SavedZ;
 
-					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Frame=[%.1f,%.1f]x[%.1f,%.1f] Slot=%d/%d PlyCtr=(%.1f,%.1f)"),
-						MinFwd, MaxFwd, MinRgt, MaxRgt,
-						(int32)((BestSlot - MinRgt) / SheetShort) + 1, NumSheets,
+					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d Ctr=(%.1f,%.1f)"),
+						TileMin, TileMax, SpanMin, SpanMax,
+						(int32)((BestSlot - TileMin) / SheetShort) + 1, NumSheets,
 						CandidateLocation.X, CandidateLocation.Y);
 				}
 			}
