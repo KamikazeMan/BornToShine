@@ -448,6 +448,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetRotation.Yaw + 90.0f;
 			}
 
+			// Special handling for plywood-to-framing top face snaps
+			// Force the sheet to lay perfectly flat (no pitch/roll tilt)
+			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
+				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
+				(TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
+				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face))
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+			}
+
 			// Special handling for rim-to-rim corner snaps (single-end)
 			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TgtSocketType == EConstructionSocketType::RimBoard_End_Corner &&
