@@ -405,6 +405,37 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
+	// PRE-COMPUTE STABLE PLYWOOD REFERENCE YAW
+	// Plywood must use a single consistent yaw for ALL candidates
+	// to prevent rotation flipping as different snap targets win.
+	// Pick the rim board direction closest to world X-axis (yaw=0).
+	// ============================================================
+	float PlywoodRefYaw = 0.0f;
+	bool bHavePlywoodRefYaw = false;
+
+	if (PieceType == EPieceType::Plywood)
+	{
+		float BestNormYaw = 360.0f;
+
+		for (ABuildablePiece* P : NearbyPieces)
+		{
+			if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+
+			float Y = P->GetActorRotation().Yaw;
+			// Normalize to [0, 180) — boards at 0 and 180 are the same direction
+			float NormY = FMath::Fmod(Y, 180.0f);
+			if (NormY < 0.0f) NormY += 180.0f;
+
+			if (NormY < BestNormYaw)
+			{
+				BestNormYaw = NormY;
+				PlywoodRefYaw = NormY;
+				bHavePlywoodRefYaw = true;
+			}
+		}
+	}
+
+	// ============================================================
 	// STANDARD SINGLE-SOCKET SNAP CANDIDATES
 	// ============================================================
 	for (const FConstructionSocket& Socket : Sockets)
@@ -449,28 +480,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Special handling for plywood-to-framing top face snaps
-			// Force the sheet to lay perfectly flat and align yaw to framing
+			// Use pre-computed stable reference yaw to prevent rotation
+			// flipping as different target pieces win the snap contest.
 			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
 				(TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
 				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face) &&
-				TargetPiece)
+				bHavePlywoodRefYaw)
 			{
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
-
-				// Align plywood long edge (X-axis) parallel to rim boards
-				FRotator TargetRot = TargetPiece->GetActorRotation();
-				if (TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
-				{
-					// Plywood runs parallel to the rim board
-					CandidateRotation.Yaw = TargetRot.Yaw;
-				}
-				else // Joist_Top_Face
-				{
-					// Joists run perpendicular to rim boards, so plywood is +90 from joist
-					CandidateRotation.Yaw = TargetRot.Yaw + 90.0f;
-				}
+				CandidateRotation.Yaw = PlywoodRefYaw;
 			}
 
 			// Special handling for rim-to-rim corner snaps (single-end)
