@@ -156,4 +156,5 @@ private:
 	void AddInlineRules();
 	void AddFoundationRules();
 	void AddJoistRules();
+	void AddPlywoodRules();
 };

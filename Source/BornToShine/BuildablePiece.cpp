@@ -513,6 +513,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
+			// Plywood snap: lift sheet so its bottom face rests on framing top.
+			// Snap location is at the target's top-face socket (top of joist/rim).
+			// Plywood corner sockets are at Z = -SheetThickness/2 (bottom face),
+			// so the actor center needs to be lifted by SheetThickness/2.
+			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
+				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
+				(TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
+				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face ||
+				 TgtSocketType == EConstructionSocketType::RimBoard_End_Corner))
+			{
+				const float SheetHalfThickness = 1.5875f / 2.0f; // 5/8"
+				CandidateLocation.Z += SheetHalfThickness;
+			}
+
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;
 			Candidate.SourceSocketType = Socket.SocketType;
@@ -673,6 +687,33 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::Joist_End))
 	{
 		return 800;
+	}
+
+	// Plywood corner to Rim board corner (MEDIUM-HIGH PRIORITY)
+	if ((SocketA == EConstructionSocketType::Plywood_Corner &&
+		 SocketB == EConstructionSocketType::RimBoard_End_Corner) ||
+		(SocketA == EConstructionSocketType::RimBoard_End_Corner &&
+		 SocketB == EConstructionSocketType::Plywood_Corner))
+	{
+		return 700;
+	}
+
+	// Plywood edge to Joist/Rim top face (MEDIUM PRIORITY)
+	if ((SocketA == EConstructionSocketType::Plywood_Edge &&
+		 (SocketB == EConstructionSocketType::Joist_Top_Face ||
+		  SocketB == EConstructionSocketType::RimBoard_Top_Face)) ||
+		((SocketA == EConstructionSocketType::Joist_Top_Face ||
+		  SocketA == EConstructionSocketType::RimBoard_Top_Face) &&
+		 SocketB == EConstructionSocketType::Plywood_Edge))
+	{
+		return 600;
+	}
+
+	// Plywood edge to Plywood edge (sheet-to-sheet, MEDIUM PRIORITY)
+	if (SocketA == EConstructionSocketType::Plywood_Edge &&
+		SocketB == EConstructionSocketType::Plywood_Edge)
+	{
+		return 500;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)

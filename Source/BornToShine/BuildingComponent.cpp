@@ -4,6 +4,7 @@
 #include "BuildablePiece.h"
 #include "RimBoard.h"
 #include "FloorJoist.h"
+#include "PlywoodSheet.h"
 #include "RectangleBuilder.h"
 #include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
@@ -392,6 +393,12 @@ void UBuildingComponent::CyclePieceType()
 		{
 			UE_LOG(LogTemp, Log, TEXT("Floor Joist selected: No joist layout available (build a rectangle first)"));
 		}
+	}
+
+	// Show plywood info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::Plywood)
+	{
+		UE_LOG(LogTemp, Log, TEXT("Plywood Sheet selected: 4x8ft panel — snap to joist/rim board top faces"));
 	}
 }
 
