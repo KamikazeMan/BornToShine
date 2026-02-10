@@ -131,13 +131,16 @@ void ASocketManager::CreateJoistRules()
 void ASocketManager::CreatePlywoodRules()
 {
 	// CRITICAL: First plywood corner ONLY snaps to rim board corners
+	// Alignment check DISABLED: plywood corner sockets face downward (Pitch=90)
+	// while EndCorner sockets face sideways (Pitch=0). The 90-degree pitch
+	// difference would always fail any reasonable angle tolerance.
 	FSocketCompatibilityRule PlywoodCornerRule;
 	PlywoodCornerRule.SourceSocketType = EConstructionSocketType::Plywood_Corner;
 	PlywoodCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	PlywoodCornerRule.RequiredPhase = EConstructionPhase::FloorSheathing;
 	PlywoodCornerRule.SnapDistance = 30.0f;
-	PlywoodCornerRule.bCheckAlignment = true;
-	PlywoodCornerRule.MaxAlignmentAngle = 5.0f;
+	PlywoodCornerRule.bCheckAlignment = false;
+	PlywoodCornerRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(PlywoodCornerRule);
 
 	// Plywood edges snap to joist tops, rim board tops, and other plywood edges

@@ -513,20 +513,32 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
-			// Plywood corner snap to RimBoard_End_Corner: EndCorner sockets are at
-			// the rim board CENTER (Z=0 local), not the top. Lift by BoardHeight/2
-			// so the plywood sits on TOP of the rim board. The plywood socket's
-			// local Z offset (-SheetThickness/2) already handles center-to-bottom.
-			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
-				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
-				TgtSocketType == EConstructionSocketType::RimBoard_End_Corner)
+			// Plywood Z offset adjustments:
+			// EndCorner sockets are at rim board CENTER (Z=0 local), not the top.
+			// TopFace/JoistTop sockets are already at the top surface.
+			if (Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
+				Socket.SocketType == EConstructionSocketType::Plywood_Corner)
 			{
-				const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
-				CandidateLocation.Z += BoardHalfHeight;
+				float ZBefore = CandidateLocation.Z;
+
+				if (TgtSocketType == EConstructionSocketType::RimBoard_End_Corner)
+				{
+					// Lift by BoardHalfHeight because EndCorner is at board center, not top
+					const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
+					CandidateLocation.Z += BoardHalfHeight;
+				}
+				// For Joist_Top_Face / RimBoard_Top_Face: no additional Z offset.
+				// Those sockets are already at the top surface, and the plywood socket
+				// local Z = -SheetThickness/2 correctly positions the sheet on top.
+
+				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ZBefore=%.2f ZAfter=%.2f"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					SnapLoc.Z,
+					SocketWorldOffset.Z,
+					ZBefore,
+					CandidateLocation.Z);
 			}
-			// For Joist_Top_Face / RimBoard_Top_Face targets: no Z offset needed.
-			// Those sockets are already at the top surface, and the plywood socket
-			// local position at Z=-SheetThickness/2 correctly positions the sheet.
 
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;
@@ -622,6 +634,16 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Corner joints: boards stay at centerline positions (centered on foundation).
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
+
+	// Debug: Log final Z for plywood placements
+	if (PieceType == EPieceType::Plywood)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FINAL POS: Actor Z=%.2f  SnapTo=%s (socket=%s) Priority=%d"),
+			FinalLocation.Z,
+			Candidate.TargetPiece ? *Candidate.TargetPiece->GetName() : TEXT("null"),
+			*Candidate.TargetSocketName.ToString(),
+			Candidate.Priority);
+	}
 
 	// Update snap state
 	bIsSnapped = true;
