@@ -174,6 +174,11 @@ void URectangleBuilderComponent::RecalculateState()
                     Board->GetActorRotation().Yaw);
             }
         }
+
+        // Reset for the next rectangle
+        TrackedBoards.Empty();
+        CurrentState = ERectangleState::None;
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Reset — ready for next rectangle."));
         return;
     }
 }
