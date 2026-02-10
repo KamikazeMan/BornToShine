@@ -7,10 +7,10 @@ APlywoodSheet::APlywoodSheet()
 {
 	PieceType = EPieceType::Plywood;
 
-	// 4'x8' sheet, 5/8" thick
+	// 4'x8' sheet, 3/4" thick
 	SheetWidth = 121.92f;   // 4 feet in cm
 	SheetLength = 243.84f;  // 8 feet in cm
-	SheetThickness = 1.5875f; // 5/8 inch in cm
+	SheetThickness = 1.905f; // 3/4 inch in cm
 
 	// Scene root for clean actor transform (same pattern as RimBoard)
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
@@ -27,6 +27,17 @@ APlywoodSheet::APlywoodSheet()
 void APlywoodSheet::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Diagnostic: Print mesh bounds to verify centering
+	if (MeshComponent && MeshComponent->GetStaticMesh())
+	{
+		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD MESH BOUNDS: Origin=(%.2f, %.2f, %.2f) Extent=(%.2f, %.2f, %.2f) Min.Z=%.2f Max.Z=%.2f"),
+			Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z,
+			Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z,
+			Bounds.Origin.Z - Bounds.BoxExtent.Z,
+			Bounds.Origin.Z + Bounds.BoxExtent.Z);
+	}
 }
 
 void APlywoodSheet::InitializeSockets()

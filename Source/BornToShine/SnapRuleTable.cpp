@@ -241,8 +241,8 @@ void ASnapRuleTable::AddJoistRules()
 
 void ASnapRuleTable::AddPlywoodRules()
 {
-	// Plywood sheet thickness: 5/8" = 1.5875cm
-	const float SheetHalfThickness = 1.5875f / 2.0f;
+	// Plywood sheet thickness: 3/4" = 1.905cm
+	const float SheetHalfThickness = 1.905f / 2.0f;
 
 	// PLYWOOD CORNER -> RIM BOARD END CORNER
 	// First sheet snaps its corner to a rim board corner.
