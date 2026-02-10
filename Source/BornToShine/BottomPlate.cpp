@@ -50,7 +50,9 @@ void ABottomPlate::InitializeSockets()
 void ABottomPlate::CreateBottomSockets()
 {
 	float HalfLen = BoardLength / 2.0f;
-	float SocketZ = -BoardHeight / 2.0f;
+	// Mesh pivot is at BOTTOM (like rim boards), so Z=0 is the mesh bottom face.
+	// This ensures the plate sits directly on the plywood surface.
+	float SocketZ = 0.0f;
 	float Spacing = 40.64f; // 16" OC
 
 	// End bottom sockets (at both ends of the plate)

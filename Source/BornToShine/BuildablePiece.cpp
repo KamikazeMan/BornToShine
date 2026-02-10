@@ -406,16 +406,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 	// ============================================================
 	// PRE-COMPUTE BUILDING CENTER FOR BOTTOM PLATE Y OFFSET
-	// Bottom plate needs to shift inward so its outer face is flush
-	// with the plywood edge. Compute average position of nearby
-	// pieces to approximate the building center direction.
+	// Use ALL placed rim boards (not just nearby) so the center
+	// is accurate regardless of snap search radius.
 	// ============================================================
 	FVector BuildingCenter = FVector::ZeroVector;
 	int32 CenterPieceCount = 0;
 
-	if (PieceType == EPieceType::WallPlate)
+	if (PieceType == EPieceType::WallPlate && AConstructionPhaseManager::Instance)
 	{
-		for (ABuildablePiece* P : NearbyPieces)
+		TArray<ABuildablePiece*> AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
+		for (ABuildablePiece* P : AllRimBoards)
 		{
 			if (P)
 			{
