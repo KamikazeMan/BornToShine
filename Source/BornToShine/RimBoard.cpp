@@ -43,15 +43,10 @@ ARimBoard::ARimBoard()
 	// Actor scale stays at (1,1,1) — SceneRoot is unscaled
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Set mesh scale to match dimensions (only affects MeshComponent, not actor transform)
-	if (MeshComponent)
-	{
-		MeshComponent->SetRelativeScale3D(FVector(
-			GetEffectiveLength() / 100.0f,
-			BoardWidth / 100.0f,
-			BoardHeight / 100.0f
-		));
-	}
+	// NOTE: Do NOT set MeshComponent scale here. The BP (BP_RimBoard) already
+	// has the mesh correctly sized at scale (1,1,1). Constructor scale values
+	// may or may not be overridden by BP defaults depending on spawn timing,
+	// causing unpredictable results (paper-thin boards).
 }
 
 void ARimBoard::BeginPlay()
@@ -344,10 +339,12 @@ void ARimBoard::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
 
-	// The BP mesh is already the correct board size at scale (1,1,1).
+	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh BEFORE scale=(%.4f, %.4f, %.4f)"),
+		*GetName(), CurrentScale3D.X, CurrentScale3D.Y, CurrentScale3D.Z);
+
 	// Extend X by the ratio (EffectiveLength + BoardWidth) / EffectiveLength
 	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
-	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
 	float EffLen = GetEffectiveLength();
 	float Ratio = (EffLen + BoardWidth) / EffLen;
 
@@ -357,8 +354,9 @@ void ARimBoard::ExtendMeshForFlushCorners()
 		CurrentScale3D.Z
 	));
 
-	UE_LOG(LogTemp, Log, TEXT("RimBoard: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
-		Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
+	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) ratio=%.4f"),
+		*GetName(), NewScale3D.X, NewScale3D.Y, NewScale3D.Z, Ratio);
 }
 
 float ARimBoard::GetEffectiveLength() const
