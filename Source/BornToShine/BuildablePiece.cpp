@@ -513,28 +513,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
-			// Plywood Z offset adjustments:
-			// EndCorner sockets are at rim board CENTER (Z=0 local), not the top.
-			// TopFace/JoistTop sockets are already at the top surface.
-			// A small anti-Z-fighting offset (0.05cm) prevents the plywood bottom
-			// face from co-planar fighting with joist/rim board top faces.
+			// Plywood Z offset: TopFace/JoistTop sockets are at BoardHeight/2
+			// above the actor center, but the actual mesh top is at the actor center.
+			// Drop the plywood by BoardHeight/2 so it sits on the real framing top.
 			if (Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				Socket.SocketType == EConstructionSocketType::Plywood_Corner)
 			{
 				float ZBefore = CandidateLocation.Z;
-				const float AntiZFightOffset = 0.05f; // Tiny lift to prevent Z-fighting
 
-				if (TgtSocketType == EConstructionSocketType::RimBoard_End_Corner)
+				if (TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
+					TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 				{
-					// Lift by BoardHalfHeight because EndCorner is at board center, not top
 					const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
-					CandidateLocation.Z += BoardHalfHeight;
+					CandidateLocation.Z -= BoardHalfHeight;
 				}
-				// For Joist_Top_Face / RimBoard_Top_Face: no additional Z offset.
-				// Those sockets are already at the top surface, and the plywood socket
-				// local Z = -SheetThickness/2 correctly positions the sheet on top.
-
-				CandidateLocation.Z += AntiZFightOffset;
 
 				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ZBefore=%.2f ZAfter=%.2f"),
 					*Socket.SocketName.ToString(),
@@ -715,15 +707,6 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::Joist_End))
 	{
 		return 800;
-	}
-
-	// Plywood corner to Rim board corner (MEDIUM-HIGH PRIORITY)
-	if ((SocketA == EConstructionSocketType::Plywood_Corner &&
-		 SocketB == EConstructionSocketType::RimBoard_End_Corner) ||
-		(SocketA == EConstructionSocketType::RimBoard_End_Corner &&
-		 SocketB == EConstructionSocketType::Plywood_Corner))
-	{
-		return 700;
 	}
 
 	// Plywood edge to Joist/Rim top face (MEDIUM PRIORITY)

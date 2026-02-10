@@ -96,7 +96,6 @@ void ASocketManager::CreateRimBoardRules()
 	FSocketCompatibilityRule RimCornerRule;
 	RimCornerRule.SourceSocketType = EConstructionSocketType::RimBoard_End_Corner;
 	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
-	RimCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Corner); // For first plywood sheet
 	RimCornerRule.RequiredPhase = EConstructionPhase::FloorFrame;
 	RimCornerRule.SnapDistance = 100.0f; // Increased from 50cm to help 4th board find corners when closing rectangle
 	RimCornerRule.bCheckAlignment = true; // Enable alignment checking for precise 90-degree corners
@@ -130,20 +129,8 @@ void ASocketManager::CreateJoistRules()
 
 void ASocketManager::CreatePlywoodRules()
 {
-	// CRITICAL: First plywood corner ONLY snaps to rim board corners
-	// Alignment check DISABLED: plywood corner sockets face downward (Pitch=90)
-	// while EndCorner sockets face sideways (Pitch=0). The 90-degree pitch
-	// difference would always fail any reasonable angle tolerance.
-	FSocketCompatibilityRule PlywoodCornerRule;
-	PlywoodCornerRule.SourceSocketType = EConstructionSocketType::Plywood_Corner;
-	PlywoodCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
-	PlywoodCornerRule.RequiredPhase = EConstructionPhase::FloorSheathing;
-	PlywoodCornerRule.SnapDistance = 50.0f;
-	PlywoodCornerRule.bCheckAlignment = false;
-	PlywoodCornerRule.MaxAlignmentAngle = 15.0f;
-	CompatibilityRules.Add(PlywoodCornerRule);
-
 	// Plywood edges snap to joist tops, rim board tops, and other plywood edges
+	// NOTE: Plywood does NOT snap to EndCorner sockets — only to TopFace sockets
 	FSocketCompatibilityRule PlywoodEdgeRule;
 	PlywoodEdgeRule.SourceSocketType = EConstructionSocketType::Plywood_Edge;
 	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Joist_Top_Face);
@@ -221,15 +208,13 @@ bool ASocketManager::FindBestSnapPoint(
 		{
 			// Skip occupied sockets UNLESS the source is plywood.
 			// Plywood rests ON TOP of the framing — it should snap to the same
-			// support points that joists already occupy (TopFace sockets) or that
-			// rim-to-rim corner joints occupy (EndCorner sockets).
+			// support points that joists already occupy (TopFace sockets).
 			if (TargetSocket.bIsOccupied)
 			{
 				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
 				                       SourceSocket.SocketType == EConstructionSocketType::Plywood_Edge);
 				bool bFramingTarget = (TargetSocket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
-				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face ||
-				                       TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner);
+				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face);
 				if (!(bPlywoodSource && bFramingTarget))
 				{
 					continue;

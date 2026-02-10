@@ -244,47 +244,8 @@ void ASnapRuleTable::AddPlywoodRules()
 	// Plywood sheet thickness: 3/4" = 1.905cm
 	const float SheetHalfThickness = 1.905f / 2.0f;
 
-	// PLYWOOD CORNER -> RIM BOARD END CORNER
-	// First sheet snaps its corner to a rim board corner.
-	// Sheet lays flat, its bottom rests on the top of the framing.
-	// The corner socket is at the bottom face of the plywood.
-	// Rim board top face is at rim center + halfBoardHeight = 6.985cm.
-	// Plywood corner socket is at plywood center - halfThickness.
-	// So plywood center Z = rim top + halfThickness.
-	const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
-	{
-		FSnapRuleKey Key(
-			/*SrcLeft=*/ false, // Corner sockets don't have Left/Right naming
-			/*TgtLeft=*/ true,  // EndCorner_Left
-			EConstructionSocketType::Plywood_Corner,
-			EConstructionSocketType::RimBoard_End_Corner
-		);
-
-		FSnapRule Rule;
-		Rule.ConnectionType = ESnapConnectionType::TopFace;
-		Rule.YawOffset = 0.0f;
-		Rule.bYawSignFromPlayerIntent = false;
-		Rule.FlushOffset = FVector(0.0f, 0.0f, BoardHalfHeight + SheetHalfThickness);
-		Rule.Priority = 700;
-		RuleTable.Add(Key, Rule);
-	}
-	// Also match against EndCorner_Right
-	{
-		FSnapRuleKey Key(
-			/*SrcLeft=*/ false,
-			/*TgtLeft=*/ false, // EndCorner_Right
-			EConstructionSocketType::Plywood_Corner,
-			EConstructionSocketType::RimBoard_End_Corner
-		);
-
-		FSnapRule Rule;
-		Rule.ConnectionType = ESnapConnectionType::TopFace;
-		Rule.YawOffset = 0.0f;
-		Rule.bYawSignFromPlayerIntent = false;
-		Rule.FlushOffset = FVector(0.0f, 0.0f, BoardHalfHeight + SheetHalfThickness);
-		Rule.Priority = 700;
-		RuleTable.Add(Key, Rule);
-	}
+	// NOTE: Plywood does NOT snap to EndCorner sockets — only to TopFace sockets.
+	// Corner sockets on plywood still exist for positioning but don't connect to EndCorner.
 
 	// PLYWOOD EDGE -> JOIST TOP FACE
 	// Sheet edge rests on top of a joist.
@@ -341,8 +302,8 @@ void ASnapRuleTable::AddPlywoodRules()
 		RuleTable.Add(Key, Rule);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added plywood rules (Corner=%d, Edge=%d, Sheet-to-sheet=%d)"),
-		700, 600, 500);
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added plywood rules (Edge=%d, Sheet-to-sheet=%d)"),
+		600, 500);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)
