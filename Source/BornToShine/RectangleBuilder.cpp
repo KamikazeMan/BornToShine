@@ -177,8 +177,9 @@ void URectangleBuilderComponent::RecalculateState()
 
         // Reset for the next rectangle
         TrackedBoards.Empty();
+        CurrentSuggestions.Empty();
         CurrentState = ERectangleState::None;
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Reset — ready for next rectangle."));
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Reset. Ready for new rectangle."));
         return;
     }
 }
