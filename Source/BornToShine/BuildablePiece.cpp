@@ -560,35 +560,96 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z);
 			}
 
-			// Plywood XY alignment: center on rim board and flush edge with outer face
+			// Plywood XY alignment: compute position from frame rectangle
+			// Find all rim boards, compute bounding box, tile sheets to cover floor
 			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
-				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face &&
+				(TgtSocketType == EConstructionSocketType::RimBoard_Top_Face ||
+				 TgtSocketType == EConstructionSocketType::Joist_Top_Face) &&
 				TargetPiece)
 			{
-				FVector RimCenter = TargetPiece->GetActorLocation();
-				FRotator RimRot = TargetPiece->GetActorRotation();
-				FVector RimForward = RimRot.RotateVector(FVector::ForwardVector);
-				FVector RimRight = RimRot.RotateVector(FVector::RightVector);
+				// Use plywood's aligned rotation as reference frame
+				FVector RefFwd = CandidateRotation.RotateVector(FVector::ForwardVector);
+				FVector RefRgt = CandidateRotation.RotateVector(FVector::RightVector);
+				FVector RefOrigin = TargetPiece->GetActorLocation();
 
-				// Decompose current offset from rim board center
-				FVector Offset = CandidateLocation - RimCenter;
-				float ForwardComp = FVector::DotProduct(Offset, RimForward);
-				float RightComp = FVector::DotProduct(Offset, RimRight);
+				// Compute frame bounding box from all rim board corners
+				float MinFwd = FLT_MAX, MaxFwd = -FLT_MAX;
+				float MinRgt = FLT_MAX, MaxRgt = -FLT_MAX;
+				int32 RimCount = 0;
 
-				// 1. Center plywood along rim board's long axis
-				ForwardComp = 0.0f;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+					RimCount++;
 
-				// 2. Shift plywood edge from rim centerline to rim outer face
-				const float BoardHalfWidth = 3.81f / 2.0f; // 1.905cm
-				if (RightComp < 0)
-					RightComp += BoardHalfWidth;
-				else
-					RightComp -= BoardHalfWidth;
+					ARimBoard* Rim = Cast<ARimBoard>(P);
+					float HalfLen = Rim ? Rim->GetEffectiveLength() / 2.0f : 121.92f;
+					const float HalfW = 3.81f / 2.0f;
 
-				float SavedZ = CandidateLocation.Z;
-				CandidateLocation = RimCenter + RimForward * ForwardComp + RimRight * RightComp;
-				CandidateLocation.Z = SavedZ;
+					FVector C = P->GetActorLocation();
+					FRotator R = P->GetActorRotation();
+					FVector Fwd = R.RotateVector(FVector::ForwardVector);
+					FVector Rgt = R.RotateVector(FVector::RightVector);
+
+					// 4 corners of rim board footprint
+					FVector Corners[4] = {
+						C + Fwd * HalfLen + Rgt * HalfW,
+						C + Fwd * HalfLen - Rgt * HalfW,
+						C - Fwd * HalfLen + Rgt * HalfW,
+						C - Fwd * HalfLen - Rgt * HalfW
+					};
+
+					for (int32 ci = 0; ci < 4; ci++)
+					{
+						FVector Local = Corners[ci] - RefOrigin;
+						float F = FVector::DotProduct(Local, RefFwd);
+						float RR = FVector::DotProduct(Local, RefRgt);
+						MinFwd = FMath::Min(MinFwd, F);
+						MaxFwd = FMath::Max(MaxFwd, F);
+						MinRgt = FMath::Min(MinRgt, RR);
+						MaxRgt = FMath::Max(MaxRgt, RR);
+					}
+				}
+
+				if (RimCount >= 4 && MinFwd < MaxFwd && MinRgt < MaxRgt)
+				{
+					float FrameFwdCenter = (MinFwd + MaxFwd) / 2.0f;
+					const float SheetShort = 121.92f; // 4ft
+
+					// Center plywood along its long axis (forward) to span the frame
+					float PlywoodFwd = FrameFwdCenter;
+
+					// Tile the short axis: compute slot positions starting from MinRgt edge
+					int32 NumSheets = FMath::CeilToInt((MaxRgt - MinRgt) / SheetShort);
+					if (NumSheets < 1) NumSheets = 1;
+
+					// Pick the slot closest to the player's current placement
+					FVector CurrentOffset = CandidateLocation - RefOrigin;
+					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
+
+					float BestSlot = MinRgt + SheetShort / 2.0f;
+					float BestDist = FLT_MAX;
+					for (int32 si = 0; si < NumSheets; si++)
+					{
+						float SlotCenter = MinRgt + SheetShort / 2.0f + si * SheetShort;
+						float D = FMath::Abs(CurrentRgt - SlotCenter);
+						if (D < BestDist)
+						{
+							BestDist = D;
+							BestSlot = SlotCenter;
+						}
+					}
+
+					float SavedZ = CandidateLocation.Z;
+					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
+					CandidateLocation.Z = SavedZ;
+
+					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Frame=[%.1f,%.1f]x[%.1f,%.1f] Slot=%d/%d PlyCtr=(%.1f,%.1f)"),
+						MinFwd, MaxFwd, MinRgt, MaxRgt,
+						(int32)((BestSlot - MinRgt) / SheetShort) + 1, NumSheets,
+						CandidateLocation.X, CandidateLocation.Y);
+				}
 			}
 
 			FSnapCandidate Candidate;
