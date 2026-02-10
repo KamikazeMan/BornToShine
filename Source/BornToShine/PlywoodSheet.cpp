@@ -36,8 +36,8 @@ void APlywoodSheet::BeginPlay()
 	{
 		const float RimBoardWidth = 3.81f; // 1.5 inch = 2x6 lumber width
 		float OverhangScale = (SheetLength + RimBoardWidth) / SheetLength;
-		FVector CurrentScale = MeshComponent->GetRelativeScale3D();
-		MeshComponent->SetRelativeScale3D(CurrentScale * FVector(OverhangScale, OverhangScale, 1.0f));
+		FVector MeshScale = MeshComponent->GetRelativeScale3D();
+		MeshComponent->SetRelativeScale3D(MeshScale * FVector(OverhangScale, OverhangScale, 1.0f));
 
 		UE_LOG(LogTemp, Log, TEXT("PLYWOOD: Mesh scaled by %.4f to cover rim board overhang (%.1fcm -> %.1fcm x %.1fcm -> %.1fcm)"),
 			OverhangScale, SheetLength, SheetLength + RimBoardWidth, SheetWidth, SheetWidth * OverhangScale);
