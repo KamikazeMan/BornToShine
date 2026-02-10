@@ -449,14 +449,28 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Special handling for plywood-to-framing top face snaps
-			// Force the sheet to lay perfectly flat (no pitch/roll tilt)
+			// Force the sheet to lay perfectly flat and align yaw to framing
 			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
 				(TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
-				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face))
+				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face) &&
+				TargetPiece)
 			{
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
+
+				// Align plywood long edge (X-axis) parallel to rim boards
+				FRotator TargetRot = TargetPiece->GetActorRotation();
+				if (TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
+				{
+					// Plywood runs parallel to the rim board
+					CandidateRotation.Yaw = TargetRot.Yaw;
+				}
+				else // Joist_Top_Face
+				{
+					// Joists run perpendicular to rim boards, so plywood is +90 from joist
+					CandidateRotation.Yaw = TargetRot.Yaw + 90.0f;
+				}
 			}
 
 			// Special handling for rim-to-rim corner snaps (single-end)
