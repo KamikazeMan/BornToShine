@@ -357,6 +357,10 @@ void ARimBoard::ExtendMeshForFlushCorners()
 	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
 	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) ratio=%.4f"),
 		*GetName(), NewScale3D.X, NewScale3D.Y, NewScale3D.Z, Ratio);
+
+	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: MeshComponent RelativeLocation=(%.4f, %.4f, %.4f)"),
+		*GetName(), MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z);
 }
 
 float ARimBoard::GetEffectiveLength() const
