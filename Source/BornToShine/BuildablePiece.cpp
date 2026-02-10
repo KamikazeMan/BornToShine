@@ -560,6 +560,37 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z);
 			}
 
+			// Plywood XY alignment: center on rim board and flush edge with outer face
+			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
+				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face &&
+				TargetPiece)
+			{
+				FVector RimCenter = TargetPiece->GetActorLocation();
+				FRotator RimRot = TargetPiece->GetActorRotation();
+				FVector RimForward = RimRot.RotateVector(FVector::ForwardVector);
+				FVector RimRight = RimRot.RotateVector(FVector::RightVector);
+
+				// Decompose current offset from rim board center
+				FVector Offset = CandidateLocation - RimCenter;
+				float ForwardComp = FVector::DotProduct(Offset, RimForward);
+				float RightComp = FVector::DotProduct(Offset, RimRight);
+
+				// 1. Center plywood along rim board's long axis
+				ForwardComp = 0.0f;
+
+				// 2. Shift plywood edge from rim centerline to rim outer face
+				const float BoardHalfWidth = 3.81f / 2.0f; // 1.905cm
+				if (RightComp < 0)
+					RightComp += BoardHalfWidth;
+				else
+					RightComp -= BoardHalfWidth;
+
+				float SavedZ = CandidateLocation.Z;
+				CandidateLocation = RimCenter + RimForward * ForwardComp + RimRight * RightComp;
+				CandidateLocation.Z = SavedZ;
+			}
+
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;
 			Candidate.SourceSocketType = Socket.SocketType;
