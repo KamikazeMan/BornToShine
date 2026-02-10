@@ -513,19 +513,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
-			// Plywood snap: lift sheet so its bottom face rests on framing top.
-			// Snap location is at the target's top-face socket (top of joist/rim).
-			// Plywood corner sockets are at Z = -SheetThickness/2 (bottom face),
-			// so the actor center needs to be lifted by SheetThickness/2.
+			// Plywood corner snap to RimBoard_End_Corner: EndCorner sockets are at
+			// the rim board CENTER (Z=0 local), not the top. Lift by BoardHeight/2
+			// so the plywood sits on TOP of the rim board. The plywood socket's
+			// local Z offset (-SheetThickness/2) already handles center-to-bottom.
 			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
-				(TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
-				 TgtSocketType == EConstructionSocketType::RimBoard_Top_Face ||
-				 TgtSocketType == EConstructionSocketType::RimBoard_End_Corner))
+				TgtSocketType == EConstructionSocketType::RimBoard_End_Corner)
 			{
-				const float SheetHalfThickness = 1.5875f / 2.0f; // 5/8"
-				CandidateLocation.Z += SheetHalfThickness;
+				const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
+				CandidateLocation.Z += BoardHalfHeight;
 			}
+			// For Joist_Top_Face / RimBoard_Top_Face targets: no Z offset needed.
+			// Those sockets are already at the top surface, and the plywood socket
+			// local position at Z=-SheetThickness/2 correctly positions the sheet.
 
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;
