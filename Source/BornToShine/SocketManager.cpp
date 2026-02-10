@@ -138,7 +138,7 @@ void ASocketManager::CreatePlywoodRules()
 	PlywoodCornerRule.SourceSocketType = EConstructionSocketType::Plywood_Corner;
 	PlywoodCornerRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_End_Corner);
 	PlywoodCornerRule.RequiredPhase = EConstructionPhase::FloorSheathing;
-	PlywoodCornerRule.SnapDistance = 30.0f;
+	PlywoodCornerRule.SnapDistance = 50.0f;
 	PlywoodCornerRule.bCheckAlignment = false;
 	PlywoodCornerRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(PlywoodCornerRule);
@@ -150,7 +150,7 @@ void ASocketManager::CreatePlywoodRules()
 	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Top_Face); // Rim board perimeter
 	PlywoodEdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::Plywood_Edge); // Sheet-to-sheet
 	PlywoodEdgeRule.RequiredPhase = EConstructionPhase::FloorSheathing;
-	PlywoodEdgeRule.SnapDistance = 25.0f;
+	PlywoodEdgeRule.SnapDistance = 50.0f;
 	PlywoodEdgeRule.bCheckAlignment = false;
 	PlywoodEdgeRule.MaxAlignmentAngle = 10.0f;
 	CompatibilityRules.Add(PlywoodEdgeRule);
@@ -219,8 +219,22 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
-			// Skip if socket is already occupied
-			if (TargetSocket.bIsOccupied) continue;
+			// Skip occupied sockets UNLESS the source is plywood.
+			// Plywood rests ON TOP of the framing — it should snap to the same
+			// support points that joists already occupy (TopFace sockets) or that
+			// rim-to-rim corner joints occupy (EndCorner sockets).
+			if (TargetSocket.bIsOccupied)
+			{
+				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
+				                       SourceSocket.SocketType == EConstructionSocketType::Plywood_Edge);
+				bool bFramingTarget = (TargetSocket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
+				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face ||
+				                       TargetSocket.SocketType == EConstructionSocketType::RimBoard_End_Corner);
+				if (!(bPlywoodSource && bFramingTarget))
+				{
+					continue;
+				}
+			}
 
 			// Check compatibility
 			if (!AreSocketsCompatible(SourceSocket.SocketType, TargetSocket.SocketType, CurrentPhase)) continue;
