@@ -513,10 +513,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
-			// Plywood Z debug logging
+			// Plywood Z offset: TopFace/JoistTop sockets are at BoardHeight/2
+			// (midpoint of the framing mesh), but the actual mesh top is at
+			// BoardHeight above the actor origin. Push plywood UP by BoardHeight/2
+			// so its bottom sits on the real framing top surface.
 			if (Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
 				Socket.SocketType == EConstructionSocketType::Plywood_Corner)
 			{
+				if (TgtSocketType == EConstructionSocketType::Joist_Top_Face ||
+					TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
+				{
+					const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
+					CandidateLocation.Z += BoardHalfHeight;
+				}
+
 				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
