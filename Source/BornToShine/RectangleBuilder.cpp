@@ -703,8 +703,8 @@ void URectangleBuilderComponent::CalculateJoistLayout(ARimBoard* Board1, ARimBoa
     int32 JoistLengthFeet = FMath::RoundToInt(JoistSpanCm / 30.48f);
     JoistLengthFeet = FMath::Clamp(JoistLengthFeet, 1, 16);
 
-    // Joist Z position: on top of the rim board (rim board center Z + half rim height + half joist height)
-    float JoistZ = Board1Center.Z + Board1->BoardHeight / 2.0f + Board1->BoardHeight / 2.0f;
+    // Joist Z position: same center as rim boards so tops are flush
+    float JoistZ = Board1Center.Z;
 
     // 16" OC spacing along the through boards
     float Spacing = 40.64f; // 16" = 40.64cm

@@ -503,12 +503,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
 			FVector CandidateLocation = SnapLoc - SocketWorldOffset;
 
-			// Joist top-face snap: lift joist so its bottom rests on the rim board's top surface
+			// Joist top-face snap: lower joist so its top is flush with rim board top.
+			// Snap location is at top-face socket (rim center Z + halfHeight).
+			// Joist center should be at rim center Z, so subtract halfHeight.
 			if (Socket.SocketType == EConstructionSocketType::Joist_End &&
 				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 			{
-				const float BoardHeight = 13.97f; // 5.5" joist height
-				CandidateLocation.Z += BoardHeight / 2.0f;
+				const float BoardHeight = 13.97f; // 5.5"
+				CandidateLocation.Z -= BoardHeight / 2.0f;
 			}
 
 			FSnapCandidate Candidate;
