@@ -18,6 +18,7 @@ enum class ESnapConnectionType : uint8
 	Inline_0,       // Straight extension (Left-Right or Right-Left)
 	Foundation,     // Board sitting on foundation
 	DualEnd_Span,   // Board spanning between two corners
+	TopFace,        // Joist sitting on top of rim board
 	None
 };
 
@@ -154,4 +155,5 @@ private:
 	void AddCornerRules(float BoardHalfWidth);
 	void AddInlineRules();
 	void AddFoundationRules();
+	void AddJoistRules();
 };

@@ -438,6 +438,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			bool bCandidateIsCorner = false;
 			bool bCandidateIsInline = false;
 
+			// Special handling for joist-to-rim-board top face snaps
+			if (Socket.SocketType == EConstructionSocketType::Joist_End &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face &&
+				TargetPiece)
+			{
+				// Joist runs perpendicular to the rim board
+				FRotator TargetRotation = TargetPiece->GetActorRotation();
+				CandidateRotation.Yaw = TargetRotation.Yaw + 90.0f;
+			}
+
 			// Special handling for rim-to-rim corner snaps (single-end)
 			if (Socket.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
 				TgtSocketType == EConstructionSocketType::RimBoard_End_Corner &&
@@ -493,9 +503,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
 			FVector CandidateLocation = SnapLoc - SocketWorldOffset;
 
-			// Corner joints: boards stay centered on foundations.
-			// The half-width overlap at corners is structurally correct —
-			// one board's end sits inside the other's cross-section.
+			// Joist top-face snap: lift joist so its bottom rests on the rim board's top surface
+			if (Socket.SocketType == EConstructionSocketType::Joist_End &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
+			{
+				const float BoardHeight = 13.97f; // 5.5" joist height
+				CandidateLocation.Z += BoardHeight / 2.0f;
+			}
 
 			FSnapCandidate Candidate;
 			Candidate.SourceSocketName = Socket.SocketName;

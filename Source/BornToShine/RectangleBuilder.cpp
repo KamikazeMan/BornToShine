@@ -2,6 +2,7 @@
 
 #include "RectangleBuilder.h"
 #include "RimBoard.h"
+#include "FloorJoist.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -15,6 +16,9 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     CurrentState = ERectangleState::None;
     bShowGhostPreviews = true;
     GhostMaterial = nullptr;
+    PlacedJoistCount = 0;
+    ThroughBoard1 = nullptr;
+    ThroughBoard3 = nullptr;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -173,6 +177,12 @@ void URectangleBuilderComponent::RecalculateState()
                     Board->GetActorLocation().X, Board->GetActorLocation().Y, Board->GetActorLocation().Z,
                     Board->GetActorRotation().Yaw);
             }
+        }
+
+        // Calculate joist layout before resetting tracked boards
+        if (TrackedBoards.Num() >= 4)
+        {
+            CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
         }
 
         // Reset for the next rectangle
@@ -658,4 +668,149 @@ void URectangleBuilderComponent::ClearGhostPreviews()
         }
     }
     GhostActors.Empty();
+}
+
+void URectangleBuilderComponent::CalculateJoistLayout(ARimBoard* Board1, ARimBoard* Board2, ARimBoard* Board3, ARimBoard* Board4)
+{
+    if (!Board1 || !Board2 || !Board3 || !Board4) return;
+
+    JoistSuggestions.Empty();
+    PlacedJoistCount = 0;
+
+    // Board1 and Board3 are the "through" boards (parallel to each other)
+    // Board2 and Board4 are the "end" boards (perpendicular)
+    // Joists run perpendicular to the through boards, from Board1 to Board3
+    ThroughBoard1 = Board1;
+    ThroughBoard3 = Board3;
+
+    // Through boards share the same rotation — joists are perpendicular
+    FRotator ThroughRotation = Board1->GetActorRotation();
+    FVector ThroughForward = ThroughRotation.RotateVector(FVector::ForwardVector);
+
+    // Joist rotation: perpendicular to through boards
+    FRotator JoistRotation = Board2->GetActorRotation();
+
+    // Calculate the span (distance between Board1 and Board3 centers along the perpendicular axis)
+    FVector Board1Center = Board1->GetActorLocation();
+    FVector Board3Center = Board3->GetActorLocation();
+    FVector Board2Forward = Board2->GetActorRotation().RotateVector(FVector::ForwardVector);
+
+    float SpanDistance = FMath::Abs(FVector::DotProduct(Board3Center - Board1Center, Board2Forward));
+
+    // Joist length = span between inside faces of Board1 and Board3
+    // Subtract one BoardWidth (the joists butt up against the inside faces)
+    float JoistSpanCm = SpanDistance - Board1->BoardWidth;
+    int32 JoistLengthFeet = FMath::RoundToInt(JoistSpanCm / 30.48f);
+    JoistLengthFeet = FMath::Clamp(JoistLengthFeet, 1, 16);
+
+    // Joist Z position: on top of the rim board (rim board center Z + half rim height + half joist height)
+    float JoistZ = Board1Center.Z + Board1->BoardHeight / 2.0f + Board1->BoardHeight / 2.0f;
+
+    // 16" OC spacing along the through boards
+    float Spacing = 40.64f; // 16" = 40.64cm
+    float ThroughLength = Board1->GetEffectiveLength();
+    float HalfThroughLen = ThroughLength / 2.0f;
+
+    // Start from one end, offset by the spacing from the end board
+    // Standard framing: first joist at 16" from the end, then every 16"
+    float StartOffset = Spacing;
+    float CurrentOffset = -HalfThroughLen + StartOffset;
+
+    // Center of joist span (midpoint between Board1 and Board3)
+    FVector SpanCenter = (Board1Center + Board3Center) / 2.0f;
+    // Project SpanCenter along the through-board direction at each offset
+    FVector SpanPerp = Board2Forward; // Direction from Board1 toward Board3
+
+    int32 JoistIndex = 0;
+    while (CurrentOffset < HalfThroughLen - StartOffset / 2.0f)
+    {
+        FVector JoistCenter = SpanCenter + ThroughForward * CurrentOffset;
+        JoistCenter.Z = JoistZ;
+
+        // Find the matching top-face socket names on Board1 and Board3
+        FName Board1Socket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
+        FName Board3Socket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
+
+        FJoistSuggestion Suggestion;
+        Suggestion.Position = JoistCenter;
+        Suggestion.Rotation = JoistRotation;
+        Suggestion.LengthFeet = JoistLengthFeet;
+        Suggestion.Board1 = Board1;
+        Suggestion.Board3 = Board3;
+        Suggestion.Board1TargetSocket = Board1Socket;
+        Suggestion.Board3TargetSocket = Board3Socket;
+        Suggestion.JoistIndex = JoistIndex;
+        Suggestion.bIsValid = true;
+
+        JoistSuggestions.Add(Suggestion);
+
+        CurrentOffset += Spacing;
+        JoistIndex++;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d joist positions at 16\" OC. Span=%.1fcm, JoistLen=%dft, Z=%.1f"),
+        JoistSuggestions.Num(), JoistSpanCm, JoistLengthFeet, JoistZ);
+}
+
+FJoistSuggestion URectangleBuilderComponent::GetNextJoistSuggestion() const
+{
+    if (PlacedJoistCount < JoistSuggestions.Num())
+    {
+        return JoistSuggestions[PlacedJoistCount];
+    }
+    return FJoistSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
+{
+    if (!Joist || !HasJoistSuggestions()) return false;
+
+    FJoistSuggestion Suggestion = GetNextJoistSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Resize joist to match the span
+    if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Joist->GetBoardLengthFeet())
+    {
+        Joist->SetBoardLengthFeet(Suggestion.LengthFeet);
+    }
+
+    // Set position and rotation
+    Joist->SetActorLocation(Suggestion.Position);
+    Joist->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Joist->SetPreviewMode(false);
+
+    // Occupy top-face sockets on the through boards
+    if (Suggestion.Board1)
+    {
+        ABuildablePiece* Board1Piece = Cast<ABuildablePiece>(Suggestion.Board1);
+        if (Board1Piece)
+        {
+            Board1Piece->OccupySocket(Suggestion.Board1TargetSocket, Joist);
+        }
+    }
+    if (Suggestion.Board3)
+    {
+        ABuildablePiece* Board3Piece = Cast<ABuildablePiece>(Suggestion.Board3);
+        if (Board3Piece)
+        {
+            Board3Piece->OccupySocket(Suggestion.Board3TargetSocket, Joist);
+        }
+    }
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Joist);
+    }
+
+    PlacedJoistCount++;
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed joist %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f"),
+        PlacedJoistCount, JoistSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw);
+
+    return true;
 }

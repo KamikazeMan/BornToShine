@@ -27,6 +27,7 @@ void ASnapRuleTable::InitializeRules()
 	AddCornerRules(RimBoardHalfWidth);
 	AddInlineRules();
 	AddFoundationRules();
+	AddJoistRules();
 }
 
 void ASnapRuleTable::AddCornerRules(float BoardHalfWidth)
@@ -187,6 +188,54 @@ bool ASnapRuleTable::GetSnapRule(
 	}
 
 	return false;
+}
+
+void ASnapRuleTable::AddJoistRules()
+{
+	// JOIST TOP-FACE: Joist end snaps to rim board top face socket.
+	// The joist sits on top of the rim board, perpendicular to it.
+	// Joist center is offset upward by half the joist height (so its bottom
+	// rests on the rim board's top surface).
+	const float BoardHeight = 13.97f; // 5.5" in cm
+	const float HalfBoardHeight = BoardHeight / 2.0f;
+
+	// JoistEnd_Left -> RimBoard_Top_Face
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ true,
+			/*TgtLeft=*/ false, // Top face sockets don't have Left/Right
+			EConstructionSocketType::Joist_End,
+			EConstructionSocketType::RimBoard_Top_Face
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 90.0f; // Joist runs perpendicular to rim board
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector(0.0f, 0.0f, HalfBoardHeight); // Lift joist so bottom rests on rim top
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// JoistEnd_Right -> RimBoard_Top_Face
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::Joist_End,
+			EConstructionSocketType::RimBoard_Top_Face
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 90.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector(0.0f, 0.0f, HalfBoardHeight);
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added joist top-face rules (Priority=900, Z-offset=%.2f)"), HalfBoardHeight);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)

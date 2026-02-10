@@ -3,6 +3,7 @@
 #include "BuildingComponent.h"
 #include "BuildablePiece.h"
 #include "RimBoard.h"
+#include "FloorJoist.h"
 #include "RectangleBuilder.h"
 #include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
@@ -133,6 +134,26 @@ void UBuildingComponent::UpdatePreviewPosition()
 {
 	if (!CurrentPreviewPiece) return;
 
+	// JOIST SUGGESTION OVERRIDE: When placing a floor joist and the RectangleBuilder
+	// has joist suggestions, position the preview at the next joist location.
+	if (RectangleBuilder && RectangleBuilder->HasJoistSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::FloorJoist)
+	{
+		FJoistSuggestion JoistSug = RectangleBuilder->GetNextJoistSuggestion();
+		if (JoistSug.bIsValid)
+		{
+			AFloorJoist* PreviewJoist = Cast<AFloorJoist>(CurrentPreviewPiece);
+			if (PreviewJoist && JoistSug.LengthFeet > 0 && JoistSug.LengthFeet != PreviewJoist->GetBoardLengthFeet())
+			{
+				PreviewJoist->SetBoardLengthFeet(JoistSug.LengthFeet);
+			}
+
+			CurrentPreviewPiece->SetActorLocation(JoistSug.Position);
+			CurrentPreviewPiece->SetActorRotation(JoistSug.Rotation);
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
 	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
 	// detection. Position the preview exactly where the suggestion says.
@@ -237,6 +258,25 @@ void UBuildingComponent::PlaceCurrentPiece()
 {
 	if (!bIsInBuildMode || !CurrentPreviewPiece) return;
 
+	// JOIST SUGGESTION PATH: When joist suggestions exist and we're placing a joist,
+	// bypass TryPlace and use the calculated position.
+	if (RectangleBuilder && RectangleBuilder->HasJoistSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::FloorJoist)
+	{
+		AFloorJoist* Joist = Cast<AFloorJoist>(CurrentPreviewPiece);
+		if (Joist && RectangleBuilder->ApplyJoistSuggestion(Joist))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Joist placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER PATH: When a suggestion is active, bypass TryPlace entirely.
 	// Place the board exactly where the RectangleBuilder calculated, with correct length.
 	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
@@ -334,6 +374,23 @@ void UBuildingComponent::CyclePieceType()
 		{
 			FString LengthInfo = RimBoard->GetLengthDisplayString();
 			UE_LOG(LogTemp, Log, TEXT("RimBoard selected: %s (scroll wheel disabled)"), *LengthInfo);
+		}
+	}
+
+	// Show joist suggestion info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::FloorJoist)
+	{
+		if (RectangleBuilder && RectangleBuilder->HasJoistSuggestions())
+		{
+			FJoistSuggestion NextJoist = RectangleBuilder->GetNextJoistSuggestion();
+			UE_LOG(LogTemp, Log, TEXT("Floor Joist selected: %d/%d joists to place, %dft span"),
+				RectangleBuilder->GetPlacedJoistCount(),
+				RectangleBuilder->GetJoistSuggestions().Num(),
+				NextJoist.LengthFeet);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Floor Joist selected: No joist layout available (build a rectangle first)"));
 		}
 	}
 }

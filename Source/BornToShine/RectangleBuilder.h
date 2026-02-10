@@ -11,6 +11,7 @@
 
 class ABuildablePiece;
 class ARimBoard;
+class AFloorJoist;
 
 /**
  * Tracks the state of rectangle construction
@@ -72,6 +73,56 @@ struct FBoardSuggestion
 };
 
 /**
+ * Data for a suggested joist placement
+ */
+USTRUCT(BlueprintType)
+struct FJoistSuggestion
+{
+    GENERATED_BODY()
+
+    // World position for the joist center
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    // World rotation (perpendicular to through boards)
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    // Required length in feet
+    UPROPERTY(BlueprintReadOnly)
+    int32 LengthFeet;
+
+    // Which rim board top-face sockets this joist connects to
+    UPROPERTY(BlueprintReadOnly)
+    FName Board1TargetSocket;
+
+    UPROPERTY(BlueprintReadOnly)
+    FName Board3TargetSocket;
+
+    // The rim boards this joist spans between
+    UPROPERTY(BlueprintReadOnly)
+    ABuildablePiece* Board1;
+
+    UPROPERTY(BlueprintReadOnly)
+    ABuildablePiece* Board3;
+
+    // Joist index (0-based, for tracking placement order)
+    int32 JoistIndex;
+
+    bool bIsValid;
+
+    FJoistSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , LengthFeet(0)
+        , Board1(nullptr)
+        , Board3(nullptr)
+        , JoistIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
  * Component that tracks rectangle construction progress.
  * Attach to the same actor as BuildingComponent.
  * Recognizes L-shapes from placed boards and suggests/auto-places remaining boards.
@@ -111,6 +162,23 @@ public:
     // Apply a suggestion to a rim board: sets its length, position, rotation, and commits placement.
     // Returns true if successful. Called by BuildingComponent instead of TryPlace().
     bool ApplySuggestionToBoard(ARimBoard* Board);
+
+    // --- Joist Layout System ---
+
+    // Does the builder have joist suggestions ready?
+    bool HasJoistSuggestions() const { return JoistSuggestions.Num() > 0; }
+
+    // Get the next joist suggestion (first unplaced)
+    FJoistSuggestion GetNextJoistSuggestion() const;
+
+    // Apply a joist suggestion: sets position, rotation, length
+    bool ApplyJoistSuggestion(AFloorJoist* Joist);
+
+    // Get all joist suggestions (for ghost previews)
+    TArray<FJoistSuggestion> GetJoistSuggestions() const { return JoistSuggestions; }
+
+    // How many joists have been placed in the current layout
+    int32 GetPlacedJoistCount() const { return PlacedJoistCount; }
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -165,4 +233,24 @@ private:
     void UpdateGhostPreviews();
     void ClearGhostPreviews();
     void SpawnGhostForSuggestion(const FBoardSuggestion& Suggestion);
+
+    // --- Joist Layout ---
+
+    // Calculate joist positions after rectangle completes
+    void CalculateJoistLayout(ARimBoard* Board1, ARimBoard* Board2, ARimBoard* Board3, ARimBoard* Board4);
+
+    // Joist suggestions for the completed rectangle
+    TArray<FJoistSuggestion> JoistSuggestions;
+
+    // Number of joists placed so far
+    int32 PlacedJoistCount;
+
+    // Stored rectangle geometry for joist calculations
+    // Board1 and Board3 are the "through" boards (parallel, joists span between them)
+    // Board2 and Board4 are the "end" boards (perpendicular)
+    UPROPERTY()
+    ARimBoard* ThroughBoard1;
+
+    UPROPERTY()
+    ARimBoard* ThroughBoard3;
 };
