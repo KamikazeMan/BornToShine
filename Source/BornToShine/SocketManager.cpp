@@ -274,8 +274,11 @@ bool ASocketManager::FindBestSnapPoint(
 			float Score = CalculateSnapScore(WorldLocation, TargetWorldLocation, WorldRotation, TargetWorldRotation);
 
 			// RULE-BASED PRIORITY SCORING
-			// Use SnapRuleTable for priority-based scoring when available,
-			// falling back to hardcoded values if the rule table is not in the level.
+			// Priority is the DOMINANT factor — a higher-priority snap ALWAYS beats
+			// a lower-priority snap regardless of distance. Priority is multiplied by
+			// a large weight so it can never be outweighed by distance/alignment scores.
+			// Example: framing snap (Priority 600) at 50cm always beats
+			//          sheet-to-sheet (Priority 500) at 0cm.
 			if (ASnapRuleTable::Instance)
 			{
 				FSnapRule SnapRule;
@@ -283,7 +286,7 @@ bool ASocketManager::FindBestSnapPoint(
 					SourceSocket.SocketType, TargetSocket.SocketType,
 					SourceSocket.SocketName, TargetSocket.SocketName, SnapRule))
 				{
-					Score += SnapRule.Priority;
+					Score += SnapRule.Priority * 100.0f;
 
 					// Small alignment bonus for corner snaps
 					if (SnapRule.ConnectionType == ESnapConnectionType::Corner_90 ||
