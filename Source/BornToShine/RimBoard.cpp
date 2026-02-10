@@ -339,12 +339,10 @@ void ARimBoard::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
 
-	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh BEFORE scale=(%.4f, %.4f, %.4f)"),
-		*GetName(), CurrentScale3D.X, CurrentScale3D.Y, CurrentScale3D.Z);
-
 	// Extend X by the ratio (EffectiveLength + BoardWidth) / EffectiveLength
 	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
+	// Mesh is centered at origin so scaling extends equally both directions.
+	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
 	float EffLen = GetEffectiveLength();
 	float Ratio = (EffLen + BoardWidth) / EffLen;
 
@@ -354,33 +352,8 @@ void ARimBoard::ExtendMeshForFlushCorners()
 		CurrentScale3D.Z
 	));
 
-	// If the mesh asset's pivot is not at its geometric center, scaling extends
-	// only one direction. Compute the bounds center and offset the mesh so the
-	// extension is split equally to both ends.
-	UStaticMesh* Mesh = MeshComponent->GetStaticMesh();
-	if (Mesh)
-	{
-		FBoxSphereBounds MeshBounds = Mesh->GetBounds();
-		float CenterX = MeshBounds.Origin.X;
-		// Scaling shifts the bounds center by CenterX * (Ratio - 1).
-		// Offset the mesh in the opposite direction to re-center.
-		float OffsetX = -CenterX * (Ratio - 1.0f);
-
-		FVector CurrentRelLoc = MeshComponent->GetRelativeLocation();
-		MeshComponent->SetRelativeLocation(FVector(
-			CurrentRelLoc.X + OffsetX,
-			CurrentRelLoc.Y,
-			CurrentRelLoc.Z
-		));
-
-		UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: Mesh pivot CenterX=%.4f, compensating offset=%.4f"),
-			*GetName(), CenterX, OffsetX);
-	}
-
-	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
-	FVector NewRelLoc = MeshComponent->GetRelativeLocation();
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) ratio=%.4f loc=(%.4f, %.4f, %.4f)"),
-		*GetName(), NewScale3D.X, NewScale3D.Y, NewScale3D.Z, Ratio, NewRelLoc.X, NewRelLoc.Y, NewRelLoc.Z);
+	UE_LOG(LogTemp, Log, TEXT("RimBoard [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
+		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
 }
 
 float ARimBoard::GetEffectiveLength() const
