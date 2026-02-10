@@ -354,13 +354,33 @@ void ARimBoard::ExtendMeshForFlushCorners()
 		CurrentScale3D.Z
 	));
 
-	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) ratio=%.4f"),
-		*GetName(), NewScale3D.X, NewScale3D.Y, NewScale3D.Z, Ratio);
+	// If the mesh asset's pivot is not at its geometric center, scaling extends
+	// only one direction. Compute the bounds center and offset the mesh so the
+	// extension is split equally to both ends.
+	UStaticMesh* Mesh = MeshComponent->GetStaticMesh();
+	if (Mesh)
+	{
+		FBoxSphereBounds MeshBounds = Mesh->GetBounds();
+		float CenterX = MeshBounds.Origin.X;
+		// Scaling shifts the bounds center by CenterX * (Ratio - 1).
+		// Offset the mesh in the opposite direction to re-center.
+		float OffsetX = -CenterX * (Ratio - 1.0f);
 
-	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
-	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: MeshComponent RelativeLocation=(%.4f, %.4f, %.4f)"),
-		*GetName(), MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z);
+		FVector CurrentRelLoc = MeshComponent->GetRelativeLocation();
+		MeshComponent->SetRelativeLocation(FVector(
+			CurrentRelLoc.X + OffsetX,
+			CurrentRelLoc.Y,
+			CurrentRelLoc.Z
+		));
+
+		UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: Mesh pivot CenterX=%.4f, compensating offset=%.4f"),
+			*GetName(), CenterX, OffsetX);
+	}
+
+	FVector NewScale3D = MeshComponent->GetRelativeScale3D();
+	FVector NewRelLoc = MeshComponent->GetRelativeLocation();
+	UE_LOG(LogTemp, Warning, TEXT("RimBoard [%s]: ExtendMesh AFTER  scale=(%.4f, %.4f, %.4f) ratio=%.4f loc=(%.4f, %.4f, %.4f)"),
+		*GetName(), NewScale3D.X, NewScale3D.Y, NewScale3D.Z, Ratio, NewRelLoc.X, NewRelLoc.Y, NewRelLoc.Z);
 }
 
 float ARimBoard::GetEffectiveLength() const
