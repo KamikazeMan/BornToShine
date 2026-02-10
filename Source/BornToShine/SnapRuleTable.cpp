@@ -29,6 +29,7 @@ void ASnapRuleTable::InitializeRules()
 	AddFoundationRules();
 	AddJoistRules();
 	AddPlywoodRules();
+	AddBottomPlateRules();
 }
 
 void ASnapRuleTable::AddCornerRules(float BoardHalfWidth)
@@ -304,6 +305,107 @@ void ASnapRuleTable::AddPlywoodRules()
 
 	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added plywood rules (Edge=%d, Sheet-to-sheet=%d)"),
 		600, 500);
+}
+
+void ASnapRuleTable::AddBottomPlateRules()
+{
+	// 2x4 bottom plate half-width: 1.5" = 3.81cm / 2 = 1.905cm
+	const float PlateHalfWidth = 3.81f / 2.0f;
+
+	// BOTTOM PLATE -> RIM BOARD TOP FACE
+	// Plate sits on top of plywood, above the rim board.
+	// Z offset is handled in BuildablePiece::DetectSnapCandidates.
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::BottomPlate_Bottom,
+			EConstructionSocketType::RimBoard_Top_Face
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f; // Plate aligns with rim board (same direction)
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 700;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// BOTTOM PLATE END -> BOTTOM PLATE END (corner joint: Left-Left)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ true,
+			/*TgtLeft=*/ true,
+			EConstructionSocketType::BottomPlate_End,
+			EConstructionSocketType::BottomPlate_End
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::Corner_90;
+		Rule.YawOffset = 90.0f;
+		Rule.bYawSignFromPlayerIntent = true;
+		Rule.FlushOffset = FVector(0.0f, PlateHalfWidth, 0.0f);
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// BOTTOM PLATE END -> BOTTOM PLATE END (corner joint: Right-Right)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::BottomPlate_End,
+			EConstructionSocketType::BottomPlate_End
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::Corner_90;
+		Rule.YawOffset = 90.0f;
+		Rule.bYawSignFromPlayerIntent = true;
+		Rule.FlushOffset = FVector(0.0f, PlateHalfWidth, 0.0f);
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// BOTTOM PLATE END -> BOTTOM PLATE END (inline: Left-Right)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ true,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::BottomPlate_End,
+			EConstructionSocketType::BottomPlate_End
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::Inline_0;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 700;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// BOTTOM PLATE END -> BOTTOM PLATE END (inline: Right-Left)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ true,
+			EConstructionSocketType::BottomPlate_End,
+			EConstructionSocketType::BottomPlate_End
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::Inline_0;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 700;
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added bottom plate rules (TopFace=%d, Corner=%d, Inline=%d)"),
+		700, 900, 700);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)

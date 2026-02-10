@@ -64,6 +64,10 @@ enum class EConstructionSocketType : uint8
 	Plywood_Corner				UMETA(DisplayName = "Plywood Corner"),
 	Plywood_Edge				UMETA(DisplayName = "Plywood Edge"),
 
+	// Bottom Plate Sockets (2x4 sole plate on top of subfloor)
+	BottomPlate_Bottom			UMETA(DisplayName = "Bottom Plate Bottom"),
+	BottomPlate_End				UMETA(DisplayName = "Bottom Plate End"),
+
 	// Wall Sockets
 	Wall_Bottom_Plate			UMETA(DisplayName = "Wall Bottom Plate"),
 	Wall_Top_Plate				UMETA(DisplayName = "Wall Top Plate"),

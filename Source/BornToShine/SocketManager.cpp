@@ -27,6 +27,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateRimBoardRules();
 	CreateJoistRules();
 	CreatePlywoodRules();
+	CreateBottomPlateRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -143,6 +144,41 @@ void ASocketManager::CreatePlywoodRules()
 	CompatibilityRules.Add(PlywoodEdgeRule);
 }
 
+void ASocketManager::CreateBottomPlateRules()
+{
+	// Bottom plate bottom sockets snap to rim board top face (plate sits above plywood, above rim board)
+	FSocketCompatibilityRule PlateBottomRule;
+	PlateBottomRule.SourceSocketType = EConstructionSocketType::BottomPlate_Bottom;
+	PlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Top_Face);
+	PlateBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PlateBottomRule.SnapDistance = 50.0f;
+	PlateBottomRule.bCheckAlignment = false; // Plate just needs to be on top
+	PlateBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PlateBottomRule);
+
+	// Rim board top face also accepts bottom plate bottom sockets
+	FSocketCompatibilityRule RimTopPlateRule;
+	RimTopPlateRule.SourceSocketType = EConstructionSocketType::RimBoard_Top_Face;
+	RimTopPlateRule.CompatibleSocketTypes.Add(EConstructionSocketType::BottomPlate_Bottom);
+	RimTopPlateRule.RequiredPhase = EConstructionPhase::WallFrame;
+	RimTopPlateRule.SnapDistance = 50.0f;
+	RimTopPlateRule.bCheckAlignment = false;
+	RimTopPlateRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(RimTopPlateRule);
+
+	// Bottom plate end sockets connect to other bottom plate end sockets (corners/inline)
+	FSocketCompatibilityRule PlateEndRule;
+	PlateEndRule.SourceSocketType = EConstructionSocketType::BottomPlate_End;
+	PlateEndRule.CompatibleSocketTypes.Add(EConstructionSocketType::BottomPlate_End);
+	PlateEndRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PlateEndRule.SnapDistance = 60.0f;
+	PlateEndRule.bCheckAlignment = true;
+	PlateEndRule.MaxAlignmentAngle = 95.0f; // Allow 90-degree corners with tolerance
+	CompatibilityRules.Add(PlateEndRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added bottom plate compatibility rules"));
+}
+
 bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const
 {
 	for (const FSocketCompatibilityRule& Rule : CompatibilityRules)
@@ -206,16 +242,18 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
-			// Skip occupied sockets UNLESS the source is plywood.
+			// Skip occupied sockets UNLESS the source is plywood or bottom plate.
 			// Plywood rests ON TOP of the framing — it should snap to the same
 			// support points that joists already occupy (TopFace sockets).
+			// Bottom plates sit ON TOP of plywood — they also need occupied TopFace sockets.
 			if (TargetSocket.bIsOccupied)
 			{
 				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
 				                       SourceSocket.SocketType == EConstructionSocketType::Plywood_Edge);
+				bool bBottomPlateSource = (SourceSocket.SocketType == EConstructionSocketType::BottomPlate_Bottom);
 				bool bFramingTarget = (TargetSocket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
 				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face);
-				if (!(bPlywoodSource && bFramingTarget))
+				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget))
 				{
 					continue;
 				}

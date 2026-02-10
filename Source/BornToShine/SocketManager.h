@@ -70,6 +70,7 @@ protected:
 	void CreateRimBoardRules();
 	void CreateJoistRules();
 	void CreatePlywoodRules();
+	void CreateBottomPlateRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(

@@ -479,6 +479,59 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetRotation.Yaw + 90.0f;
 			}
 
+			// Special handling for bottom plate-to-rim board top face snaps
+			// Plate aligns WITH the rim board below (same yaw direction)
+			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
+			// Special handling for bottom plate end-to-end snaps (corners/inline)
+			if (Socket.SocketType == EConstructionSocketType::BottomPlate_End &&
+				TgtSocketType == EConstructionSocketType::BottomPlate_End &&
+				TargetPiece)
+			{
+				FRotator TargetRotation = TargetPiece->GetActorRotation();
+
+				FString SourceSocketStr = Socket.SocketName.ToString();
+				FString TargetSocketStr = TargetSocketName.ToString();
+				bool bSourceIsRight = SourceSocketStr.Contains(TEXT("Right"));
+				bool bTargetIsRight = TargetSocketStr.Contains(TEXT("Right"));
+				bool bOppositeEnds = (bSourceIsRight != bTargetIsRight);
+
+				if (bOppositeEnds)
+				{
+					// INLINE: Right->Left or Left->Right
+					CandidateRotation.Yaw = TargetRotation.Yaw;
+					bCandidateIsInline = true;
+				}
+				else
+				{
+					// CORNER: Left->Left or Right->Right
+					FVector TargetRight = TargetRotation.RotateVector(FVector::RightVector);
+					FVector PlayerLookDir = FVector::ZeroVector;
+					if (UWorld* World = GetWorld())
+					{
+						APlayerController* PC = World->GetFirstPlayerController();
+						if (PC)
+						{
+							FVector CamLoc;
+							FRotator CamRot;
+							PC->GetPlayerViewPoint(CamLoc, CamRot);
+							PlayerLookDir = CamRot.Vector();
+						}
+					}
+					float DotResult = FVector::DotProduct(PlayerLookDir, TargetRight);
+					float RotationSign = (DotResult > 0) ? 90.0f : -90.0f;
+					CandidateRotation.Yaw = TargetRotation.Yaw + RotationSign;
+					bCandidateIsCorner = true;
+				}
+			}
+
 			// Special handling for plywood-to-framing top face snaps
 			// Use pre-computed stable reference yaw to prevent rotation
 			// flipping as different target pieces win the snap contest.
@@ -573,6 +626,26 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 
 				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					SnapLoc.Z,
+					SocketWorldOffset.Z,
+					CandidateLocation.Z);
+			}
+
+			// Bottom plate Z offset: plate sits on top of plywood, which sits on
+			// top of the rim board. From the TopFace socket (at rim board midpoint):
+			//   + RimBoardHalfHeight (6.985cm) to reach actual mesh top
+			//   + PlywoodThickness (1.905cm) for plywood sheet on top
+			// Total = 8.89cm above the TopFace socket position
+			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
+			{
+				const float RimBoardHalfHeight = 13.97f / 2.0f; // 6.985cm
+				const float PlywoodThickness = 1.905f; // 3/4"
+				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
+
+				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
 					SnapLoc.Z,
@@ -760,11 +833,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	FVector FinalLocation = Candidate.SnapLocation;
 	FRotator FinalRotation = Candidate.SnapRotation;
 
-	// Force plywood perfectly flat — only yaw varies
-	if (PieceType == EPieceType::Plywood)
+	// Force plywood and wall plates perfectly flat — only yaw varies
+	if (PieceType == EPieceType::Plywood || PieceType == EPieceType::WallPlate)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD ROTATION BEFORE: Pitch=%.2f Yaw=%.2f Roll=%.2f"),
-			FinalRotation.Pitch, FinalRotation.Yaw, FinalRotation.Roll);
 		FinalRotation.Pitch = 0.0f;
 		FinalRotation.Roll = 0.0f;
 	}
@@ -868,6 +939,22 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		SocketB == EConstructionSocketType::Plywood_Edge)
 	{
 		return 500;
+	}
+
+	// Bottom plate end-to-end (corner/inline connections)
+	if (SocketA == EConstructionSocketType::BottomPlate_End &&
+		SocketB == EConstructionSocketType::BottomPlate_End)
+	{
+		return 900;
+	}
+
+	// Bottom plate bottom to Rim board top face
+	if ((SocketA == EConstructionSocketType::BottomPlate_Bottom &&
+		 SocketB == EConstructionSocketType::RimBoard_Top_Face) ||
+		(SocketA == EConstructionSocketType::RimBoard_Top_Face &&
+		 SocketB == EConstructionSocketType::BottomPlate_Bottom))
+	{
+		return 700;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)
