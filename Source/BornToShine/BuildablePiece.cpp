@@ -405,6 +405,31 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
+	// PRE-COMPUTE BUILDING CENTER FOR BOTTOM PLATE Y OFFSET
+	// Bottom plate needs to shift inward so its outer face is flush
+	// with the plywood edge. Compute average position of nearby
+	// pieces to approximate the building center direction.
+	// ============================================================
+	FVector BuildingCenter = FVector::ZeroVector;
+	int32 CenterPieceCount = 0;
+
+	if (PieceType == EPieceType::WallPlate)
+	{
+		for (ABuildablePiece* P : NearbyPieces)
+		{
+			if (P)
+			{
+				BuildingCenter += P->GetActorLocation();
+				CenterPieceCount++;
+			}
+		}
+		if (CenterPieceCount > 0)
+		{
+			BuildingCenter /= CenterPieceCount;
+		}
+	}
+
+	// ============================================================
 	// PRE-COMPUTE STABLE PLYWOOD REFERENCE YAW
 	// Plywood must use a single consistent yaw for ALL candidates
 	// to prevent rotation flipping as different snap targets win.
@@ -633,24 +658,37 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z);
 			}
 
-			// Bottom plate Z offset: plate sits on top of plywood, which sits on
-			// top of the rim board. From the TopFace socket (at rim board midpoint):
+			// Bottom plate Z + Y offset: plate sits on top of plywood, above rim board.
+			// Z: From TopFace socket (rim board midpoint):
 			//   + RimBoardHalfHeight (6.985cm) to reach actual mesh top
 			//   + PlywoodThickness (1.905cm) for plywood sheet on top
-			// Total = 8.89cm above the TopFace socket position
+			// Y: Shift inward by HalfWidth (1.905cm) so outer face is flush
+			//   with plywood edge (which extends 1.905cm past rim board center).
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
 				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 			{
+				// Z offset
 				const float RimBoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
 
-				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
+				// Y offset: shift inward toward building center by HalfWidth
+				// so the plate's outer face aligns with the plywood edge
+				if (CenterPieceCount > 0 && TargetPiece)
+				{
+					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
+					FVector RimRight = CandidateRotation.RotateVector(FVector::RightVector);
+					FVector ToCenter = (BuildingCenter - TargetPiece->GetActorLocation()).GetSafeNormal();
+					float Dot = FVector::DotProduct(ToCenter, RimRight);
+					float InwardSign = (Dot > 0) ? 1.0f : -1.0f;
+					CandidateLocation += RimRight * InwardSign * PlateHalfWidth;
+				}
+
+				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f InwardOffset=%.2f"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
-					SnapLoc.Z,
-					SocketWorldOffset.Z,
-					CandidateLocation.Z);
+					CandidateLocation.Z,
+					(CenterPieceCount > 0) ? 1.905f : 0.0f);
 			}
 
 			// Plywood XY alignment: compute position from frame rectangle

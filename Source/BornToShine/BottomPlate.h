@@ -55,6 +55,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetLengthDisplayString() const;
 
+	// Extend the visual mesh by HalfWidth on each end for flush corner joints.
+	// Actor position and sockets are unchanged — only the mesh scale increases.
+	void ExtendMeshForFlushCorners();
+
 	// Override scale to change length instead of visual scale
 	virtual void ScalePiece(float ScaleDelta) override;
 
