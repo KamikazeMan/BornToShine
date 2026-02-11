@@ -24,8 +24,8 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	FadeAlpha = 0.0f;
 	FadeSpeed = 8.0f;
 
-	// Icons — large and prominent (80+ for readability)
-	SegmentIconSize = 80.0f;
+	// Icons — large and prominent
+	SegmentIconSize = 104.0f;
 	CenterIconSize  = 96.0f;
 
 	// --- Color palette: shipped-game quality ---
@@ -226,9 +226,9 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		const FLinearColor GlowBase(0.85f, 0.58f, 0.18f, 1.0f);
 		struct FBloomRing { float OutPad; float InPad; float AngPad; float Alpha; };
 		const FBloomRing Rings[] = {
-			{ 36.0f, 18.0f, 4.0f, 0.07f },  // Outermost halo
-			{ 24.0f, 12.0f, 2.0f, 0.14f },  // Mid bloom
-			{ 14.0f,  6.0f, 0.8f, 0.24f },  // Inner concentrated glow
+			{ 3.0f, 3.0f, 1.5f, 0.08f },  // Soft feather just past border
+			{ 1.0f, 1.0f, 0.8f, 0.16f },  // At border edge
+			{ 0.0f, 0.0f, 0.3f, 0.26f },  // Fully contained in ring
 		};
 
 		for (const FBloomRing& Ring : Rings)
@@ -472,13 +472,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			const FPieceTypeInfo& Info = SegmentInfos[HighlightedIndex];
 
-			// Soft amber glow disc behind the selected icon
-			FVector2D IconCenterPos = Center + FVector2D(0.0f, -24.0f);
-			DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry,
-				IconCenterPos, CenterIconSize * 0.72f,
-				Faded(FLinearColor(0.80f, 0.55f, 0.18f, 0.18f)));
-
-			// Large icon in center
+			// Large icon in center (clean on dark background, no glow disc)
 			if (IconBrushes.IsValidIndex(HighlightedIndex) && IconBrushes[HighlightedIndex].GetResourceObject())
 			{
 				FVector2D TexSize(CenterIconSize, CenterIconSize);
