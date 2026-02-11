@@ -176,27 +176,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 	if (NearbyPieces.Num() == 0)
 	{
-		static float LastLogTime = 0.0f;
-		float CurrentTime = GetWorld()->GetTimeSeconds();
-		if (CurrentTime - LastLogTime > 2.0f)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("%s: No nearby pieces within %.0fcm of (%.1f, %.1f, %.1f)"),
-				*GetName(), SnapSearchRadius, GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
-			LastLogTime = CurrentTime;
-		}
 		return Candidates;
-	}
-
-	// Debug: Log search info (throttled)
-	static float LastSearchLogTime = 0.0f;
-	{
-		float CurrentTime = GetWorld()->GetTimeSeconds();
-		if (CurrentTime - LastSearchLogTime > 2.0f)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("%s: Searching %d nearby pieces with %d sockets"),
-				*GetName(), NearbyPieces.Num(), Sockets.Num());
-			LastSearchLogTime = CurrentTime;
-		}
 	}
 
 	// ============================================================
@@ -406,13 +386,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// PRE-FETCH ALL RIM BOARDS (for plywood alignment + bottom plate offset)
+	// PRE-FETCH ALL RIM BOARDS (for plywood alignment)
 	// On large foundations (e.g. 24'), rim boards may be beyond
 	// SnapSearchRadius. Must use PhaseManager to get ALL of them.
 	// ============================================================
 	TArray<ABuildablePiece*> AllRimBoards;
-	if ((PieceType == EPieceType::WallPlate || PieceType == EPieceType::Plywood) &&
-		AConstructionPhaseManager::Instance)
+	if (PieceType == EPieceType::Plywood && AConstructionPhaseManager::Instance)
 	{
 		AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
 	}
@@ -637,77 +616,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 					CandidateLocation.Z += BoardHalfHeight;
 				}
-
-				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
-					*Socket.SocketName.ToString(),
-					*TargetSocketName.ToString(),
-					SnapLoc.Z,
-					SocketWorldOffset.Z,
-					CandidateLocation.Z);
 			}
 
-			// Bottom plate Z + Y offset: plate sits on top of plywood, above rim board.
-			// Z: From TopFace socket (rim board midpoint):
+			// Bottom plate Z offset: plate sits on top of plywood, above rim board.
+			// From TopFace socket (rim board midpoint):
 			//   + RimBoardHalfHeight (6.985cm) to reach actual mesh top
 			//   + PlywoodThickness (1.905cm) for plywood sheet on top
-			// Y: Shift inward by HalfWidth (1.905cm) so outer face is flush
-			//   with plywood edge (which extends 1.905cm past rim board center).
+			// No Y offset needed: plate and rim board are both 3.81cm wide,
+			// so centering on the rim board aligns the plate face with the
+			// plywood edge automatically.
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
 				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 			{
-				// Z offset
 				const float RimBoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
-
-				// Y offset: shift plate by HalfWidth so outer face aligns with
-				// plywood edge. Direction depends on outside vs inside board:
-				//   Outside boards: plywood extends past outer face, shift OUTWARD
-				//   Inside boards: plywood recessed from outer face, shift INWARD
-				if (AllRimBoards.Num() >= 2 && TargetPiece)
-				{
-					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
-					FVector RimRight = CandidateRotation.RotateVector(FVector::RightVector);
-
-					// Frame center from bounding box of all rim boards
-					FVector MinPos(FLT_MAX, FLT_MAX, FLT_MAX);
-					FVector MaxPos(-FLT_MAX, -FLT_MAX, -FLT_MAX);
-					for (ABuildablePiece* P : AllRimBoards)
-					{
-						if (!P) continue;
-						FVector Loc = P->GetActorLocation();
-						MinPos.X = FMath::Min(MinPos.X, Loc.X);
-						MinPos.Y = FMath::Min(MinPos.Y, Loc.Y);
-						MaxPos.X = FMath::Max(MaxPos.X, Loc.X);
-						MaxPos.Y = FMath::Max(MaxPos.Y, Loc.Y);
-					}
-					FVector FrameCenter = (MinPos + MaxPos) / 2.0f;
-
-					FVector OptionA = CandidateLocation + RimRight * PlateHalfWidth;
-					FVector OptionB = CandidateLocation - RimRight * PlateHalfWidth;
-					float DistA = FVector::DistSquaredXY(OptionA, FrameCenter);
-					float DistB = FVector::DistSquaredXY(OptionB, FrameCenter);
-
-					// Outside boards: shift AWAY from center (plywood overhangs outward)
-					// Inside boards: shift TOWARD center
-					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
-					bool bIsOutside = TargetRimBoard ? TargetRimBoard->bIsOutsideBoard : false;
-
-					if (bIsOutside)
-					{
-						CandidateLocation = (DistA > DistB) ? OptionA : OptionB;
-					}
-					else
-					{
-						CandidateLocation = (DistA < DistB) ? OptionA : OptionB;
-					}
-				}
-
-				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f loc=(%.2f,%.2f,%.2f)"),
-					*Socket.SocketName.ToString(),
-					*TargetSocketName.ToString(),
-					CandidateLocation.Z,
-					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 			}
 
 			// Plywood XY alignment: compute position from frame rectangle
@@ -793,12 +716,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					float SavedZ = CandidateLocation.Z;
 					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
 					CandidateLocation.Z = SavedZ;
-
-					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d EffW=%.1f Ctr=(%.1f,%.1f)"),
-						TileMin, TileMax, SpanMin, SpanMax,
-						(int32)((BestSlot - TileMin) / EffSlotWidth) + 1, NumSheets,
-						EffSlotWidth,
-						CandidateLocation.X, CandidateLocation.Y);
 				}
 			}
 
@@ -905,16 +822,6 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Corner joints: boards stay at centerline positions (centered on foundation).
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
-
-	// Debug: Log final Z for plywood placements
-	if (PieceType == EPieceType::Plywood)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FINAL POS: Actor Z=%.2f  SnapTo=%s (socket=%s) Priority=%d"),
-			FinalLocation.Z,
-			Candidate.TargetPiece ? *Candidate.TargetPiece->GetName() : TEXT("null"),
-			*Candidate.TargetSocketName.ToString(),
-			Candidate.Priority);
-	}
 
 	// Update snap state
 	bIsSnapped = true;
