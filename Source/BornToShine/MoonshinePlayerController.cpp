@@ -126,12 +126,18 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 		if (Now - LastTraceLog > 2.0f)
 		{
 			if (HitPiece)
+			{
 				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: Targeting %s (%s)"), *HitPiece->GetName(),
 					*UEnum::GetDisplayValueAsText(HitPiece->GetPieceState()).ToString());
+			}
 			else if (bHit)
+			{
 				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: Hit %s (not a BuildablePiece)"), *Hit.GetActor()->GetName());
+			}
 			else
+			{
 				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: No hit"));
+			}
 			LastTraceLog = Now;
 		}
 	}
