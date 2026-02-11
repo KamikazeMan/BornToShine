@@ -887,9 +887,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
-			// Corner post flush offset: shift inward so the outer stud face
-			// is flush with the bottom plate's outer face.  Uses the same
-			// frame-center approach as the bottom plate Y offset above.
+			// Corner post flush offset: shift inward along BOTH plate axes
+			// so both stud faces of the L-shaped assembly are flush with
+			// their respective bottom plate outer faces.
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
@@ -915,11 +915,22 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FrameCenter /= RimCount;
 					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
 					ToCenter.Z = 0.0f;
-					FVector PlateRight = CandidateRotation.RotateVector(FVector::RightVector);
+
+					FVector PlateRight   = CandidateRotation.RotateVector(FVector::RightVector);
+					FVector PlateForward = CandidateRotation.RotateVector(FVector::ForwardVector);
+
+					// Y offset — perpendicular to plate length
 					float DotY = FVector::DotProduct(ToCenter, PlateRight);
 					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
 					{
 						CandidateLocation += PlateRight * FMath::Sign(DotY) * InwardOffset;
+					}
+
+					// X offset — along plate length (perpendicular stud face)
+					float DotX = FVector::DotProduct(ToCenter, PlateForward);
+					if (FMath::Abs(DotX) > KINDA_SMALL_NUMBER)
+					{
+						CandidateLocation += PlateForward * FMath::Sign(DotX) * InwardOffset;
 					}
 				}
 			}
