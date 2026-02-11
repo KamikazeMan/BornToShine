@@ -895,7 +895,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TargetPiece)
 			{
 				float InwardOffset = 2.54f; // Default 1"
-				if (ACornerPost* CP = Cast<ACornerPost>(this))
+				if (const ACornerPost* CP = Cast<const ACornerPost>(this))
 				{
 					InwardOffset = CP->FlushInwardOffset;
 				}
