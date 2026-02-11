@@ -27,6 +27,7 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	bEnableTouchEvents = false;
 	BuildModeWidget = nullptr;
 	DeleteTraceDistance = 2000.0f; // 20 meters
+	bDeleteModeActive = false;
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -46,7 +47,8 @@ void AMoonshinePlayerController::SetupInputComponent()
 	{
 		InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
 		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
-		// X key delete is routed through MoonshineCharacter::OnToggleBoardType
+		InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AMoonshinePlayerController::ToggleDeleteMode);
+		// X key delete is routed through MoonshineCharacter_Simple::OnToggleBoardType
 		// (Enhanced Input consumes X before legacy BindKey fires)
 	}
 }
@@ -57,7 +59,17 @@ void AMoonshinePlayerController::SetupInputComponent()
 void AMoonshinePlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
-	UpdatePieceHighlight();
+
+	if (bDeleteModeActive)
+	{
+		UpdatePieceHighlight();
+
+		// Show delete mode indicator
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(43, 0.0f, FColor::Red, TEXT("** DELETE MODE (F7 to exit) **"));
+		}
+	}
 }
 
 void AMoonshinePlayerController::UpdatePieceHighlight()
@@ -157,6 +169,36 @@ void AMoonshinePlayerController::OnDeletePressed()
 	FString Msg = FString::Printf(TEXT("Deleted: %s"), *PieceName);
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Orange, Msg);
 	UE_LOG(LogTemp, Log, TEXT("Deleted piece: %s"), *PieceName);
+}
+
+// ---------------------------------------------------------------------------
+// Toggle Delete Mode (F7)
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::ToggleDeleteMode()
+{
+	bDeleteModeActive = !bDeleteModeActive;
+
+	if (bDeleteModeActive)
+	{
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("Delete Mode ON - Look at a piece and press X to delete"));
+		UE_LOG(LogTemp, Log, TEXT("Delete Mode: ENABLED"));
+	}
+	else
+	{
+		ClearHighlight();
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Delete Mode OFF"));
+		UE_LOG(LogTemp, Log, TEXT("Delete Mode: DISABLED"));
+	}
+}
+
+void AMoonshinePlayerController::ClearHighlight()
+{
+	ABuildablePiece* CurrentHL = HighlightedPiece.Get();
+	if (CurrentHL && CurrentHL->IsHighlighted())
+	{
+		CurrentHL->SetHighlighted(false);
+	}
+	HighlightedPiece = nullptr;
 }
 
 void AMoonshinePlayerController::ShowBuildModeUI()

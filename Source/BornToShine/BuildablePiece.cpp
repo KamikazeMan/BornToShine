@@ -5,6 +5,7 @@
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "GameFramework/PlayerController.h"
@@ -755,16 +756,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Bottom plate Z offset: plate sits on top of plywood, which sits on
-			// top of the rim board. From the TopFace socket (at rim board midpoint):
-			//   + RimBoardHalfHeight (6.985cm) to reach actual mesh top
-			//   + PlywoodThickness (1.905cm) for plywood sheet on top
-			// Total = 8.89cm above the TopFace socket position
+			// top of the rim board. Socket alignment already accounts for:
+			//   - RimBoard_Top_Face socket at BoardHeight/2 above rim center
+			//   - BottomPlate_Bottom socket at -PlateHeight/2 below plate center
+			// So the actor center is already at: rimTop + plateHalfHeight.
+			// We only need to add the plywood thickness gap between rim top and plate bottom.
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
 				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 			{
-				const float RimBoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 				const float PlywoodThickness = 1.905f; // 3/4"
-				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
+				CandidateLocation.Z += PlywoodThickness;
 
 				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
 					*Socket.SocketName.ToString(),
@@ -1310,44 +1311,41 @@ void ABuildablePiece::SetHighlighted(bool bHighlight)
 
 	if (bHighlight)
 	{
+		// Save whatever material is currently on the mesh
+		PreHighlightMaterial = MeshComponent->GetMaterial(0);
+
+		// Create a fresh MID from the current material for tinting
+		UMaterialInterface* BaseMat = PreHighlightMaterial;
+		if (!BaseMat) BaseMat = UMaterial::GetDefaultMaterial(MD_Surface);
+
+		UMaterialInstanceDynamic* HighlightMID = UMaterialInstanceDynamic::Create(BaseMat, this);
+
+		// Try all common vector parameter names — at least one should match the user's material
+		FLinearColor Red(1.0f, 0.15f, 0.15f, 1.0f);
+		HighlightMID->SetVectorParameterValue(FName("BaseColor"), Red);
+		HighlightMID->SetVectorParameterValue(FName("Base Color"), Red);
+		HighlightMID->SetVectorParameterValue(FName("Color"), Red);
+		HighlightMID->SetVectorParameterValue(FName("Tint"), Red);
+		HighlightMID->SetVectorParameterValue(FName("DiffuseColor"), Red);
+
+		// Also try emissive for a glow that works regardless of lighting
+		FLinearColor EmissiveRed(3.0f, 0.3f, 0.3f, 1.0f);
+		HighlightMID->SetVectorParameterValue(FName("EmissiveColor"), EmissiveRed);
+		HighlightMID->SetVectorParameterValue(FName("Emissive Color"), EmissiveRed);
+		HighlightMID->SetVectorParameterValue(FName("Emissive"), EmissiveRed);
+
+		MeshComponent->SetMaterial(0, HighlightMID);
 		MeshComponent->SetRenderCustomDepth(true);
 		MeshComponent->SetCustomDepthStencilValue(1);
-
-		FLinearColor HighlightColor(1.0f, 0.3f, 0.3f, 0.9f); // Red highlight
-
-		if (DynamicMaterial)
-		{
-			// Placed piece — reuse the EXISTING DynamicMaterial (no new material).
-			// Just tint it red. UpdateVisualFeedback will restore the color later.
-			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), HighlightColor);
-		}
-		else
-		{
-			// Nailed piece — DynamicMaterial was cleared by UpdateVisualFeedback.
-			// Save the current material and create ONE temp MID for tinting.
-			PreHighlightMaterial = MeshComponent->GetMaterial(0);
-			UMaterialInterface* BaseMat = PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0);
-			DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMat, this);
-			MeshComponent->SetMaterial(0, DynamicMaterial);
-			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), HighlightColor);
-			DynamicMaterial->SetVectorParameterValue(FName("Color"), HighlightColor);
-		}
 	}
 	else
 	{
-		MeshComponent->SetRenderCustomDepth(false);
-
+		// Restore the exact material that was on the mesh before highlighting
 		if (PreHighlightMaterial)
 		{
-			// Was a nailed piece — restore the original material, discard temp MID
 			MeshComponent->SetMaterial(0, PreHighlightMaterial);
-			DynamicMaterial = nullptr;
 			PreHighlightMaterial = nullptr;
 		}
-		else if (DynamicMaterial)
-		{
-			// Was a placed piece — restore color on the same DynamicMaterial
-			UpdateVisualFeedback();
-		}
+		MeshComponent->SetRenderCustomDepth(false);
 	}
 }

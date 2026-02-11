@@ -833,13 +833,14 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     CompletedRimBoards.Add(Board4);
 
     // Bottom plate Z offset from rim board center:
-    //   + RimBoardHeight     (full height: center-to-top + snap system's plywood offset)
-    //   + PlateHalfHeight    (plate center above plywood top surface)
-    // PlywoodThickness is already included in the snap system's plywood offset,
-    // so we do NOT add it again here.
-    const float RimBoardHeight = 13.97f;              // 5.5" = 13.97cm (full height)
-    const float PlateHalfHeight = 8.89f / 2.0f;      // 2x4 is 3.5" = 8.89cm, half = 4.445cm
-    const float ZOffset = RimBoardHeight + PlateHalfHeight;
+    //   + RimBoardHalfHeight (6.985cm) to reach actual rim board top
+    //   + PlywoodThickness   (1.905cm) for plywood sheet sitting on top
+    //   + PlateHalfHeight    (4.445cm) to reach plate actor center
+    // Total = 13.335cm above the rim board center
+    const float RimBoardHalfHeight = 13.97f / 2.0f;  // 5.5" / 2 = 6.985cm
+    const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
+    const float PlateHalfHeight = 8.89f / 2.0f;      // 3.5" / 2 = 4.445cm
+    const float ZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
 
     // Inward Y offset: shift plate toward the building center so its outer face
     // aligns with the plywood outer edge (not overhanging).

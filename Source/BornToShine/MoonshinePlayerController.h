@@ -25,6 +25,12 @@ public:
 	// Delete the currently highlighted piece (called from character's X key handler)
 	void OnDeletePressed();
 
+	// Toggle delete mode on/off (F7)
+	void ToggleDeleteMode();
+
+	// Is delete mode active?
+	bool IsDeleteModeActive() const { return bDeleteModeActive; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -46,6 +52,12 @@ protected:
 
 	// Per-tick highlight: line trace from camera to find piece under crosshair
 	void UpdatePieceHighlight();
+
+	// Clear any current piece highlight
+	void ClearHighlight();
+
+	// Delete mode toggle state (F7)
+	bool bDeleteModeActive;
 
 	// The piece currently highlighted (under crosshair)
 	UPROPERTY()
