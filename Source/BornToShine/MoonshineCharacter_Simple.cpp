@@ -1,6 +1,7 @@
 // Born To Shine - Simplified Player Character using BuildingComponent
 
 #include "MoonshineCharacter_Simple.h"
+#include "MoonshinePlayerController.h"
 #include "BuildingComponent.h"
 #include "ConstructionPhaseManager.h"
 #include "RimBoard.h"
@@ -411,30 +412,34 @@ void AMoonshineCharacter_Simple::OnZoomStop()
 
 void AMoonshineCharacter_Simple::OnToggleBoardType()
 {
-	if (!BuildingComponent) return;
-
-	// Get the current preview piece from the building component
-	ABuildablePiece* PreviewPiece = BuildingComponent->GetCurrentPreviewPiece();
-	if (!PreviewPiece) return;
-
-	// Only works on rim boards
-	ARimBoard* RimBoard = Cast<ARimBoard>(PreviewPiece);
-	if (RimBoard)
+	// In build mode with a rim board preview: toggle board type
+	if (BuildingComponent)
 	{
-		RimBoard->ToggleBoardType();
-
-		FString BoardType = RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE");
-		UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"), *BoardType);
-
-		// Show on-screen message
-		if (GEngine)
+		ABuildablePiece* PreviewPiece = BuildingComponent->GetCurrentPreviewPiece();
+		if (PreviewPiece)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan,
-				FString::Printf(TEXT("Board Type: %s"), *BoardType));
+			ARimBoard* RimBoard = Cast<ARimBoard>(PreviewPiece);
+			if (RimBoard)
+			{
+				RimBoard->ToggleBoardType();
+
+				FString BoardType = RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE");
+				UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"), *BoardType);
+
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan,
+						FString::Printf(TEXT("Board Type: %s"), *BoardType));
+				}
+				return;
+			}
 		}
 	}
-	else
+
+	// Fallthrough: X key pressed but not toggling board type -> try delete
+	AMoonshinePlayerController* PC = Cast<AMoonshinePlayerController>(GetController());
+	if (PC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Toggle board type only works on rim boards"));
+		PC->OnDeletePressed();
 	}
 }
