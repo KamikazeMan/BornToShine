@@ -42,6 +42,12 @@ AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 	SprintSpeed = 800.0f;
 	MouseSensitivity = 1.0f;
 
+	// Zoom defaults
+	DefaultFOV = 90.0f;
+	ZoomedFOV = 45.0f;
+	ZoomInterpSpeed = 12.0f;
+	bIsZooming = false;
+
 	// Configure character movement
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	GetCharacterMovement()->JumpZVelocity = 600.0f;
@@ -82,6 +88,20 @@ void AMoonshineCharacter_Simple::BeginPlay()
 void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Smooth FOV zoom transition
+	float TargetFOV = bIsZooming ? ZoomedFOV : DefaultFOV;
+	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
+	if (ActiveCamera)
+	{
+		float CurrentFOV = ActiveCamera->FieldOfView;
+		if (!FMath::IsNearlyEqual(CurrentFOV, TargetFOV, 0.1f))
+		{
+			float NewFOV = FMath::FInterpTo(CurrentFOV, TargetFOV, DeltaTime, ZoomInterpSpeed);
+			FirstPersonCamera->SetFieldOfView(NewFOV);
+			ThirdPersonCamera->SetFieldOfView(NewFOV);
+		}
+	}
 }
 
 void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -171,6 +191,13 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 		if (ToggleBoardTypeAction)
 		{
 			EnhancedInputComponent->BindAction(ToggleBoardTypeAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnToggleBoardType);
+		}
+
+		// Zoom (right mouse button hold)
+		if (ZoomAction)
+		{
+			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnZoomStart);
+			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Completed, this, &AMoonshineCharacter_Simple::OnZoomStop);
 		}
 	}
 }
@@ -370,6 +397,16 @@ void AMoonshineCharacter_Simple::OnAdvancePhase()
 			}
 		}
 	}
+}
+
+void AMoonshineCharacter_Simple::OnZoomStart()
+{
+	bIsZooming = true;
+}
+
+void AMoonshineCharacter_Simple::OnZoomStop()
+{
+	bIsZooming = false;
 }
 
 void AMoonshineCharacter_Simple::OnToggleBoardType()

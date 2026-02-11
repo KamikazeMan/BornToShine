@@ -51,6 +51,8 @@ protected:
 	void OnNailPiece();
 	void OnAdvancePhase(); // Advance to next construction phase
 	void OnToggleBoardType(); // Toggle between outside and inside board for rim boards
+	void OnZoomStart();  // Hold RMB to zoom in
+	void OnZoomStop();   // Release RMB to zoom out
 
 	// Enhanced Input Actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -101,6 +103,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* ToggleBoardTypeAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	class UInputAction* ZoomAction;
+
 	// Camera components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	class USpringArmComponent* ThirdPersonArm;
@@ -128,4 +133,16 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	float MouseSensitivity;
+
+	// Zoom settings (right mouse button hold)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
+	float DefaultFOV;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
+	float ZoomedFOV;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Zoom")
+	float ZoomInterpSpeed;
+
+	bool bIsZooming;
 };

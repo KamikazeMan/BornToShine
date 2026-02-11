@@ -46,6 +46,12 @@ AMoonshineCharacter::AMoonshineCharacter()
 	SprintSpeed = 800.0f;
 	MouseSensitivity = 1.0f;
 
+	// Zoom defaults
+	DefaultFOV = 90.0f;
+	ZoomedFOV = 45.0f;
+	ZoomInterpSpeed = 12.0f;
+	bIsZooming = false;
+
 	ThirdPersonArmLength = 450.0f;
 	ThirdPersonArmOffset = FVector(0.0f, 80.0f, 40.0f);
 
@@ -95,6 +101,20 @@ void AMoonshineCharacter::BeginPlay()
 void AMoonshineCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// Smooth FOV zoom transition
+	float TargetFOV = bIsZooming ? ZoomedFOV : DefaultFOV;
+	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
+	if (ActiveCamera)
+	{
+		float CurrentFOV = ActiveCamera->FieldOfView;
+		if (!FMath::IsNearlyEqual(CurrentFOV, TargetFOV, 0.1f))
+		{
+			float NewFOV = FMath::FInterpTo(CurrentFOV, TargetFOV, DeltaTime, ZoomInterpSpeed);
+			FirstPersonCamera->SetFieldOfView(NewFOV);
+			ThirdPersonCamera->SetFieldOfView(NewFOV);
+		}
+	}
 
 	// Update preview piece position if in build mode
 	if (bIsInBuildMode && CurrentPreviewPiece)
@@ -161,6 +181,13 @@ void AMoonshineCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 		if (ToggleBoardTypeAction)
 		{
 			EnhancedInputComponent->BindAction(ToggleBoardTypeAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnToggleBoardType);
+		}
+
+		// Zoom (right mouse button hold)
+		if (ZoomAction)
+		{
+			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnZoomStart);
+			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Completed, this, &AMoonshineCharacter::OnZoomStop);
 		}
 	}
 }
@@ -446,6 +473,16 @@ void AMoonshineCharacter::OnScalePiece(float Value)
 	{
 		CurrentPreviewPiece->ScalePiece(Value * 0.1f); // 0.1 scale per scroll
 	}
+}
+
+void AMoonshineCharacter::OnZoomStart()
+{
+	bIsZooming = true;
+}
+
+void AMoonshineCharacter::OnZoomStop()
+{
+	bIsZooming = false;
 }
 
 void AMoonshineCharacter::OnToggleBoardType()
