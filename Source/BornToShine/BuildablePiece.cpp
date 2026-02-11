@@ -758,9 +758,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					int32 NumSheets = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
 					float EffSlotWidth = FrameWidth / NumSheets;
 
-					// Pick the slot closest to the player's current placement
-					FVector CurrentOffset = CandidateLocation - RefOrigin;
-					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
+					// Pick the slot closest to the player's AIM position (actor location
+					// before snap), not the candidate position from the socket match.
+					// This ensures the player can aim at different areas of the frame
+					// to select different sheet slots.
+					FVector AimOffset = GetActorLocation() - RefOrigin;
+					float CurrentRgt = FVector::DotProduct(AimOffset, RefRgt);
 
 					float BestSlot = TileMin + EffSlotWidth * 0.5f;
 					float BestDist = FLT_MAX;
@@ -992,11 +995,11 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 600;
 	}
 
-	// Plywood edge to Plywood edge (sheet-to-sheet, MEDIUM PRIORITY)
+	// Plywood edge to Plywood edge (sheet-to-sheet, HIGH PRIORITY — wins over joist snap)
 	if (SocketA == EConstructionSocketType::Plywood_Edge &&
 		SocketB == EConstructionSocketType::Plywood_Edge)
 	{
-		return 500;
+		return 650;
 	}
 
 	// Bottom plate end-to-end (corner/inline connections)
