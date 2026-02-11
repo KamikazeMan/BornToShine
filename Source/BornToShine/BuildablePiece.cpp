@@ -1056,15 +1056,30 @@ void ABuildablePiece::Remove()
 		AConstructionPhaseManager::Instance->UnregisterPiece(this);
 	}
 
+	// Free the target socket we originally snapped to
 	if (bIsSnapped && SnappedToPiece != nullptr)
 	{
 		SnappedToPiece->FreeSocket(SnappedToSocketName);
 	}
 
+	// Free sockets on ALL connected pieces that reference this piece
 	for (FConstructionSocket& Socket : Sockets)
 	{
 		if (Socket.bIsOccupied && Socket.ConnectedPiece.IsValid())
 		{
+			ABuildablePiece* Connected = Socket.ConnectedPiece.Get();
+			if (Connected)
+			{
+				// Find and free the socket on the connected piece that points back to us
+				TArray<FConstructionSocket> ConnectedSockets = Connected->GetAllSockets();
+				for (const FConstructionSocket& CS : ConnectedSockets)
+				{
+					if (CS.bIsOccupied && CS.ConnectedPiece.Get() == this)
+					{
+						Connected->FreeSocket(CS.SocketName);
+					}
+				}
+			}
 			Socket.bIsOccupied = false;
 			Socket.ConnectedPiece = nullptr;
 		}
@@ -1224,4 +1239,55 @@ void ABuildablePiece::ScalePiece(float ScaleDelta)
 	SetActorScale3D(CurrentScale);
 
 	UE_LOG(LogTemp, Log, TEXT("Piece scaled to %f"), NewScaleValue);
+}
+
+void ABuildablePiece::SetHighlighted(bool bHighlight)
+{
+	if (bIsHighlighted == bHighlight) return;
+	bIsHighlighted = bHighlight;
+
+	if (!MeshComponent) return;
+
+	if (bHighlight)
+	{
+		// Save current material so we can restore it
+		PreHighlightMaterial = MeshComponent->GetMaterial(0);
+
+		// Use custom depth for outline effect + tint the color
+		MeshComponent->SetRenderCustomDepth(true);
+		MeshComponent->SetCustomDepthStencilValue(1);
+
+		// If we have a DynamicMaterial, tint it; otherwise create a temporary one
+		if (DynamicMaterial)
+		{
+			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"),
+				FLinearColor(1.0f, 0.4f, 0.4f, 0.9f)); // Red-ish highlight
+		}
+		else
+		{
+			// Nailed pieces use NailedMaterial directly — swap to a tinted dynamic mat
+			DynamicMaterial = UMaterialInstanceDynamic::Create(
+				PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0), this);
+			MeshComponent->SetMaterial(0, DynamicMaterial);
+			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"),
+				FLinearColor(1.0f, 0.4f, 0.4f, 0.9f));
+		}
+	}
+	else
+	{
+		// Restore
+		MeshComponent->SetRenderCustomDepth(false);
+
+		if (PieceState == EPieceState::Nailed && NailedMaterial)
+		{
+			// Restore the nailed material
+			MeshComponent->SetMaterial(0, NailedMaterial);
+			DynamicMaterial = nullptr; // We created a temp one during highlight
+		}
+		else if (DynamicMaterial)
+		{
+			// Restore original color via UpdateVisualFeedback
+			UpdateVisualFeedback();
+		}
+	}
 }

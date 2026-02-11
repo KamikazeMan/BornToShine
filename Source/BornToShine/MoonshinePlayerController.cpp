@@ -6,6 +6,9 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
+#include "SocketManager.h"
+#include "RectangleBuilder.h"
+#include "MoonshineCharacter.h"
 #include "Blueprint/UserWidget.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonWriter.h"
@@ -13,6 +16,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Components/StaticMeshComponent.h"
+#include "Camera/CameraComponent.h"
 
 AMoonshinePlayerController::AMoonshinePlayerController()
 {
@@ -20,6 +25,7 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	bEnableClickEvents = false;
 	bEnableTouchEvents = false;
 	BuildModeWidget = nullptr;
+	DeleteTraceDistance = 2000.0f; // 20 meters
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -39,7 +45,111 @@ void AMoonshinePlayerController::SetupInputComponent()
 	{
 		InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
 		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
+		InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Per-tick: update highlight + check piece under crosshair
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+	UpdatePieceHighlight();
+}
+
+void AMoonshinePlayerController::UpdatePieceHighlight()
+{
+	// Get camera view
+	FVector CamLoc;
+	FRotator CamRot;
+	GetPlayerViewPoint(CamLoc, CamRot);
+
+	FVector TraceEnd = CamLoc + CamRot.Vector() * DeleteTraceDistance;
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(GetPawn());
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, CamLoc, TraceEnd, ECC_Visibility, Params);
+
+	ABuildablePiece* HitPiece = nullptr;
+	if (bHit)
+	{
+		HitPiece = Cast<ABuildablePiece>(Hit.GetActor());
+
+		// Only highlight placed or nailed pieces, not preview pieces
+		if (HitPiece && HitPiece->GetPieceState() == EPieceState::Preview)
+		{
+			HitPiece = nullptr;
+		}
+	}
+
+	// Update highlight state
+	ABuildablePiece* CurrentHighlight = HighlightedPiece.Get();
+
+	if (CurrentHighlight != HitPiece)
+	{
+		// Unhighlight old piece
+		if (CurrentHighlight && CurrentHighlight->IsHighlighted())
+		{
+			CurrentHighlight->SetHighlighted(false);
+		}
+
+		// Highlight new piece
+		if (HitPiece)
+		{
+			HitPiece->SetHighlighted(true);
+		}
+
+		HighlightedPiece = HitPiece;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Delete System (X key)
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::OnDeletePressed()
+{
+	// If the character is in build mode with a rim board preview, X is used
+	// for board type toggle (handled by Enhanced Input). Skip delete.
+	AMoonshineCharacter* Char = Cast<AMoonshineCharacter>(GetPawn());
+	if (Char && Char->IsInBuildMode())
+	{
+		return; // X key is for board type toggle in build mode
+	}
+
+	ABuildablePiece* Target = HighlightedPiece.Get();
+	if (!Target)
+	{
+		return;
+	}
+
+	bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+
+	if (Target->GetPieceState() == EPieceState::Nailed)
+	{
+		if (!bShiftHeld)
+		{
+			// Nailed pieces need Shift+X
+			FString Msg = TEXT("Piece is nailed! Hold Shift+X to force delete.");
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, Msg);
+			return;
+		}
+		UE_LOG(LogTemp, Warning, TEXT("Force-deleting nailed piece: %s"), *Target->GetName());
+	}
+
+	// Clear highlight before removing
+	Target->SetHighlighted(false);
+	HighlightedPiece = nullptr;
+
+	// Remove the piece (handles socket cleanup, PhaseManager unregister, and Destroy)
+	FString PieceName = Target->GetName();
+	Target->Remove();
+
+	FString Msg = FString::Printf(TEXT("Deleted: %s"), *PieceName);
+	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Orange, Msg);
+	UE_LOG(LogTemp, Log, TEXT("Deleted piece: %s"), *PieceName);
 }
 
 void AMoonshinePlayerController::ShowBuildModeUI()
@@ -172,6 +282,13 @@ void AMoonshinePlayerController::QuickLoad()
 		return;
 	}
 
+	// Clear highlight if active
+	if (ABuildablePiece* HL = HighlightedPiece.Get())
+	{
+		HL->SetHighlighted(false);
+		HighlightedPiece = nullptr;
+	}
+
 	// ---- Destroy all existing placed pieces ----
 	if (AConstructionPhaseManager::Instance)
 	{
@@ -193,6 +310,7 @@ void AMoonshinePlayerController::QuickLoad()
 
 	// ---- Respawn from save data ----
 	const TArray<TSharedPtr<FJsonValue>>& PiecesArray = Root->GetArrayField(TEXT("pieces"));
+	TArray<ABuildablePiece*> LoadedPieces;
 	int32 Loaded = 0;
 
 	for (const TSharedPtr<FJsonValue>& Val : PiecesArray)
@@ -270,10 +388,116 @@ void AMoonshinePlayerController::QuickLoad()
 			AConstructionPhaseManager::Instance->RegisterPlacedPiece(Piece);
 		}
 
+		LoadedPieces.Add(Piece);
 		Loaded++;
 	}
 
-	FString Msg = FString::Printf(TEXT("Quick-loaded %d pieces"), Loaded);
+	// ---- POST-LOAD: Restore socket connections and RectangleBuilder state ----
+	RestoreSocketConnections(LoadedPieces);
+	RestoreRectangleBuilderState(LoadedPieces);
+
+	FString Msg = FString::Printf(TEXT("Quick-loaded %d pieces (sockets restored)"), Loaded);
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, Msg);
 	UE_LOG(LogTemp, Warning, TEXT("QuickLoad: %s from %s"), *Msg, *SavePath);
+}
+
+// ---------------------------------------------------------------------------
+// Post-load: Restore bidirectional socket connections via proximity matching
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::RestoreSocketConnections(TArray<ABuildablePiece*>& LoadedPieces)
+{
+	int32 ConnectionsRestored = 0;
+
+	for (int32 i = 0; i < LoadedPieces.Num(); i++)
+	{
+		ABuildablePiece* PieceA = LoadedPieces[i];
+		if (!PieceA) continue;
+
+		TArray<FConstructionSocket> SocketsA = PieceA->GetAllSockets();
+
+		for (int32 j = i + 1; j < LoadedPieces.Num(); j++)
+		{
+			ABuildablePiece* PieceB = LoadedPieces[j];
+			if (!PieceB) continue;
+
+			TArray<FConstructionSocket> SocketsB = PieceB->GetAllSockets();
+
+			for (const FConstructionSocket& SA : SocketsA)
+			{
+				if (SA.bIsOccupied) continue;
+
+				FVector WorldPosA = PieceA->GetActorTransform().TransformPosition(SA.LocalPosition);
+
+				for (const FConstructionSocket& SB : SocketsB)
+				{
+					if (SB.bIsOccupied) continue;
+
+					FVector WorldPosB = PieceB->GetActorTransform().TransformPosition(SB.LocalPosition);
+
+					float Dist = FVector::Dist(WorldPosA, WorldPosB);
+
+					// Check if within snap tolerance (5cm)
+					if (Dist < 5.0f)
+					{
+						// Verify these socket types can actually connect
+						if (ASocketManager::Instance &&
+							ASocketManager::Instance->AreSocketsCompatible(
+								SA.SocketType, SB.SocketType,
+								AConstructionPhaseManager::Instance ? AConstructionPhaseManager::Instance->GetCurrentPhase() : EConstructionPhase::Foundation))
+						{
+							PieceA->OccupySocket(SA.SocketName, PieceB);
+							PieceB->OccupySocket(SB.SocketName, PieceA);
+							ConnectionsRestored++;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("QuickLoad: Restored %d socket connections"), ConnectionsRestored);
+}
+
+// ---------------------------------------------------------------------------
+// Post-load: Restore RectangleBuilder state from loaded rim boards
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces)
+{
+	// Find the RectangleBuilder component on the player's pawn
+	APawn* Pawn = GetPawn();
+	if (!Pawn) return;
+
+	URectangleBuilderComponent* RectBuilder = Pawn->FindComponentByClass<URectangleBuilderComponent>();
+	if (!RectBuilder) return;
+
+	// Collect loaded rim boards (not joists — joists inherit from ARimBoard
+	// but have PieceType == FloorJoist)
+	TArray<ARimBoard*> LoadedRimBoards;
+	for (ABuildablePiece* Piece : LoadedPieces)
+	{
+		if (Piece && Piece->GetPieceType() == EPieceType::RimBoard)
+		{
+			ARimBoard* Rim = Cast<ARimBoard>(Piece);
+			if (Rim)
+			{
+				LoadedRimBoards.Add(Rim);
+			}
+		}
+	}
+
+	// If we have exactly 4 rim boards, simulate the rectangle completion
+	// by calling OnRimBoardPlaced for each one in order. The RectangleBuilder
+	// will detect L-shape, U-shape, and Complete states, then auto-calculate
+	// joist and plate suggestions.
+	if (LoadedRimBoards.Num() >= 4)
+	{
+		// Feed the first 4 boards to the RectangleBuilder
+		for (int32 i = 0; i < 4 && i < LoadedRimBoards.Num(); i++)
+		{
+			RectBuilder->OnRimBoardPlaced(LoadedRimBoards[i]);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("QuickLoad: Fed %d rim boards to RectangleBuilder (state=%d)"),
+			FMath::Min(LoadedRimBoards.Num(), 4), (int32)RectBuilder->GetRectangleState());
+	}
 }

@@ -92,6 +92,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void FreeSocket(FName SocketName);
 
+	// Highlight / unhighlight for delete-target feedback
+	void SetHighlighted(bool bHighlight);
+	bool IsHighlighted() const { return bIsHighlighted; }
+
+	// Get the mesh component (for line trace hit detection)
+	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -203,4 +210,11 @@ protected:
 	// Rotation step in degrees
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	float RotationStep;
+
+	// Highlight state for delete-target feedback
+	bool bIsHighlighted = false;
+
+	// Cached material before highlight (to restore nailed material)
+	UPROPERTY()
+	class UMaterialInterface* PreHighlightMaterial;
 };
