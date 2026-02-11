@@ -209,3 +209,23 @@ void ABottomPlate::RegenerateSockets()
 
 	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Regenerated %d sockets for %d ft plate"), Sockets.Num(), CurrentLengthFeet);
 }
+
+void ABottomPlate::ExtendMeshForFlushCorners()
+{
+	if (!MeshComponent) return;
+
+	// Extend X by the ratio (BoardLength + BoardWidth) / BoardLength
+	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
+	// Mesh is centered at origin so scaling extends equally both directions.
+	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
+	float Ratio = (BoardLength + BoardWidth) / BoardLength;
+
+	MeshComponent->SetRelativeScale3D(FVector(
+		CurrentScale3D.X * Ratio,
+		CurrentScale3D.Y,
+		CurrentScale3D.Z
+	));
+
+	UE_LOG(LogTemp, Log, TEXT("BottomPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
+		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
+}

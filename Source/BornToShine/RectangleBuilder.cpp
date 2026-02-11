@@ -3,6 +3,7 @@
 #include "RectangleBuilder.h"
 #include "RimBoard.h"
 #include "FloorJoist.h"
+#include "BottomPlate.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -19,6 +20,7 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     PlacedJoistCount = 0;
     ThroughBoard1 = nullptr;
     ThroughBoard3 = nullptr;
+    PlacedPlateCount = 0;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -179,10 +181,11 @@ void URectangleBuilderComponent::RecalculateState()
             }
         }
 
-        // Calculate joist layout before resetting tracked boards
+        // Calculate joist and plate layouts before resetting tracked boards
         if (TrackedBoards.Num() >= 4)
         {
             CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
+            CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
         }
 
         // Reset for the next rectangle
@@ -811,6 +814,98 @@ bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
         PlacedJoistCount, JoistSuggestions.Num(),
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
         Suggestion.Rotation.Yaw);
+
+    return true;
+}
+
+void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoard* Board2, ARimBoard* Board3, ARimBoard* Board4)
+{
+    if (!Board1 || !Board2 || !Board3 || !Board4) return;
+
+    PlateSuggestions.Empty();
+    PlacedPlateCount = 0;
+
+    // Store all 4 rim boards for reference
+    CompletedRimBoards.Empty();
+    CompletedRimBoards.Add(Board1);
+    CompletedRimBoards.Add(Board2);
+    CompletedRimBoards.Add(Board3);
+    CompletedRimBoards.Add(Board4);
+
+    // Bottom plate Z offset from rim board center:
+    //   + RimBoardHeight/2  (to rim board mesh top)
+    //   + PlywoodThickness  (plywood sheet sitting on rim board)
+    //   + PlateHeight/2     (plate center above plywood top)
+    const float RimBoardHalfHeight = 13.97f / 2.0f;  // 6.985cm
+    const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
+    const float PlateHalfHeight = 8.89f / 2.0f;      // 2x4 is 3.5" = 8.89cm, half = 4.445cm
+    const float ZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
+
+    ARimBoard* Boards[4] = { Board1, Board2, Board3, Board4 };
+
+    for (int32 i = 0; i < 4; i++)
+    {
+        ARimBoard* Board = Boards[i];
+
+        FPlateSuggestion Suggestion;
+        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset);
+        Suggestion.Rotation = Board->GetActorRotation();
+        Suggestion.LengthFeet = Board->GetBoardLengthFeet();
+        Suggestion.SourceRimBoard = Board;
+        Suggestion.PlateIndex = i;
+        Suggestion.bIsValid = true;
+
+        PlateSuggestions.Add(Suggestion);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (Z offset=%.2f cm above rim boards)"),
+        PlateSuggestions.Num(), ZOffset);
+}
+
+FPlateSuggestion URectangleBuilderComponent::GetNextPlateSuggestion() const
+{
+    if (PlacedPlateCount < PlateSuggestions.Num())
+    {
+        return PlateSuggestions[PlacedPlateCount];
+    }
+    return FPlateSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
+{
+    if (!Plate || !HasPlateSuggestions()) return false;
+
+    FPlateSuggestion Suggestion = GetNextPlateSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Resize plate to match the rim board below
+    if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Plate->GetBoardLengthFeet())
+    {
+        Plate->SetBoardLengthFeet(Suggestion.LengthFeet);
+    }
+
+    // Set position and rotation (directly above the rim board)
+    Plate->SetActorLocation(Suggestion.Position);
+    Plate->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Plate->SetPreviewMode(false);
+
+    // Extend mesh for flush corners (same visual fix as rim boards)
+    Plate->ExtendMeshForFlushCorners();
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Plate);
+    }
+
+    PlacedPlateCount++;
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed bottom plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %dft"),
+        PlacedPlateCount, PlateSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw, Suggestion.LengthFeet);
 
     return true;
 }

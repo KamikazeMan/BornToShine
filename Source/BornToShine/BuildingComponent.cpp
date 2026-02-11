@@ -5,6 +5,7 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "PlywoodSheet.h"
+#include "BottomPlate.h"
 #include "RectangleBuilder.h"
 #include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
@@ -155,6 +156,27 @@ void UBuildingComponent::UpdatePreviewPosition()
 		}
 	}
 
+	// PLATE SUGGESTION OVERRIDE: When placing a bottom plate and the RectangleBuilder
+	// has plate suggestions (from a completed rim board rectangle), position the preview
+	// at the next plate location directly above the corresponding rim board.
+	if (RectangleBuilder && RectangleBuilder->HasPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::WallPlate)
+	{
+		FPlateSuggestion PlateSug = RectangleBuilder->GetNextPlateSuggestion();
+		if (PlateSug.bIsValid)
+		{
+			ABottomPlate* PreviewPlate = Cast<ABottomPlate>(CurrentPreviewPiece);
+			if (PreviewPlate && PlateSug.LengthFeet > 0 && PlateSug.LengthFeet != PreviewPlate->GetBoardLengthFeet())
+			{
+				PreviewPlate->SetBoardLengthFeet(PlateSug.LengthFeet);
+			}
+
+			CurrentPreviewPiece->SetActorLocation(PlateSug.Position);
+			CurrentPreviewPiece->SetActorRotation(PlateSug.Rotation);
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
 	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
 	// detection. Position the preview exactly where the suggestion says.
@@ -274,6 +296,25 @@ void UBuildingComponent::PlaceCurrentPiece()
 			SpawnPreviewPiece();
 
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Joist placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
+	// PLATE SUGGESTION PATH: When plate suggestions exist and we're placing a wall plate,
+	// bypass TryPlace and use the calculated position above the rim board.
+	if (RectangleBuilder && RectangleBuilder->HasPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::WallPlate)
+	{
+		ABottomPlate* Plate = Cast<ABottomPlate>(CurrentPreviewPiece);
+		if (Plate && RectangleBuilder->ApplyPlateSuggestion(Plate))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Bottom plate placed via suggestion (Total: %d)"), PlacedPieces.Num());
 			return;
 		}
 	}
@@ -399,6 +440,23 @@ void UBuildingComponent::CyclePieceType()
 	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::Plywood)
 	{
 		UE_LOG(LogTemp, Log, TEXT("Plywood Sheet selected: 4x8ft panel — snap to joist/rim board top faces"));
+	}
+
+	// Show bottom plate info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::WallPlate)
+	{
+		if (RectangleBuilder && RectangleBuilder->HasPlateSuggestions())
+		{
+			FPlateSuggestion NextPlate = RectangleBuilder->GetNextPlateSuggestion();
+			UE_LOG(LogTemp, Log, TEXT("Bottom Plate selected: %d/%d plates to place, %dft length"),
+				RectangleBuilder->GetPlacedPlateCount(),
+				RectangleBuilder->GetPlateSuggestions().Num(),
+				NextPlate.LengthFeet);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Bottom Plate selected: No plate layout available (build a rim board rectangle first)"));
+		}
 	}
 }
 

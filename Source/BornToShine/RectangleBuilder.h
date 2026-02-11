@@ -12,6 +12,7 @@
 class ABuildablePiece;
 class ARimBoard;
 class AFloorJoist;
+class ABottomPlate;
 
 /**
  * Tracks the state of rectangle construction
@@ -123,6 +124,45 @@ struct FJoistSuggestion
 };
 
 /**
+ * Data for a suggested bottom plate placement (auto-placed above rim boards)
+ */
+USTRUCT(BlueprintType)
+struct FPlateSuggestion
+{
+    GENERATED_BODY()
+
+    // World position for the plate center
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    // World rotation (matches the rim board below)
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    // Required length in feet (matches the rim board below)
+    UPROPERTY(BlueprintReadOnly)
+    int32 LengthFeet;
+
+    // The rim board this plate sits directly above
+    UPROPERTY(BlueprintReadOnly)
+    ARimBoard* SourceRimBoard;
+
+    // Plate index (0-3, for tracking placement order)
+    int32 PlateIndex;
+
+    bool bIsValid;
+
+    FPlateSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , LengthFeet(0)
+        , SourceRimBoard(nullptr)
+        , PlateIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
  * Component that tracks rectangle construction progress.
  * Attach to the same actor as BuildingComponent.
  * Recognizes L-shapes from placed boards and suggests/auto-places remaining boards.
@@ -179,6 +219,23 @@ public:
 
     // How many joists have been placed in the current layout
     int32 GetPlacedJoistCount() const { return PlacedJoistCount; }
+
+    // --- Bottom Plate Layout System ---
+
+    // Does the builder have plate suggestions ready?
+    bool HasPlateSuggestions() const { return PlateSuggestions.Num() > 0 && PlacedPlateCount < PlateSuggestions.Num(); }
+
+    // Get the next plate suggestion (first unplaced)
+    FPlateSuggestion GetNextPlateSuggestion() const;
+
+    // Apply a plate suggestion: sets position, rotation, length, extends mesh
+    bool ApplyPlateSuggestion(ABottomPlate* Plate);
+
+    // Get all plate suggestions
+    TArray<FPlateSuggestion> GetPlateSuggestions() const { return PlateSuggestions; }
+
+    // How many plates have been placed in the current layout
+    int32 GetPlacedPlateCount() const { return PlacedPlateCount; }
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -253,4 +310,19 @@ private:
 
     UPROPERTY()
     ARimBoard* ThroughBoard3;
+
+    // --- Bottom Plate Layout ---
+
+    // Calculate bottom plate positions after rectangle completes
+    void CalculatePlateLayout(ARimBoard* Board1, ARimBoard* Board2, ARimBoard* Board3, ARimBoard* Board4);
+
+    // Plate suggestions for the completed rectangle (one per rim board)
+    TArray<FPlateSuggestion> PlateSuggestions;
+
+    // Number of plates placed so far
+    int32 PlacedPlateCount;
+
+    // All 4 rim boards from the last completed rectangle (for plate reference)
+    UPROPERTY()
+    TArray<ARimBoard*> CompletedRimBoards;
 };
