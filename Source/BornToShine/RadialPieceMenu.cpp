@@ -211,7 +211,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 2: Hover glow (bloom behind hovered segment)
+	// LAYER 2: Multi-ring hover bloom (soft ember glow with falloff)
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
@@ -221,45 +221,75 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		float StartDeg = i * SegAngle - 90.0f;
 		float EndDeg = (i + 1) * SegAngle - 90.0f;
 
-		// Glow extends outward and inward from the segment
-		float GlowOutR = OuterRadius + 18.0f * HoverT;
-		float GlowInR = InnerRadius - 8.0f * HoverT;
+		// Three concentric bloom rings: wide/dim → tight/bright
+		// Each bleeds past segment edges angularly for premium feel
+		const FLinearColor GlowBase(0.85f, 0.58f, 0.18f, 1.0f);
+		struct FBloomRing { float OutPad; float InPad; float AngPad; float Alpha; };
+		const FBloomRing Rings[] = {
+			{ 36.0f, 18.0f, 4.0f, 0.07f },  // Outermost halo
+			{ 24.0f, 12.0f, 2.0f, 0.14f },  // Mid bloom
+			{ 14.0f,  6.0f, 0.8f, 0.24f },  // Inner concentrated glow
+		};
 
-		FLinearColor GlowCol = SegmentHoverGlowColor;
-		GlowCol.A *= HoverT * FadeAlpha;
-		DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-			GlowInR, GlowOutR, StartDeg, EndDeg, GlowCol);
+		for (const FBloomRing& Ring : Rings)
+		{
+			float GlowOutR = OuterRadius + Ring.OutPad * HoverT;
+			float GlowInR  = InnerRadius - Ring.InPad * HoverT;
+			float BleedStart = StartDeg - Ring.AngPad * HoverT;
+			float BleedEnd   = EndDeg   + Ring.AngPad * HoverT;
+
+			FLinearColor GlowCol = GlowBase;
+			GlowCol.A = Ring.Alpha * HoverT * FadeAlpha;
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				GlowInR, GlowOutR, BleedStart, BleedEnd, GlowCol);
+		}
 	}
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 3: Segment fills (equal sized, no gaps between segments)
+	// LAYER 3: Segment fills — radial gradient on hover (brightens inside→out)
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
 		float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
 		bool bAvailable = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].bAvailable : true;
 
-		// Thin 1-degree gap on each side of divider
 		float GapHalf = 0.6f;
 		float StartDeg = i * SegAngle - 90.0f + GapHalf;
 		float EndDeg = (i + 1) * SegAngle - 90.0f - GapHalf;
-
-		// Slight outward push on hover
 		float EffOutR = OuterRadius + 6.0f * HoverT;
 
-		FLinearColor Fill;
 		if (!bAvailable)
 		{
-			Fill = SegmentUnavailableColor;
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				InnerRadius, EffOutR, StartDeg, EndDeg, Faded(SegmentUnavailableColor));
+		}
+		else if (HoverT < 0.01f)
+		{
+			// Unhovered: flat fill
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				InnerRadius, EffOutR, StartDeg, EndDeg, Faded(SegmentFillColor));
 		}
 		else
 		{
-			Fill = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT);
-		}
+			// Hovered: 3-band radial gradient (dim inner → bright outer)
+			float Depth = (EffOutR - InnerRadius) / 3.0f;
+			float R0 = InnerRadius;
+			float R1 = InnerRadius + Depth;
+			float R2 = InnerRadius + Depth * 2.0f;
+			float R3 = EffOutR;
 
-		DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-			InnerRadius, EffOutR, StartDeg, EndDeg, Faded(Fill));
+			FLinearColor C0 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.50f);
+			FLinearColor C1 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.75f);
+			FLinearColor C2 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 1.00f);
+
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				R0, R1, StartDeg, EndDeg, Faded(C0));
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				R1, R2, StartDeg, EndDeg, Faded(C1));
+			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
+				R2, R3, StartDeg, EndDeg, Faded(C2));
+		}
 	}
 	LayerId++;
 
@@ -285,13 +315,30 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 5: Gold/bronze accent border (outer ring — thin, no ticks)
+	// LAYER 5a: Gold glow bloom behind border rings
+	// =====================================================================
+	{
+		// Soft amber glow bloom behind outer border
+		FLinearColor OuterGlow(0.80f, 0.55f, 0.18f, 0.10f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius, -90.0f, 270.0f, Faded(OuterGlow), 16.0f);
+
+		// Soft amber glow bloom behind inner border
+		FLinearColor InnerGlow(0.80f, 0.55f, 0.18f, 0.08f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			InnerRadius, -90.0f, 270.0f, Faded(InnerGlow), 12.0f);
+	}
+	LayerId++;
+
+	// =====================================================================
+	// LAYER 5b: Thick gold/bronze accent borders (contain segment highlight)
 	// =====================================================================
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		OuterRadius, -90.0f, 270.0f, Faded(BorderAccentColor), 1.5f);
-	// Inner ring accent
+		OuterRadius, -90.0f, 270.0f, Faded(BorderAccentColor), 5.0f);
+	// Inner ring — slightly thinner, softer
+	FLinearColor InnerBorderCol(BorderAccentColor.R, BorderAccentColor.G, BorderAccentColor.B, BorderAccentColor.A * 0.7f);
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		InnerRadius, -90.0f, 270.0f, Faded(FLinearColor(BorderAccentColor.R, BorderAccentColor.G, BorderAccentColor.B, BorderAccentColor.A * 0.5f)), 1.0f);
+		InnerRadius, -90.0f, 270.0f, Faded(InnerBorderCol), 3.0f);
 	LayerId++;
 
 	// =====================================================================
@@ -400,13 +447,19 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 9: Center hub — dark fill + border ring
+	// LAYER 9: Center hub — dark fill + glow bloom + border ring
 	// =====================================================================
 	DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry, Center,
 		CenterHubRadius, Faded(CenterFillColor));
-	// Gold accent ring around center hub
+
+	// Warm glow bloom behind center border ring
+	FLinearColor HubGlow(0.70f, 0.50f, 0.18f, 0.12f);
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		CenterHubRadius, -90.0f, 270.0f, Faded(CenterBorderColor), 2.0f);
+		CenterHubRadius, -90.0f, 270.0f, Faded(HubGlow), 14.0f);
+
+	// Gold accent ring — thicker to match outer borders
+	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+		CenterHubRadius, -90.0f, 270.0f, Faded(CenterBorderColor), 3.0f);
 	LayerId++;
 
 	// =====================================================================
@@ -418,6 +471,12 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		if (bHasSelection)
 		{
 			const FPieceTypeInfo& Info = SegmentInfos[HighlightedIndex];
+
+			// Soft amber glow disc behind the selected icon
+			FVector2D IconCenterPos = Center + FVector2D(0.0f, -24.0f);
+			DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry,
+				IconCenterPos, CenterIconSize * 0.72f,
+				Faded(FLinearColor(0.80f, 0.55f, 0.18f, 0.18f)));
 
 			// Large icon in center
 			if (IconBrushes.IsValidIndex(HighlightedIndex) && IconBrushes[HighlightedIndex].GetResourceObject())
