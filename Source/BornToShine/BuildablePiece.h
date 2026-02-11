@@ -206,6 +206,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Materials")
 	class UMaterialInterface* NailedMaterial;
 
+	// Translucent material for preview ghost (green/red translucent)
+	// Set in Blueprint for best results (use a translucent material with BaseColor + Opacity params)
+	// If not set, falls back to engine default material (opaque colored preview)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Materials")
+	class UMaterialInterface* PreviewMaterialBase;
+
+	// Saved original mesh material (restored when piece is placed/nailed)
+	UPROPERTY()
+	class UMaterialInterface* OriginalMeshMaterial;
+
 	// Should this piece auto-nail on placement? (true for foundation blocks)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	bool bAutoNailOnPlace;

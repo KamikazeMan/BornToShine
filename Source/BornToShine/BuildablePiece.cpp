@@ -45,6 +45,8 @@ ABuildablePiece::ABuildablePiece()
 
 	// Material settings
 	NailedMaterial = nullptr;  // Set in Blueprint
+	PreviewMaterialBase = nullptr;  // Set in Blueprint for translucent preview; falls back to engine default
+	OriginalMeshMaterial = nullptr;
 	bAutoNailOnPlace = false;   // Override to true for foundation blocks
 }
 
@@ -54,21 +56,39 @@ void ABuildablePiece::BeginPlay()
 
 	InitializeSockets();
 
-	// Create dynamic material instance for visual feedback.
-	// Guard: only create MID from a Material or MaterialInstanceConstant,
-	// never from another MID (Unreal rejects MID-from-MID parent chains).
+	// Save the original mesh material for restoration when placed/nailed
 	if (MeshComponent && MeshComponent->GetMaterial(0))
 	{
-		UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0);
-		if (Cast<UMaterialInstanceDynamic>(BaseMat))
+		OriginalMeshMaterial = MeshComponent->GetMaterial(0);
+	}
+
+	// Create a preview Material Instance Dynamic for ghost preview (green/red colored).
+	// Use PreviewMaterialBase if set (should be a translucent material for best results).
+	// Falls back to engine default material (opaque, but responds to BaseColor parameter).
+	UMaterialInterface* PreviewBase = PreviewMaterialBase;
+	if (!PreviewBase)
+	{
+		PreviewBase = UMaterial::GetDefaultMaterial(MD_Surface);
+	}
+
+	if (PreviewBase && MeshComponent)
+	{
+		// Guard: never create MID from another MID (Unreal rejects MID-from-MID parent chains)
+		if (Cast<UMaterialInstanceDynamic>(PreviewBase))
 		{
-			// Already a MID (e.g. from hot-reload or re-entrance) — reuse it
-			DynamicMaterial = Cast<UMaterialInstanceDynamic>(BaseMat);
+			DynamicMaterial = Cast<UMaterialInstanceDynamic>(PreviewBase);
 		}
 		else
 		{
-			DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMat, this);
-			MeshComponent->SetMaterial(0, DynamicMaterial);
+			DynamicMaterial = UMaterialInstanceDynamic::Create(PreviewBase, this);
+		}
+
+		// Pieces start in Preview state — apply the preview material
+		MeshComponent->SetMaterial(0, DynamicMaterial);
+
+		if (!PreviewMaterialBase)
+		{
+			UE_LOG(LogTemp, Log, TEXT("%s: Using engine default for preview. Set PreviewMaterialBase in Blueprint for translucent ghost."), *GetName());
 		}
 	}
 
@@ -127,6 +147,12 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+
+			// Swap to preview material (green/red ghost)
+			if (DynamicMaterial)
+			{
+				MeshComponent->SetMaterial(0, DynamicMaterial);
+			}
 		}
 	}
 	else
@@ -138,6 +164,12 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 			MeshComponent->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Block);
+
+			// Restore original material (piece is now placed, show real appearance)
+			if (OriginalMeshMaterial)
+			{
+				MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+			}
 		}
 	}
 
@@ -1215,47 +1247,56 @@ void ABuildablePiece::UpdateVisualFeedback()
 {
 	if (!MeshComponent) return;
 
-	if (PieceState == EPieceState::Nailed && NailedMaterial)
-	{
-		MeshComponent->SetMaterial(0, NailedMaterial);
-		DynamicMaterial = nullptr; // Clear stale pointer so SetHighlighted creates a fresh one
-		MeshComponent->SetRenderCustomDepth(false);
-		UE_LOG(LogTemp, Log, TEXT("UpdateVisualFeedback [%s]: Nailed with NailedMaterial, Visible=%d"),
-			*GetName(), MeshComponent->IsVisible());
-		return;
-	}
-
-	if (!DynamicMaterial)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UpdateVisualFeedback [%s]: DynamicMaterial is NULL, State=%d, NailedMat=%s, MeshVisible=%d"),
-			*GetName(), (int32)PieceState, NailedMaterial ? TEXT("SET") : TEXT("NULL"), MeshComponent->IsVisible());
-		return;
-	}
-
-	FLinearColor TargetColor;
-
 	switch (PieceState)
 	{
-		case EPieceState::Preview:
-			TargetColor = IsPlacementValid() ? ValidPlacementColor : InvalidPlacementColor;
-			break;
-		case EPieceState::Placed:
-			TargetColor = PlacedColor;
-			break;
-		case EPieceState::Nailed:
-			TargetColor = NailedColor;
-			break;
-		default:
-			TargetColor = FLinearColor::White;
-			break;
+	case EPieceState::Preview:
+	{
+		if (!DynamicMaterial) return;
+
+		FLinearColor TargetColor = IsPlacementValid() ? ValidPlacementColor : InvalidPlacementColor;
+
+		// Set color on preview MID — engine default material responds to "BaseColor"
+		// Translucent user materials may use other parameter names too
+		DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), TargetColor);
+		DynamicMaterial->SetVectorParameterValue(FName("Base Color"), TargetColor);
+		DynamicMaterial->SetVectorParameterValue(FName("Color"), TargetColor);
+		// Try setting opacity for translucent preview materials
+		DynamicMaterial->SetScalarParameterValue(FName("Opacity"), TargetColor.A);
+
+		MeshComponent->SetRenderCustomDepth(true);
+		break;
 	}
 
-	DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), TargetColor);
-
-	if (PieceState == EPieceState::Preview)
+	case EPieceState::Placed:
+	{
+		// Placed: restore original material, show with custom depth outline
+		if (OriginalMeshMaterial)
+		{
+			MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+		}
 		MeshComponent->SetRenderCustomDepth(true);
-	else
+		break;
+	}
+
+	case EPieceState::Nailed:
+	{
+		// Nailed: swap to final material (NailedMaterial or original)
+		if (NailedMaterial)
+		{
+			MeshComponent->SetMaterial(0, NailedMaterial);
+		}
+		else if (OriginalMeshMaterial)
+		{
+			MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+		}
+		DynamicMaterial = nullptr;
 		MeshComponent->SetRenderCustomDepth(false);
+		break;
+	}
+
+	default:
+		break;
+	}
 }
 
 void ABuildablePiece::OccupySocket(FName SocketName, ABuildablePiece* ConnectingPiece)
