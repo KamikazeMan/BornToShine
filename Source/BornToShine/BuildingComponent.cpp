@@ -243,7 +243,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 				{
 					APlywoodSheet* Ply = Cast<APlywoodSheet>(P);
 					if (!Ply) continue;
-					float TopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
+					float TopZ = Ply->GetActorLocation().Z - Ply->SheetThickness / 2.0f;
 					if (!bFoundPly || TopZ > BestPlywoodTopZ)
 					{
 						BestPlywoodTopZ = TopZ;

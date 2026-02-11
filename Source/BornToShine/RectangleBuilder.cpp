@@ -982,7 +982,7 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
             APlywoodSheet* Ply = Cast<APlywoodSheet>(Piece);
             if (!Ply) continue;
 
-            float PlyTopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
+            float PlyTopZ = Ply->GetActorLocation().Z - Ply->SheetThickness / 2.0f;
 
             if (!bFoundPlywood || PlyTopZ > BestPlywoodTopZ)
             {
