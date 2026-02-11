@@ -20,6 +20,7 @@
 #include "Misc/Paths.h"
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
+#include "BornToShineHUD.h"
 
 AMoonshinePlayerController::AMoonshinePlayerController()
 {
@@ -224,6 +225,12 @@ void AMoonshinePlayerController::OnDeletePressed()
 void AMoonshinePlayerController::ToggleDeleteMode()
 {
 	bDeleteModeActive = !bDeleteModeActive;
+
+	// Show/hide green delete crosshair on the HUD
+	if (ABornToShineHUD* HUD = Cast<ABornToShineHUD>(GetHUD()))
+	{
+		HUD->SetDeleteCrosshairVisible(bDeleteModeActive);
+	}
 
 	if (bDeleteModeActive)
 	{

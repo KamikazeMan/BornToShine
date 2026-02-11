@@ -23,9 +23,16 @@ public:
 	void SetCrosshairVisible(bool bVisible) { bShowCrosshair = bVisible; }
 	bool IsCrosshairVisible() const { return bShowCrosshair; }
 
+	// Toggle delete-mode crosshair (green, shown during F7 delete mode)
+	void SetDeleteCrosshairVisible(bool bVisible) { bShowDeleteCrosshair = bVisible; }
+	bool IsDeleteCrosshairVisible() const { return bShowDeleteCrosshair; }
+
 protected:
 	// Whether to show the crosshair
 	bool bShowCrosshair;
+
+	// Whether to show the delete-mode crosshair (green)
+	bool bShowDeleteCrosshair;
 
 	// Crosshair settings
 	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
@@ -37,6 +44,19 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
 	FLinearColor CrosshairColor;
 
+	// Delete crosshair settings
+	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
+	float DeleteCrosshairSize;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
+	float DeleteCrosshairThickness;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
+	FLinearColor DeleteCrosshairColor;
+
 	// Draw the crosshair
 	void DrawCrosshair();
+
+	// Draw the delete-mode crosshair
+	void DrawDeleteCrosshair();
 };

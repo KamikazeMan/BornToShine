@@ -4,8 +4,10 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
+#include "PlywoodSheet.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -840,20 +842,54 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     CompletedRimBoards.Add(Board3);
     CompletedRimBoards.Add(Board4);
 
-    // Bottom plate Z offset from rim board center:
-    //   + RimBoardHalfHeight (6.985cm) to reach actual rim board top
-    //   + PlywoodThickness   (1.905cm) for plywood sheet sitting on top
-    //   + PlateHalfHeight    (4.445cm) to reach plate actor center
-    // Total = 13.335cm above the rim board center
-    const float RimBoardHalfHeight = 13.97f / 2.0f;  // 5.5" / 2 = 6.985cm
-    const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
     const float PlateHalfHeight = 8.89f / 2.0f;      // 3.5" / 2 = 4.445cm
-    const float ZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
+
+    // --- Find the actual plywood top Z from placed plywood actors ---
+    // The plate must sit ON TOP of the plywood, not under it.
+    // Formula: plate center Z = plywood top Z + PlateHalfHeight
+    //          plywood top Z  = plywood actor Z + plywood half thickness
+    float PlywoodTopZ = 0.0f;
+    bool bFoundPlywood = false;
+
+    if (AConstructionPhaseManager::Instance)
+    {
+        TArray<ABuildablePiece*> PlywoodPieces =
+            AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Plywood);
+
+        // Find the highest plywood top surface (in case multiple sheets)
+        for (ABuildablePiece* Piece : PlywoodPieces)
+        {
+            APlywoodSheet* Ply = Cast<APlywoodSheet>(Piece);
+            if (!Ply) continue;
+
+            float PlyActorZ = Ply->GetActorLocation().Z;
+            float PlyHalfThickness = Ply->SheetThickness / 2.0f;
+            float ThisTopZ = PlyActorZ + PlyHalfThickness;
+
+            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: Found plywood '%s' ActorZ=%.3f  HalfThickness=%.3f  TopZ=%.3f"),
+                *Ply->GetName(), PlyActorZ, PlyHalfThickness, ThisTopZ);
+
+            if (!bFoundPlywood || ThisTopZ > PlywoodTopZ)
+            {
+                PlywoodTopZ = ThisTopZ;
+            }
+            bFoundPlywood = true;
+        }
+    }
+
+    // Fallback: if no plywood placed yet, estimate from rim board Z
+    float FallbackZOffset = 0.0f;
+    if (!bFoundPlywood)
+    {
+        const float RimBoardHalfHeight = 13.97f / 2.0f;  // 6.985cm
+        const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
+        FallbackZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
+        UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: No plywood found! Using fallback ZOffset=%.3f from rim board center"), FallbackZOffset);
+    }
 
     // Inward Y offset: shift plate toward the building center so its outer face
     // aligns with the plywood outer edge (not overhanging).
-    // PlateHalfWidth alone left the outside face 3/16" past the plywood edge.
-    const float PlateHalfWidth = 3.81f / 2.0f;       // 1.5" = 3.81cm, half = 1.905cm
+    const float PlateHalfWidth = 3.81f / 2.0f;       // 1.905cm
     const float FlushTweak = 0.47625f;               // 3/16" extra inward
     const float InwardOffset = PlateHalfWidth + FlushTweak;
 
@@ -873,8 +909,20 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
         float Dot = FVector::DotProduct(ToCenter, BoardRight);
         FVector InwardDir = BoardRight * FMath::Sign(Dot);
 
+        // Calculate plate center Z from actual plywood top surface
+        float PlateCenterZ;
+        if (bFoundPlywood)
+        {
+            PlateCenterZ = PlywoodTopZ + PlateHalfHeight;
+        }
+        else
+        {
+            PlateCenterZ = Board->GetActorLocation().Z + FallbackZOffset;
+        }
+
         FPlateSuggestion Suggestion;
-        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset) + InwardDir * InwardOffset;
+        FVector BoardXY = Board->GetActorLocation();
+        Suggestion.Position = FVector(BoardXY.X, BoardXY.Y, PlateCenterZ) + InwardDir * InwardOffset;
         Suggestion.Rotation = Board->GetActorRotation();
         Suggestion.LengthFeet = Board->GetBoardLengthFeet();
         Suggestion.SourceRimBoard = Board;
@@ -883,13 +931,13 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
 
         PlateSuggestions.Add(Suggestion);
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Plate %d suggestion - Pos=(%.1f, %.1f, %.1f) InwardOffset=(%.3f, %.3f, %.3f)"),
-            i, Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
-            InwardDir.X * InwardOffset, InwardDir.Y * InwardOffset, InwardDir.Z * InwardOffset);
+        UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: Plate %d  RimBoardZ=%.3f  PlywoodTopZ=%.3f  PlateCenterZ=%.3f  PlatePos=(%.1f, %.1f, %.1f)"),
+            i, Board->GetActorLocation().Z, PlywoodTopZ, PlateCenterZ,
+            Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (ZOffset=%.2f, InwardY=%.3f)"),
-        PlateSuggestions.Num(), ZOffset, InwardOffset);
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (PlywoodFound=%d, PlywoodTopZ=%.3f, PlateHalfH=%.3f)"),
+        PlateSuggestions.Num(), bFoundPlywood, PlywoodTopZ, PlateHalfHeight);
 }
 
 FPlateSuggestion URectangleBuilderComponent::GetNextPlateSuggestion() const
