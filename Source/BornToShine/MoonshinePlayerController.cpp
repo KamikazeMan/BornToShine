@@ -464,10 +464,10 @@ void AMoonshinePlayerController::RestoreSocketConnections(TArray<ABuildablePiece
 void AMoonshinePlayerController::RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces)
 {
 	// Find the RectangleBuilder component on the player's pawn
-	APawn* Pawn = GetPawn();
-	if (!Pawn) return;
+	APawn* MyPawn = GetPawn();
+	if (!MyPawn) return;
 
-	URectangleBuilderComponent* RectBuilder = Pawn->FindComponentByClass<URectangleBuilderComponent>();
+	URectangleBuilderComponent* RectBuilder = MyPawn->FindComponentByClass<URectangleBuilderComponent>();
 	if (!RectBuilder) return;
 
 	// Collect loaded rim boards (not joists — joists inherit from ARimBoard
