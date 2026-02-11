@@ -10,6 +10,10 @@ ACornerPost::ACornerPost()
 	// Same height as wall studs: 92-5/8" for standard 8ft walls
 	PostHeight = 235.27f;
 
+	// Default flush offset: 1" = 2.54cm inward along plate's local Y
+	// Adjust in BP_CornerPost to match the Rhino mesh's outer face offset
+	FlushInwardOffset = 2.54f;
+
 	// Scene root for clean actor transform
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);

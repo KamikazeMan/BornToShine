@@ -35,6 +35,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float PostHeight; // Default 235.27cm (92-5/8")
 
+	// Lateral offset (cm) applied along the plate's local Y axis when snapping.
+	// Moves the corner post inward so its outer stud face is flush with the
+	// bottom plate's outer face.  Tune in Blueprint to match your Rhino mesh.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Alignment")
+	float FlushInwardOffset; // Default 2.54cm (1")
+
 	// Get height in cm
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	float GetPostHeightCm() const { return PostHeight; }

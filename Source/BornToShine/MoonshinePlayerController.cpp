@@ -526,36 +526,45 @@ void AMoonshinePlayerController::QuickLoad()
 		ABuildablePiece* Piece = GetWorld()->SpawnActor<ABuildablePiece>(PieceClass, Pos, Rot);
 		if (!Piece) continue;
 
-		// Restore per-type properties (length, board type) BEFORE extending mesh
+		// Restore per-type properties (length, board type) BEFORE extending mesh.
+		// Dispatch on PType first, then cast — so only the correct types get
+		// mesh extension.  Corner posts and other types pass through untouched.
 		EPieceType PType = (EPieceType)(int32)Obj->GetNumberField(TEXT("type"));
 
-		if (ARimBoard* Rim = Cast<ARimBoard>(Piece))
+		if (PType == EPieceType::RimBoard || PType == EPieceType::FloorJoist)
 		{
-			bool bWantOutside = Obj->GetBoolField(TEXT("isOutside"));
-			if (bWantOutside != Rim->bIsOutsideBoard)
+			if (ARimBoard* Rim = Cast<ARimBoard>(Piece))
 			{
-				Rim->ToggleBoardType();
-			}
-			int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
-			if (Len > 0 && Len != Rim->GetBoardLengthFeet())
-			{
-				Rim->SetBoardLengthFeet(Len);
-			}
-			// Extend mesh for flush corners (rim boards only, not joists)
-			if (PType == EPieceType::RimBoard)
-			{
-				Rim->ExtendMeshForFlushCorners();
+				bool bWantOutside = Obj->GetBoolField(TEXT("isOutside"));
+				if (bWantOutside != Rim->bIsOutsideBoard)
+				{
+					Rim->ToggleBoardType();
+				}
+				int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
+				if (Len > 0 && Len != Rim->GetBoardLengthFeet())
+				{
+					Rim->SetBoardLengthFeet(Len);
+				}
+				// Extend mesh for flush corners (rim boards only, not joists)
+				if (PType == EPieceType::RimBoard)
+				{
+					Rim->ExtendMeshForFlushCorners();
+				}
 			}
 		}
-		else if (ABottomPlate* Plate = Cast<ABottomPlate>(Piece))
+		else if (PType == EPieceType::WallPlate)
 		{
-			int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
-			if (Len > 0 && Len != Plate->GetBoardLengthFeet())
+			if (ABottomPlate* Plate = Cast<ABottomPlate>(Piece))
 			{
-				Plate->SetBoardLengthFeet(Len);
+				int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
+				if (Len > 0 && Len != Plate->GetBoardLengthFeet())
+				{
+					Plate->SetBoardLengthFeet(Len);
+				}
+				Plate->ExtendMeshForFlushCorners();
 			}
-			Plate->ExtendMeshForFlushCorners();
 		}
+		// CornerPost and all other types: no mesh extension, load at (1,1,1)
 
 		// Take out of preview mode (makes it solid + visible)
 		Piece->SetPreviewMode(false);

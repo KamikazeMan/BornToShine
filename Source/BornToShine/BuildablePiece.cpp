@@ -2,6 +2,7 @@
 
 #include "BuildablePiece.h"
 #include "RimBoard.h"
+#include "CornerPost.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -861,6 +862,43 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
 				const float FlushTweak = 0.47625f;          // 3/16"
 				const float InwardOffset = PlateHalfWidth + FlushTweak;
+
+				FVector FrameCenter = FVector::ZeroVector;
+				int32 RimCount = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenter += P->GetActorLocation();
+						RimCount++;
+					}
+				}
+				if (RimCount > 0)
+				{
+					FrameCenter /= RimCount;
+					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
+					ToCenter.Z = 0.0f;
+					FVector PlateRight = CandidateRotation.RotateVector(FVector::RightVector);
+					float DotY = FVector::DotProduct(ToCenter, PlateRight);
+					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
+					{
+						CandidateLocation += PlateRight * FMath::Sign(DotY) * InwardOffset;
+					}
+				}
+			}
+
+			// Corner post flush offset: shift inward so the outer stud face
+			// is flush with the bottom plate's outer face.  Uses the same
+			// frame-center approach as the bottom plate Y offset above.
+			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
+				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
+				TargetPiece)
+			{
+				float InwardOffset = 2.54f; // Default 1"
+				if (ACornerPost* CP = Cast<ACornerPost>(this))
+				{
+					InwardOffset = CP->FlushInwardOffset;
+				}
 
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
