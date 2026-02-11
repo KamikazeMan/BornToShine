@@ -24,13 +24,13 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	FadeAlpha = 0.0f;
 	FadeSpeed = 8.0f;
 
-	// Icons — large and prominent
-	SegmentIconSize = 72.0f;
+	// Icons — large and prominent (80+ for readability)
+	SegmentIconSize = 80.0f;
 	CenterIconSize  = 96.0f;
 
 	// --- Color palette: shipped-game quality ---
-	// Background: dark gray, 70% opacity
-	BgOverlayColor           = FLinearColor(0.02f, 0.02f, 0.03f, 0.70f);
+	// Background: dark gray, solid enough to kill any bleed-through
+	BgOverlayColor           = FLinearColor(0.02f, 0.02f, 0.03f, 0.88f);
 	// Unselected segments: subtle dark
 	SegmentFillColor         = FLinearColor(0.08f, 0.08f, 0.09f, 0.85f);
 	// Selected/hovered: warm wood tone
@@ -188,7 +188,9 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FVector2D Center = LocalSize / 2.0f;
 	float SegAngle = 360.0f / NumSegments;
 
-	const FSlateBrush* DefaultBrush = FCoreStyle::Get().GetDefaultBrush();
+	// Solid white brush — the CoreStyle "default" brush is a checkerboard
+	static const FSlateColorBrush SolidBrush(FLinearColor::White);
+
 	TSharedRef<FSlateFontMeasure> FontMeasure =
 		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 
@@ -204,7 +206,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FSlateDrawElement::MakeBox(
 		OutDrawElements, LayerId,
 		AllottedGeometry.ToPaintGeometry(),
-		DefaultBrush, ESlateDrawEffect::None,
+		&SolidBrush, ESlateDrawEffect::None,
 		Faded(BgOverlayColor));
 	LayerId++;
 
@@ -296,8 +298,8 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	// LAYER 6: Icons per segment — LARGE and centered (main visual)
 	// =====================================================================
 	{
-		// Icon sits in the upper portion of the segment arc
-		float IconR = InnerRadius + (OuterRadius - InnerRadius) * 0.58f;
+		// Icon centered in the segment arc (content group centroid)
+		float IconR = InnerRadius + (OuterRadius - InnerRadius) * 0.65f;
 
 		for (int32 i = 0; i < NumSegments; i++)
 		{
@@ -333,7 +335,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	// LAYER 7: Piece name text per segment (small, below icon)
 	// =====================================================================
 	{
-		float NameR = InnerRadius + (OuterRadius - InnerRadius) * 0.28f;
+		float NameR = InnerRadius + (OuterRadius - InnerRadius) * 0.35f;
 
 		for (int32 i = 0; i < NumSegments; i++)
 		{
@@ -367,7 +369,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	// LAYER 8: Size subtitle per segment (below name, even smaller)
 	// =====================================================================
 	{
-		float SubR = InnerRadius + (OuterRadius - InnerRadius) * 0.16f;
+		float SubR = InnerRadius + (OuterRadius - InnerRadius) * 0.23f;
 
 		for (int32 i = 0; i < NumSegments; i++)
 		{
