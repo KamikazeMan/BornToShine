@@ -56,8 +56,14 @@ void ABuildablePiece::BeginPlay()
 
 	InitializeSockets();
 
-	// Save the original mesh material for restoration when placed/nailed
-	if (MeshComponent && MeshComponent->GetMaterial(0))
+	// Save the "real" material for restoration when placed/nailed.
+	// If NailedMaterial is set in Blueprint, use that — the mesh may start
+	// with M_PreviewPiece (the ghost material) so GetMaterial(0) would be wrong.
+	if (NailedMaterial)
+	{
+		OriginalMeshMaterial = NailedMaterial;
+	}
+	else if (MeshComponent && MeshComponent->GetMaterial(0))
 	{
 		OriginalMeshMaterial = MeshComponent->GetMaterial(0);
 	}
