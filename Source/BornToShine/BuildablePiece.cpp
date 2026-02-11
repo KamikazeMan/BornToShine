@@ -660,45 +660,35 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
 
-				// Y offset: find the OPPOSITE parallel rim board and shift
-				// toward it by HalfWidth so the plate's outer face is flush
-				// with the plywood edge.
-				if (AllRimBoards.Num() > 0 && TargetPiece)
+				// Y offset: shift plate inward by HalfWidth so outer face
+				// aligns with the plywood edge. Try both ± directions along
+				// RimRight and pick whichever moves the plate closer to
+				// the frame center (= inward).
+				if (AllRimBoards.Num() >= 2 && TargetPiece)
 				{
 					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
-					FVector RimFwd = CandidateRotation.RotateVector(FVector::ForwardVector);
 					FVector RimRight = CandidateRotation.RotateVector(FVector::RightVector);
 
-					// Find the parallel rim board on the opposite side of the frame
-					float MaxPerpDist = 0.0f;
-					ABuildablePiece* OppositeBoard = nullptr;
+					// Frame center from bounding box of all rim boards
+					FVector MinPos(FLT_MAX, FLT_MAX, FLT_MAX);
+					FVector MaxPos(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 					for (ABuildablePiece* P : AllRimBoards)
 					{
-						if (!P || P == TargetPiece) continue;
-						FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
-						float DotFwd = FMath::Abs(FVector::DotProduct(BoardFwd, RimFwd));
-						if (DotFwd > 0.7f) // parallel board
-						{
-							FVector Delta = P->GetActorLocation() - TargetPiece->GetActorLocation();
-							float PerpDist = FMath::Abs(FVector::DotProduct(Delta, RimRight));
-							if (PerpDist > MaxPerpDist)
-							{
-								MaxPerpDist = PerpDist;
-								OppositeBoard = P;
-							}
-						}
+						if (!P) continue;
+						FVector Loc = P->GetActorLocation();
+						MinPos.X = FMath::Min(MinPos.X, Loc.X);
+						MinPos.Y = FMath::Min(MinPos.Y, Loc.Y);
+						MaxPos.X = FMath::Max(MaxPos.X, Loc.X);
+						MaxPos.Y = FMath::Max(MaxPos.Y, Loc.Y);
 					}
+					FVector FrameCenter = (MinPos + MaxPos) / 2.0f;
 
-					if (OppositeBoard)
-					{
-						FVector ToOpposite = OppositeBoard->GetActorLocation() - TargetPiece->GetActorLocation();
-						float Dot = FVector::DotProduct(ToOpposite, RimRight);
-						float InwardSign = (Dot > 0) ? 1.0f : -1.0f;
-						CandidateLocation += RimRight * InwardSign * PlateHalfWidth;
-
-						UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE Y: target=%s opposite=%s dot=%.2f sign=%.0f"),
-							*TargetPiece->GetName(), *OppositeBoard->GetName(), Dot, InwardSign);
-					}
+					// Pick the direction that moves the plate toward frame center
+					FVector OptionA = CandidateLocation + RimRight * PlateHalfWidth;
+					FVector OptionB = CandidateLocation - RimRight * PlateHalfWidth;
+					float DistA = FVector::DistSquaredXY(OptionA, FrameCenter);
+					float DistB = FVector::DistSquaredXY(OptionB, FrameCenter);
+					CandidateLocation = (DistA < DistB) ? OptionA : OptionB;
 				}
 
 				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f loc=(%.2f,%.2f,%.2f)"),
