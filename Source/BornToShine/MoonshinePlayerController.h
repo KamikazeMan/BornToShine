@@ -22,6 +22,9 @@ public:
 
 	virtual void PlayerTick(float DeltaTime) override;
 
+	// Delete the currently highlighted piece (called from character's X key handler)
+	void OnDeletePressed();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
@@ -40,9 +43,6 @@ protected:
 	// Dev quick save/load (F5/F9)
 	void QuickSave();
 	void QuickLoad();
-
-	// --- Delete System (X / Shift+X) ---
-	void OnDeletePressed();
 
 	// Per-tick highlight: line trace from camera to find piece under crosshair
 	void UpdatePieceHighlight();

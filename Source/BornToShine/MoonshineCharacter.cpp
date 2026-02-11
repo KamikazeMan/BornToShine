@@ -1,6 +1,7 @@
 // Born To Shine - Player Character with Third/First Person Toggle
 
 #include "MoonshineCharacter.h"
+#include "MoonshinePlayerController.h"
 #include "BuildablePiece.h"
 #include "RimBoard.h"
 #include "Camera/CameraComponent.h"
@@ -487,18 +488,23 @@ void AMoonshineCharacter::OnZoomStop()
 
 void AMoonshineCharacter::OnToggleBoardType()
 {
-	if (!bIsInBuildMode || !CurrentPreviewPiece) return;
-
-	// Only works on rim boards
-	ARimBoard* RimBoard = Cast<ARimBoard>(CurrentPreviewPiece);
-	if (RimBoard)
+	// In build mode with a rim board preview: toggle board type
+	if (bIsInBuildMode && CurrentPreviewPiece)
 	{
-		RimBoard->ToggleBoardType();
-		UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"),
-			RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"));
+		ARimBoard* RimBoard = Cast<ARimBoard>(CurrentPreviewPiece);
+		if (RimBoard)
+		{
+			RimBoard->ToggleBoardType();
+			UE_LOG(LogTemp, Warning, TEXT("Toggled board type: %s"),
+				RimBoard->bIsOutsideBoard ? TEXT("OUTSIDE") : TEXT("INSIDE"));
+			return;
+		}
 	}
-	else
+
+	// Fallthrough: X key pressed but not toggling board type -> try delete
+	AMoonshinePlayerController* PC = Cast<AMoonshinePlayerController>(GetController());
+	if (PC)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Toggle board type only works on rim boards"));
+		PC->OnDeletePressed();
 	}
 }

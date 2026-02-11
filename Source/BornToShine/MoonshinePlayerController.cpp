@@ -45,7 +45,8 @@ void AMoonshinePlayerController::SetupInputComponent()
 	{
 		InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
 		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
-		InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
+		// X key delete is routed through MoonshineCharacter::OnToggleBoardType
+		// (Enhanced Input consumes X before legacy BindKey fires)
 	}
 }
 
@@ -111,13 +112,8 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::OnDeletePressed()
 {
-	// If the character is in build mode with a rim board preview, X is used
-	// for board type toggle (handled by Enhanced Input). Skip delete.
-	AMoonshineCharacter* Char = Cast<AMoonshineCharacter>(GetPawn());
-	if (Char && Char->IsInBuildMode())
-	{
-		return; // X key is for board type toggle in build mode
-	}
+	// Called from MoonshineCharacter::OnToggleBoardType when X key
+	// is NOT being used for board type toggle (already filtered there).
 
 	ABuildablePiece* Target = HighlightedPiece.Get();
 	if (!Target)

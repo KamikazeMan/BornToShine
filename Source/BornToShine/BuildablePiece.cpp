@@ -415,7 +415,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 	if (PieceType == EPieceType::Plywood)
 	{
-		float BestNormYaw = 360.0f;
+		// Use the plywood's current yaw to decide which board direction to align to.
+		// This lets the player rotate the plywood to choose between the two
+		// perpendicular frame directions (e.g. 0° vs 90°).
+		float CurrentYaw = GetActorRotation().Yaw;
+		float NormCurrentYaw = FMath::Fmod(CurrentYaw, 180.0f);
+		if (NormCurrentYaw < 0.0f) NormCurrentYaw += 180.0f;
+
+		float BestYawDiff = 360.0f;
 
 		for (ABuildablePiece* P : NearbyPieces)
 		{
@@ -426,9 +433,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			float NormY = FMath::Fmod(Y, 180.0f);
 			if (NormY < 0.0f) NormY += 180.0f;
 
-			if (NormY < BestNormYaw)
+			// Pick the direction closest to the plywood's current rotation
+			float YawDiff = FMath::Abs(NormCurrentYaw - NormY);
+			if (YawDiff > 90.0f) YawDiff = 180.0f - YawDiff;
+
+			if (YawDiff < BestYawDiff)
 			{
-				BestNormYaw = NormY;
+				BestYawDiff = YawDiff;
 				PlywoodRefYaw = NormY;
 				bHavePlywoodRefYaw = true;
 			}
@@ -912,11 +923,26 @@ void ABuildablePiece::CommitPlacement()
 		}
 	}
 
-	// For dual-end snaps, also occupy the second target socket
+	// For dual-end snaps, also occupy the second target socket AND
+	// the second source socket (the other end of this piece).
+	// Without this, the unused corner socket stays "open" and
+	// attracts new boards from adjacent sections.
 	if (CurrentSnapCandidate.bIsDualEndSnap && CurrentSnapCandidate.SecondTargetPiece != nullptr)
 	{
 		CurrentSnapCandidate.SecondTargetPiece->OccupySocket(
 			CurrentSnapCandidate.SecondTargetSocketName, this);
+
+		// Find and occupy this piece's second corner socket (the one NOT used as SourceSocketName)
+		for (const FConstructionSocket& S : Sockets)
+		{
+			if (S.SocketType == EConstructionSocketType::RimBoard_End_Corner &&
+				S.SocketName != CurrentSnapCandidate.SourceSocketName &&
+				!S.bIsOccupied)
+			{
+				OccupySocket(S.SocketName, CurrentSnapCandidate.SecondTargetPiece);
+				break;
+			}
+		}
 	}
 
 	// Register with PhaseManager
