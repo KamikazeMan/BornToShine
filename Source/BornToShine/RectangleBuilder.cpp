@@ -842,8 +842,11 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     const float ZOffset = RimBoardHeight + PlateHalfHeight;
 
     // Inward Y offset: shift plate toward the building center so its outer face
-    // aligns with the plywood outer edge (not overhanging)
+    // aligns with the plywood outer edge (not overhanging).
+    // PlateHalfWidth alone left the outside face 3/16" past the plywood edge.
     const float PlateHalfWidth = 3.81f / 2.0f;       // 1.5" = 3.81cm, half = 1.905cm
+    const float FlushTweak = 0.47625f;               // 3/16" extra inward
+    const float InwardOffset = PlateHalfWidth + FlushTweak;
 
     // Rectangle center — used to determine "inward" direction for each board
     FVector RectCenter = (Board1->GetActorLocation() + Board2->GetActorLocation() +
@@ -862,7 +865,7 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
         FVector InwardDir = BoardRight * FMath::Sign(Dot);
 
         FPlateSuggestion Suggestion;
-        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset) + InwardDir * PlateHalfWidth;
+        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset) + InwardDir * InwardOffset;
         Suggestion.Rotation = Board->GetActorRotation();
         Suggestion.LengthFeet = Board->GetBoardLengthFeet();
         Suggestion.SourceRimBoard = Board;
@@ -873,11 +876,11 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
 
         UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Plate %d suggestion - Pos=(%.1f, %.1f, %.1f) InwardOffset=(%.3f, %.3f, %.3f)"),
             i, Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
-            InwardDir.X * PlateHalfWidth, InwardDir.Y * PlateHalfWidth, InwardDir.Z * PlateHalfWidth);
+            InwardDir.X * InwardOffset, InwardDir.Y * InwardOffset, InwardDir.Z * InwardOffset);
     }
 
     UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (ZOffset=%.2f, InwardY=%.3f)"),
-        PlateSuggestions.Num(), ZOffset, PlateHalfWidth);
+        PlateSuggestions.Num(), ZOffset, InwardOffset);
 }
 
 FPlateSuggestion URectangleBuilderComponent::GetNextPlateSuggestion() const

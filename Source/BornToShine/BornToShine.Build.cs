@@ -16,7 +16,8 @@ public class BornToShine : ModuleRules
 			"EnhancedInput",
 			"UMG",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"Json"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

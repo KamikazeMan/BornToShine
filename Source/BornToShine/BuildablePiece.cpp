@@ -653,6 +653,41 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z);
 			}
 
+			// Bottom plate Y offset: shift inward so outside face is flush with
+			// the plywood edge. Uses nearby rim boards to find the building center
+			// and determine the inward direction for each wall.
+			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
+				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face &&
+				TargetPiece)
+			{
+				const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
+				const float FlushTweak = 0.47625f;          // 3/16"
+				const float InwardOffset = PlateHalfWidth + FlushTweak;
+
+				FVector FrameCenter = FVector::ZeroVector;
+				int32 RimCount = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenter += P->GetActorLocation();
+						RimCount++;
+					}
+				}
+				if (RimCount > 0)
+				{
+					FrameCenter /= RimCount;
+					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
+					ToCenter.Z = 0.0f;
+					FVector PlateRight = CandidateRotation.RotateVector(FVector::RightVector);
+					float DotY = FVector::DotProduct(ToCenter, PlateRight);
+					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
+					{
+						CandidateLocation += PlateRight * FMath::Sign(DotY) * InwardOffset;
+					}
+				}
+			}
+
 			// Plywood XY alignment: compute position from frame rectangle
 			// Classify rim boards as parallel or perpendicular to plywood,
 			// then use each group's WIDTH (not length) in the cross-axis

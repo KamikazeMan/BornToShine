@@ -33,6 +33,10 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetCurrentPhaseDescription() const;
 
+	// Dev quick save/load (F5/F9)
+	void QuickSave();
+	void QuickLoad();
+
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> BuildModeWidgetClass;
