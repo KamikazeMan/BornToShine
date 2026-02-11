@@ -4,6 +4,7 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
+#include "WallStud.h"
 #include "PlywoodSheet.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
@@ -23,6 +24,7 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     ThroughBoard1 = nullptr;
     ThroughBoard3 = nullptr;
     PlacedPlateCount = 0;
+    PlacedStudCount = 0;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -1024,12 +1026,136 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
         AConstructionPhaseManager::Instance->RegisterPlacedPiece(Plate);
     }
 
+    // Track placed plates for stud layout
+    PlacedBottomPlates.Add(Plate);
     PlacedPlateCount++;
 
     UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed bottom plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %dft"),
         PlacedPlateCount, PlateSuggestions.Num(),
         PlatePos.X, PlatePos.Y, PlatePos.Z,
         Suggestion.Rotation.Yaw, Suggestion.LengthFeet);
+
+    // After all plates are placed, calculate stud layout
+    if (PlacedPlateCount >= PlateSuggestions.Num())
+    {
+        CalculateStudLayout();
+    }
+
+    return true;
+}
+
+void URectangleBuilderComponent::CalculateStudLayout()
+{
+    StudSuggestions.Empty();
+    PlacedStudCount = 0;
+
+    if (PlacedBottomPlates.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateStudLayout - No placed bottom plates!"));
+        return;
+    }
+
+    // Default stud height: 92-5/8" = 235.27cm
+    const float DefaultStudHeightCm = 235.27f;
+    const float PlateHeight = 8.89f; // 3.5" bottom plate height
+
+    int32 TotalStudIndex = 0;
+
+    for (ABottomPlate* Plate : PlacedBottomPlates)
+    {
+        if (!Plate) continue;
+
+        // Get all Wall_Bottom_Plate sockets from this plate (top face at 16" OC)
+        TArray<FConstructionSocket> PlateSockets = Plate->GetAllSockets();
+        FRotator PlateRotation = Plate->GetActorRotation();
+
+        for (const FConstructionSocket& Socket : PlateSockets)
+        {
+            if (Socket.SocketType != EConstructionSocketType::Wall_Bottom_Plate) continue;
+
+            // Transform socket position to world space
+            FVector SocketWorldPos = Plate->GetActorTransform().TransformPosition(Socket.LocalPosition);
+
+            // Stud center position: above the socket by half the stud height
+            // The socket is at the top face of the plate. The stud bottom sits there.
+            // Stud center Z = socket Z + StudHeight/2
+            FVector StudCenter = SocketWorldPos;
+            StudCenter.Z += DefaultStudHeightCm / 2.0f;
+
+            FStudSuggestion Suggestion;
+            Suggestion.Position = StudCenter;
+            Suggestion.Rotation = PlateRotation; // Stud matches plate yaw
+            Suggestion.StudHeightCm = DefaultStudHeightCm;
+            Suggestion.SourcePlate = Plate;
+            Suggestion.PlateSocketName = Socket.SocketName;
+            Suggestion.StudIndex = TotalStudIndex;
+            Suggestion.bIsValid = true;
+
+            StudSuggestions.Add(Suggestion);
+            TotalStudIndex++;
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d wall stud positions across %d bottom plates (height=%.1fcm)"),
+        StudSuggestions.Num(), PlacedBottomPlates.Num(), DefaultStudHeightCm);
+}
+
+FStudSuggestion URectangleBuilderComponent::GetNextStudSuggestion() const
+{
+    if (PlacedStudCount < StudSuggestions.Num())
+    {
+        return StudSuggestions[PlacedStudCount];
+    }
+    return FStudSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
+{
+    if (!Stud || !HasStudSuggestions()) return false;
+
+    FStudSuggestion Suggestion = GetNextStudSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Set stud height if different from default
+    if (!FMath::IsNearlyEqual(Suggestion.StudHeightCm, Stud->GetStudHeightCm(), 0.1f))
+    {
+        Stud->SetStudHeightInches(Suggestion.StudHeightCm / 2.54f);
+    }
+
+    // Set position and rotation
+    Stud->SetActorLocation(Suggestion.Position);
+    Stud->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Stud->SetPreviewMode(false);
+    if (Stud->ShouldAutoNail())
+    {
+        Stud->NailInPlace();
+    }
+
+    // Occupy the Wall_Bottom_Plate socket on the source plate
+    if (Suggestion.SourcePlate)
+    {
+        Suggestion.SourcePlate->OccupySocket(Suggestion.PlateSocketName, Stud);
+
+        // Also occupy the stud's bottom socket (bidirectional)
+        Stud->OccupySocket(FName(TEXT("StudBottom")), Suggestion.SourcePlate);
+    }
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Stud);
+    }
+
+    PlacedStudCount++;
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed wall stud %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f on plate '%s' socket '%s'"),
+        PlacedStudCount, StudSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw,
+        Suggestion.SourcePlate ? *Suggestion.SourcePlate->GetName() : TEXT("null"),
+        *Suggestion.PlateSocketName.ToString());
 
     return true;
 }

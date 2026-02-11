@@ -13,6 +13,7 @@ class ABuildablePiece;
 class ARimBoard;
 class AFloorJoist;
 class ABottomPlate;
+class AWallStud;
 
 /**
  * Tracks the state of rectangle construction
@@ -163,6 +164,49 @@ struct FPlateSuggestion
 };
 
 /**
+ * Data for a suggested wall stud placement (auto-placed on bottom plates at 16" OC)
+ */
+USTRUCT(BlueprintType)
+struct FStudSuggestion
+{
+    GENERATED_BODY()
+
+    // World position for the stud center (plate top + StudHeight/2)
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    // World rotation (same yaw as the bottom plate)
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    // Height of this stud in cm
+    UPROPERTY(BlueprintReadOnly)
+    float StudHeightCm;
+
+    // The bottom plate this stud sits on
+    UPROPERTY(BlueprintReadOnly)
+    ABottomPlate* SourcePlate;
+
+    // Which Wall_Bottom_Plate socket on the plate
+    UPROPERTY(BlueprintReadOnly)
+    FName PlateSocketName;
+
+    // Stud index (0-based, for tracking placement order)
+    int32 StudIndex;
+
+    bool bIsValid;
+
+    FStudSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , StudHeightCm(235.27f)
+        , SourcePlate(nullptr)
+        , StudIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
  * Component that tracks rectangle construction progress.
  * Attach to the same actor as BuildingComponent.
  * Recognizes L-shapes from placed boards and suggests/auto-places remaining boards.
@@ -236,6 +280,23 @@ public:
 
     // How many plates have been placed in the current layout
     int32 GetPlacedPlateCount() const { return PlacedPlateCount; }
+
+    // --- Wall Stud Layout System ---
+
+    // Does the builder have stud suggestions ready?
+    bool HasStudSuggestions() const { return StudSuggestions.Num() > 0 && PlacedStudCount < StudSuggestions.Num(); }
+
+    // Get the next stud suggestion (first unplaced)
+    FStudSuggestion GetNextStudSuggestion() const;
+
+    // Apply a stud suggestion: sets position, rotation, height
+    bool ApplyStudSuggestion(AWallStud* Stud);
+
+    // Get all stud suggestions
+    TArray<FStudSuggestion> GetStudSuggestions() const { return StudSuggestions; }
+
+    // How many studs have been placed in the current layout
+    int32 GetPlacedStudCount() const { return PlacedStudCount; }
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -325,4 +386,19 @@ private:
     // All 4 rim boards from the last completed rectangle (for plate reference)
     UPROPERTY()
     TArray<ARimBoard*> CompletedRimBoards;
+
+    // --- Wall Stud Layout ---
+
+    // Calculate stud positions from all placed bottom plates
+    void CalculateStudLayout();
+
+    // Stud suggestions for all placed bottom plates
+    TArray<FStudSuggestion> StudSuggestions;
+
+    // Number of studs placed so far
+    int32 PlacedStudCount;
+
+    // Placed bottom plates (tracked for stud layout calculation)
+    UPROPERTY()
+    TArray<ABottomPlate*> PlacedBottomPlates;
 };

@@ -1068,6 +1068,15 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 700;
 	}
 
+	// Wall stud bottom to bottom plate top (stud sits on plate)
+	if ((SocketA == EConstructionSocketType::Wall_Stud_Bottom &&
+		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
+		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
+		 SocketB == EConstructionSocketType::Wall_Stud_Bottom))
+	{
+		return 750;
+	}
+
 	// Rim bottom to Foundation (LOW PRIORITY)
 	if ((SocketA == EConstructionSocketType::RimBoard_Bottom_End &&
 		 (SocketB == EConstructionSocketType::Foundation_Corner ||

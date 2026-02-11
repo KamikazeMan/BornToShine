@@ -28,6 +28,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateJoistRules();
 	CreatePlywoodRules();
 	CreateBottomPlateRules();
+	CreateWallStudRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -177,6 +178,31 @@ void ASocketManager::CreateBottomPlateRules()
 	CompatibilityRules.Add(PlateEndRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added bottom plate compatibility rules"));
+}
+
+void ASocketManager::CreateWallStudRules()
+{
+	// Wall stud bottom socket snaps to Wall_Bottom_Plate sockets (on bottom plate top face)
+	FSocketCompatibilityRule StudBottomRule;
+	StudBottomRule.SourceSocketType = EConstructionSocketType::Wall_Stud_Bottom;
+	StudBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Bottom_Plate);
+	StudBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	StudBottomRule.SnapDistance = 50.0f;
+	StudBottomRule.bCheckAlignment = false; // Stud just needs to sit on top of plate
+	StudBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(StudBottomRule);
+
+	// Wall_Bottom_Plate sockets accept Wall_Stud_Bottom (reverse direction)
+	FSocketCompatibilityRule PlateTopStudRule;
+	PlateTopStudRule.SourceSocketType = EConstructionSocketType::Wall_Bottom_Plate;
+	PlateTopStudRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Bottom);
+	PlateTopStudRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PlateTopStudRule.SnapDistance = 50.0f;
+	PlateTopStudRule.bCheckAlignment = false;
+	PlateTopStudRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PlateTopStudRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added wall stud compatibility rules"));
 }
 
 bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const

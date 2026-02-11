@@ -6,6 +6,7 @@
 #include "FloorJoist.h"
 #include "PlywoodSheet.h"
 #include "BottomPlate.h"
+#include "WallStud.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
@@ -66,6 +67,11 @@ void UBuildingComponent::BeginPlay()
 	{
 		AvailablePieceTypes.Add(ABottomPlate::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added BottomPlate to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::WallStud))
+	{
+		AvailablePieceTypes.Add(AWallStud::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added WallStud to AvailablePieceTypes"));
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: %d piece types available"), AvailablePieceTypes.Num());
@@ -262,6 +268,27 @@ void UBuildingComponent::UpdatePreviewPosition()
 		}
 	}
 
+	// WALL STUD SUGGESTION OVERRIDE: When placing a wall stud and the RectangleBuilder
+	// has stud suggestions (from placed bottom plates), position the preview at the
+	// next stud location standing vertically on the plate.
+	if (RectangleBuilder && RectangleBuilder->HasStudSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::WallStud)
+	{
+		FStudSuggestion StudSug = RectangleBuilder->GetNextStudSuggestion();
+		if (StudSug.bIsValid)
+		{
+			AWallStud* PreviewStud = Cast<AWallStud>(CurrentPreviewPiece);
+			if (PreviewStud && !FMath::IsNearlyEqual(StudSug.StudHeightCm, PreviewStud->GetStudHeightCm(), 0.1f))
+			{
+				PreviewStud->SetStudHeightInches(StudSug.StudHeightCm / 2.54f);
+			}
+
+			CurrentPreviewPiece->SetActorLocation(StudSug.Position);
+			CurrentPreviewPiece->SetActorRotation(StudSug.Rotation);
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
 	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
 	// detection. Position the preview exactly where the suggestion says.
@@ -404,6 +431,25 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 	}
 
+	// WALL STUD SUGGESTION PATH: When stud suggestions exist and we're placing a wall stud,
+	// bypass TryPlace and use the calculated position on the bottom plate.
+	if (RectangleBuilder && RectangleBuilder->HasStudSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::WallStud)
+	{
+		AWallStud* Stud = Cast<AWallStud>(CurrentPreviewPiece);
+		if (Stud && RectangleBuilder->ApplyStudSuggestion(Stud))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Wall stud placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER PATH: When a suggestion is active, bypass TryPlace entirely.
 	// Place the board exactly where the RectangleBuilder calculated, with correct length.
 	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
@@ -541,6 +587,23 @@ void UBuildingComponent::CyclePieceType()
 		else
 		{
 			UE_LOG(LogTemp, Log, TEXT("Bottom Plate selected: No plate layout available (build a rim board rectangle first)"));
+		}
+	}
+
+	// Show wall stud info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::WallStud)
+	{
+		if (RectangleBuilder && RectangleBuilder->HasStudSuggestions())
+		{
+			FStudSuggestion NextStud = RectangleBuilder->GetNextStudSuggestion();
+			UE_LOG(LogTemp, Log, TEXT("Wall Stud selected: %d/%d studs to place, height=%.1f\""),
+				RectangleBuilder->GetPlacedStudCount(),
+				RectangleBuilder->GetStudSuggestions().Num(),
+				NextStud.StudHeightCm / 2.54f);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Wall Stud selected: No stud layout available (place all bottom plates first)"));
 		}
 	}
 }

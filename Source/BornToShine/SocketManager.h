@@ -71,6 +71,7 @@ protected:
 	void CreateJoistRules();
 	void CreatePlywoodRules();
 	void CreateBottomPlateRules();
+	void CreateWallStudRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(
