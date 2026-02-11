@@ -406,12 +406,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// PRE-FETCH ALL RIM BOARDS FOR BOTTOM PLATE Y OFFSET
-	// Used below to find the opposite parallel rim board and
-	// determine the inward direction for each target board.
+	// PRE-FETCH ALL RIM BOARDS (for plywood alignment + bottom plate offset)
+	// On large foundations (e.g. 24'), rim boards may be beyond
+	// SnapSearchRadius. Must use PhaseManager to get ALL of them.
 	// ============================================================
 	TArray<ABuildablePiece*> AllRimBoards;
-	if (PieceType == EPieceType::WallPlate && AConstructionPhaseManager::Instance)
+	if ((PieceType == EPieceType::WallPlate || PieceType == EPieceType::Plywood) &&
+		AConstructionPhaseManager::Instance)
 	{
 		AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
 	}
@@ -429,9 +430,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	{
 		float BestNormYaw = 360.0f;
 
-		for (ABuildablePiece* P : NearbyPieces)
+		for (ABuildablePiece* P : AllRimBoards)
 		{
-			if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+			if (!P) continue;
 
 			float Y = P->GetActorRotation().Yaw;
 			// Normalize to [0, 180) — boards at 0 and 180 are the same direction
@@ -727,9 +728,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				float SpanMin = FLT_MAX, SpanMax = -FLT_MAX;
 				int32 ParallelCount = 0, PerpCount = 0;
 
-				for (ABuildablePiece* P : NearbyPieces)
+				for (ABuildablePiece* P : AllRimBoards)
 				{
-					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+					if (!P) continue;
 
 					FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
 					float Dot = FMath::Abs(FVector::DotProduct(BoardFwd, RefFwd));
