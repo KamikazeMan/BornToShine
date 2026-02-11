@@ -7,6 +7,7 @@
 #include "MoonshinePlayerController.generated.h"
 
 class ABuildablePiece;
+class URadialPieceMenu;
 
 /**
  * Custom Player Controller for Born To Shine
@@ -70,6 +71,15 @@ protected:
 	// --- Post-load helpers ---
 	void RestoreSocketConnections(TArray<ABuildablePiece*>& LoadedPieces);
 	void RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces);
+
+	// --- Radial piece selection menu (Tab) ---
+	void OpenRadialMenu();
+	void CloseRadialMenu();
+
+	UPROPERTY()
+	URadialPieceMenu* RadialMenu;
+
+	bool bRadialMenuOpen;
 
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")

@@ -21,6 +21,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Camera/CameraComponent.h"
 #include "BornToShineHUD.h"
+#include "RadialPieceMenu.h"
 
 AMoonshinePlayerController::AMoonshinePlayerController()
 {
@@ -30,6 +31,8 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	BuildModeWidget = nullptr;
 	DeleteTraceDistance = 2000.0f; // 20 meters
 	bDeleteModeActive = false;
+	RadialMenu = nullptr;
+	bRadialMenuOpen = false;
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -58,6 +61,10 @@ void AMoonshinePlayerController::SetupInputComponent()
 
 		// Delete key: always available as an alternative delete trigger
 		InputComponent->BindKey(EKeys::Delete, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
+
+		// Tab: hold to open radial piece menu, release to select
+		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::OpenRadialMenu);
+		InputComponent->BindKey(EKeys::Tab, IE_Released, this, &AMoonshinePlayerController::CloseRadialMenu);
 	}
 }
 
@@ -68,7 +75,7 @@ void AMoonshinePlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
 
-	if (bDeleteModeActive)
+	if (bDeleteModeActive && !bRadialMenuOpen)
 	{
 		UpdatePieceHighlight();
 
@@ -254,6 +261,77 @@ void AMoonshinePlayerController::ClearHighlight()
 		CurrentHL->SetHighlighted(false);
 	}
 	HighlightedPiece = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// Radial Piece Menu (Tab hold/release)
+// ---------------------------------------------------------------------------
+void AMoonshinePlayerController::OpenRadialMenu()
+{
+	if (bRadialMenuOpen) return;
+
+	// Only works in build mode
+	APawn* MyPawn = GetPawn();
+	if (!MyPawn) return;
+	UBuildingComponent* BC = MyPawn->FindComponentByClass<UBuildingComponent>();
+	if (!BC || !BC->IsInBuildMode()) return;
+
+	TArray<FString> Names = BC->GetPieceTypeNames();
+	if (Names.Num() == 0) return;
+
+	RadialMenu = CreateWidget<URadialPieceMenu>(this);
+	if (!RadialMenu) return;
+
+	RadialMenu->InitMenu(Names, BC->GetCurrentPieceTypeIndex());
+	RadialMenu->AddToViewport(100);
+
+	// Center mouse on screen
+	int32 VPX, VPY;
+	GetViewportSize(VPX, VPY);
+	SetMouseLocation(VPX / 2, VPY / 2);
+
+	bShowMouseCursor = true;
+	SetInputMode(FInputModeGameAndUI().SetHideCursorDuringCapture(false));
+
+	// Pause building preview updates
+	BC->SetComponentTickEnabled(false);
+	bRadialMenuOpen = true;
+
+	UE_LOG(LogTemp, Log, TEXT("Radial menu opened (%d segments)"), Names.Num());
+}
+
+void AMoonshinePlayerController::CloseRadialMenu()
+{
+	if (!bRadialMenuOpen) return;
+
+	int32 Selected = -1;
+	if (RadialMenu)
+	{
+		Selected = RadialMenu->GetHighlightedIndex();
+		RadialMenu->RemoveFromParent();
+		RadialMenu = nullptr;
+	}
+
+	bShowMouseCursor = false;
+	SetInputMode(FInputModeGameOnly());
+	bRadialMenuOpen = false;
+
+	// Resume building
+	APawn* MyPawn = GetPawn();
+	if (MyPawn)
+	{
+		UBuildingComponent* BC = MyPawn->FindComponentByClass<UBuildingComponent>();
+		if (BC)
+		{
+			BC->SetComponentTickEnabled(true);
+			if (Selected >= 0)
+			{
+				BC->SetPieceTypeIndex(Selected);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("Radial menu closed (selected=%d)"), Selected);
 }
 
 void AMoonshinePlayerController::ShowBuildModeUI()

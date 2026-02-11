@@ -620,3 +620,46 @@ FString UBuildingComponent::GetCurrentPieceName() const
 {
 	return UEnum::GetDisplayValueAsText(GetCurrentPieceType()).ToString();
 }
+
+void UBuildingComponent::SetPieceTypeIndex(int32 Index)
+{
+	if (!bIsInBuildMode) return;
+	if (Index < 0 || Index >= AvailablePieceTypes.Num()) return;
+	if (Index == CurrentPieceTypeIndex) return;
+
+	CurrentPieceTypeIndex = Index;
+	SpawnPreviewPiece();
+
+	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Radial select -> %s (index %d)"),
+		*GetCurrentPieceName(), Index);
+}
+
+TArray<FString> UBuildingComponent::GetPieceTypeNames() const
+{
+	TArray<FString> Names;
+	for (const TSubclassOf<ABuildablePiece>& PieceClass : AvailablePieceTypes)
+	{
+		if (!PieceClass)
+		{
+			Names.Add(TEXT("?"));
+			continue;
+		}
+		// Use Blueprint class name: strip BP_ prefix and _C suffix
+		FString Name = PieceClass->GetName();
+		Name.RemoveFromStart(TEXT("BP_"));
+		Name.RemoveFromEnd(TEXT("_C"));
+
+		// Insert spaces before uppercase letters (PascalCase -> words)
+		FString Nice;
+		for (int32 i = 0; i < Name.Len(); i++)
+		{
+			if (i > 0 && FChar::IsUpper(Name[i]) && !FChar::IsUpper(Name[i - 1]))
+			{
+				Nice += TEXT(" ");
+			}
+			Nice += Name[i];
+		}
+		Names.Add(Nice);
+	}
+	return Names;
+}

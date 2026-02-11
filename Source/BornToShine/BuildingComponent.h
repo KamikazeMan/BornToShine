@@ -73,6 +73,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Building")
 	class ABuildablePiece* GetCurrentPreviewPiece() const { return CurrentPreviewPiece; }
 
+	// Radial menu support
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	int32 GetCurrentPieceTypeIndex() const { return CurrentPieceTypeIndex; }
+
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	int32 GetAvailablePieceTypeCount() const { return AvailablePieceTypes.Num(); }
+
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	void SetPieceTypeIndex(int32 Index);
+
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	TArray<FString> GetPieceTypeNames() const;
+
 protected:
 	virtual void BeginPlay() override;
 
