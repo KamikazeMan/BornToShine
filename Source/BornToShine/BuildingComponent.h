@@ -59,6 +59,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Building")
 	void ScalePreview(float ScaleDelta);
 
+	// Double up an end stud — press D after placing an end stud to add
+	// a second stud offset 1.5" inward for corner post drywall attachment
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	void DoubleUpEndStud();
+
+	// Is a double end stud available right now?
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	bool IsDoubleStudAvailable() const;
+
 	// Get current piece info
 	UFUNCTION(BlueprintCallable, Category = "Building")
 	EPieceType GetCurrentPieceType() const;

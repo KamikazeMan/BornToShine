@@ -164,7 +164,8 @@ struct FPlateSuggestion
 };
 
 /**
- * Data for a suggested wall stud placement (auto-placed on bottom plates at 16" OC)
+ * Data for a suggested wall stud placement (auto-placed on bottom plates)
+ * End studs are placed flush with plate ends; interior studs at 16" OC.
  */
 USTRUCT(BlueprintType)
 struct FStudSuggestion
@@ -187,12 +188,18 @@ struct FStudSuggestion
     UPROPERTY(BlueprintReadOnly)
     ABottomPlate* SourcePlate;
 
-    // Which Wall_Bottom_Plate socket on the plate
+    // Which Wall_Bottom_Plate socket on the plate (NAME_None for end studs)
     UPROPERTY(BlueprintReadOnly)
     FName PlateSocketName;
 
     // Stud index (0-based, for tracking placement order)
     int32 StudIndex;
+
+    // True if this is an end stud (at plate ends, eligible for doubling)
+    bool bIsEndStud;
+
+    // True if this end stud is at the left end of the plate (for double offset direction)
+    bool bIsLeftEnd;
 
     bool bIsValid;
 
@@ -202,6 +209,8 @@ struct FStudSuggestion
         , StudHeightCm(235.27f)
         , SourcePlate(nullptr)
         , StudIndex(0)
+        , bIsEndStud(false)
+        , bIsLeftEnd(false)
         , bIsValid(false)
     {}
 };
@@ -297,6 +306,17 @@ public:
 
     // How many studs have been placed in the current layout
     int32 GetPlacedStudCount() const { return PlacedStudCount; }
+
+    // --- Double End Stud System ---
+
+    // Is a double stud available? (last placed stud was an end stud)
+    bool IsDoubleStudAvailable() const { return bDoubleStudPending; }
+
+    // Place a double stud next to the last end stud (offset 1.5" inward)
+    bool DoubleUpEndStud(AWallStud* DoubleStud);
+
+    // Get the position/rotation for the pending double stud (for preview)
+    FStudSuggestion GetPendingDoubleSuggestion() const;
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -401,4 +421,12 @@ private:
     // Placed bottom plates (tracked for stud layout calculation)
     UPROPERTY()
     TArray<ABottomPlate*> PlacedBottomPlates;
+
+    // --- Double End Stud ---
+
+    // True when the last placed stud was an end stud and a double is available
+    bool bDoubleStudPending;
+
+    // Cached info for the pending double stud
+    FStudSuggestion PendingDoubleSuggestion;
 };

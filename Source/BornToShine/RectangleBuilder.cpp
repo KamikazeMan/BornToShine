@@ -25,6 +25,7 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     ThroughBoard3 = nullptr;
     PlacedPlateCount = 0;
     PlacedStudCount = 0;
+    bDoubleStudPending = false;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -1048,6 +1049,7 @@ void URectangleBuilderComponent::CalculateStudLayout()
 {
     StudSuggestions.Empty();
     PlacedStudCount = 0;
+    bDoubleStudPending = false;
 
     if (PlacedBottomPlates.Num() == 0)
     {
@@ -1057,7 +1059,7 @@ void URectangleBuilderComponent::CalculateStudLayout()
 
     // Default stud height: 92-5/8" = 235.27cm
     const float DefaultStudHeightCm = 235.27f;
-    const float PlateHeight = 8.89f; // 3.5" bottom plate height
+    const float StudWidthCm = 3.81f; // 1.5" stud width (along wall)
 
     int32 TotalStudIndex = 0;
 
@@ -1065,43 +1067,82 @@ void URectangleBuilderComponent::CalculateStudLayout()
     {
         if (!Plate) continue;
 
-        // Get all Wall_Bottom_Plate sockets from this plate (top face at 16" OC)
-        TArray<FConstructionSocket> PlateSockets = Plate->GetAllSockets();
+        float HalfLen = Plate->BoardLength / 2.0f;
+        float PlateTopZ = Plate->BoardHeight / 2.0f; // Top face Z in plate-local space
         FRotator PlateRotation = Plate->GetActorRotation();
+        FVector PlateForward = PlateRotation.RotateVector(FVector::ForwardVector);
 
+        // Helper lambda: create a stud suggestion at a local X position on the plate
+        auto MakeStudSuggestion = [&](float LocalX, bool bEndStud, bool bLeftEnd, FName SocketName) -> FStudSuggestion
+        {
+            FVector LocalPos(LocalX, 0.0f, PlateTopZ);
+            FVector WorldPos = Plate->GetActorTransform().TransformPosition(LocalPos);
+            WorldPos.Z += DefaultStudHeightCm / 2.0f; // Center of vertical stud
+
+            FStudSuggestion Sug;
+            Sug.Position = WorldPos;
+            Sug.Rotation = PlateRotation;
+            Sug.StudHeightCm = DefaultStudHeightCm;
+            Sug.SourcePlate = Plate;
+            Sug.PlateSocketName = SocketName;
+            Sug.StudIndex = TotalStudIndex;
+            Sug.bIsEndStud = bEndStud;
+            Sug.bIsLeftEnd = bLeftEnd;
+            Sug.bIsValid = true;
+            TotalStudIndex++;
+            return Sug;
+        };
+
+        // --- LEFT END STUD: flush with left plate end ---
+        // Stud center at -HalfLen + StudWidth/2 (outside face flush with plate end)
+        float LeftEndX = -HalfLen + StudWidthCm / 2.0f;
+        StudSuggestions.Add(MakeStudSuggestion(LeftEndX, true, true, NAME_None));
+
+        // --- INTERIOR STUDS at 16" OC (from existing Wall_Bottom_Plate sockets) ---
+        TArray<FConstructionSocket> PlateSockets = Plate->GetAllSockets();
         for (const FConstructionSocket& Socket : PlateSockets)
         {
             if (Socket.SocketType != EConstructionSocketType::Wall_Bottom_Plate) continue;
 
-            // Transform socket position to world space
             FVector SocketWorldPos = Plate->GetActorTransform().TransformPosition(Socket.LocalPosition);
-
-            // Stud center position: above the socket by half the stud height
-            // The socket is at the top face of the plate. The stud bottom sits there.
-            // Stud center Z = socket Z + StudHeight/2
             FVector StudCenter = SocketWorldPos;
             StudCenter.Z += DefaultStudHeightCm / 2.0f;
 
-            FStudSuggestion Suggestion;
-            Suggestion.Position = StudCenter;
-            Suggestion.Rotation = PlateRotation; // Stud matches plate yaw
-            Suggestion.StudHeightCm = DefaultStudHeightCm;
-            Suggestion.SourcePlate = Plate;
-            Suggestion.PlateSocketName = Socket.SocketName;
-            Suggestion.StudIndex = TotalStudIndex;
-            Suggestion.bIsValid = true;
-
-            StudSuggestions.Add(Suggestion);
+            FStudSuggestion Sug;
+            Sug.Position = StudCenter;
+            Sug.Rotation = PlateRotation;
+            Sug.StudHeightCm = DefaultStudHeightCm;
+            Sug.SourcePlate = Plate;
+            Sug.PlateSocketName = Socket.SocketName;
+            Sug.StudIndex = TotalStudIndex;
+            Sug.bIsEndStud = false;
+            Sug.bIsLeftEnd = false;
+            Sug.bIsValid = true;
+            StudSuggestions.Add(Sug);
             TotalStudIndex++;
         }
+
+        // --- RIGHT END STUD: flush with right plate end ---
+        float RightEndX = HalfLen - StudWidthCm / 2.0f;
+        StudSuggestions.Add(MakeStudSuggestion(RightEndX, true, false, NAME_None));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d wall stud positions across %d bottom plates (height=%.1fcm)"),
-        StudSuggestions.Num(), PlacedBottomPlates.Num(), DefaultStudHeightCm);
+    int32 EndStudCount = 0;
+    for (const FStudSuggestion& S : StudSuggestions) { if (S.bIsEndStud) EndStudCount++; }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d wall stud positions (%d end studs, eligible for doubling) across %d plates"),
+        StudSuggestions.Num(), EndStudCount, PlacedBottomPlates.Num());
 }
 
 FStudSuggestion URectangleBuilderComponent::GetNextStudSuggestion() const
 {
+    // If a double stud is pending and the player hasn't acted on it yet,
+    // show the double suggestion as the "next" so the preview sits there
+    if (bDoubleStudPending)
+    {
+        return PendingDoubleSuggestion;
+    }
+
     if (PlacedStudCount < StudSuggestions.Num())
     {
         return StudSuggestions[PlacedStudCount];
@@ -1111,9 +1152,19 @@ FStudSuggestion URectangleBuilderComponent::GetNextStudSuggestion() const
 
 bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
 {
-    if (!Stud || !HasStudSuggestions()) return false;
+    if (!Stud) return false;
 
-    FStudSuggestion Suggestion = GetNextStudSuggestion();
+    // If a double stud is pending, placing it means the player clicked
+    // instead of pressing D — skip the double and move to next regular stud
+    if (bDoubleStudPending)
+    {
+        bDoubleStudPending = false;
+        // Fall through to place the next regular stud
+    }
+
+    if (!HasStudSuggestions()) return false;
+
+    FStudSuggestion Suggestion = StudSuggestions[PlacedStudCount];
     if (!Suggestion.bIsValid) return false;
 
     // Set stud height if different from default
@@ -1133,12 +1184,10 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
         Stud->NailInPlace();
     }
 
-    // Occupy the Wall_Bottom_Plate socket on the source plate
-    if (Suggestion.SourcePlate)
+    // Occupy the Wall_Bottom_Plate socket on the source plate (interior studs only)
+    if (Suggestion.SourcePlate && Suggestion.PlateSocketName != NAME_None)
     {
         Suggestion.SourcePlate->OccupySocket(Suggestion.PlateSocketName, Stud);
-
-        // Also occupy the stud's bottom socket (bidirectional)
         Stud->OccupySocket(FName(TEXT("StudBottom")), Suggestion.SourcePlate);
     }
 
@@ -1150,12 +1199,75 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
 
     PlacedStudCount++;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed wall stud %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f on plate '%s' socket '%s'"),
+    // If this was an end stud, prepare the double stud option
+    if (Suggestion.bIsEndStud && Suggestion.SourcePlate)
+    {
+        const float StudWidthCm = 3.81f;
+        FVector PlateForward = Suggestion.Rotation.RotateVector(FVector::ForwardVector);
+
+        // Offset inward: left end goes +forward, right end goes -forward
+        FVector DoubleOffset = PlateForward * (Suggestion.bIsLeftEnd ? StudWidthCm : -StudWidthCm);
+
+        PendingDoubleSuggestion = Suggestion;
+        PendingDoubleSuggestion.Position = Suggestion.Position + DoubleOffset;
+        PendingDoubleSuggestion.bIsEndStud = true; // Still an end stud (the double)
+        bDoubleStudPending = true;
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: End stud placed (%s end) — press D to double up"),
+            Suggestion.bIsLeftEnd ? TEXT("left") : TEXT("right"));
+    }
+    else
+    {
+        bDoubleStudPending = false;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed wall stud %d/%d%s at (%.1f, %.1f, %.1f) Yaw=%.1f"),
         PlacedStudCount, StudSuggestions.Num(),
+        Suggestion.bIsEndStud ? TEXT(" [END]") : TEXT(""),
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
-        Suggestion.Rotation.Yaw,
-        Suggestion.SourcePlate ? *Suggestion.SourcePlate->GetName() : TEXT("null"),
-        *Suggestion.PlateSocketName.ToString());
+        Suggestion.Rotation.Yaw);
+
+    return true;
+}
+
+FStudSuggestion URectangleBuilderComponent::GetPendingDoubleSuggestion() const
+{
+    return PendingDoubleSuggestion;
+}
+
+bool URectangleBuilderComponent::DoubleUpEndStud(AWallStud* DoubleStud)
+{
+    if (!DoubleStud || !bDoubleStudPending) return false;
+
+    FStudSuggestion Suggestion = PendingDoubleSuggestion;
+
+    // Set stud height
+    if (!FMath::IsNearlyEqual(Suggestion.StudHeightCm, DoubleStud->GetStudHeightCm(), 0.1f))
+    {
+        DoubleStud->SetStudHeightInches(Suggestion.StudHeightCm / 2.54f);
+    }
+
+    // Set position and rotation
+    DoubleStud->SetActorLocation(Suggestion.Position);
+    DoubleStud->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    DoubleStud->SetPreviewMode(false);
+    if (DoubleStud->ShouldAutoNail())
+    {
+        DoubleStud->NailInPlace();
+    }
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(DoubleStud);
+    }
+
+    bDoubleStudPending = false;
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Doubled end stud at (%.1f, %.1f, %.1f)"),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
 
     return true;
 }

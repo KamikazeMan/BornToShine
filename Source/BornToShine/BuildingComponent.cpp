@@ -269,9 +269,10 @@ void UBuildingComponent::UpdatePreviewPosition()
 	}
 
 	// WALL STUD SUGGESTION OVERRIDE: When placing a wall stud and the RectangleBuilder
-	// has stud suggestions (from placed bottom plates), position the preview at the
+	// has stud suggestions (or a double stud is pending), position the preview at the
 	// next stud location standing vertically on the plate.
-	if (RectangleBuilder && RectangleBuilder->HasStudSuggestions() &&
+	if (RectangleBuilder &&
+		(RectangleBuilder->HasStudSuggestions() || RectangleBuilder->IsDoubleStudAvailable()) &&
 		CurrentPreviewPiece->GetPieceType() == EPieceType::WallStud)
 	{
 		FStudSuggestion StudSug = RectangleBuilder->GetNextStudSuggestion();
@@ -433,7 +434,10 @@ void UBuildingComponent::PlaceCurrentPiece()
 
 	// WALL STUD SUGGESTION PATH: When stud suggestions exist and we're placing a wall stud,
 	// bypass TryPlace and use the calculated position on the bottom plate.
-	if (RectangleBuilder && RectangleBuilder->HasStudSuggestions() &&
+	// If a double stud is pending and the player clicks (instead of pressing D),
+	// skip the double and move to the next regular stud.
+	if (RectangleBuilder &&
+		(RectangleBuilder->HasStudSuggestions() || RectangleBuilder->IsDoubleStudAvailable()) &&
 		CurrentPreviewPiece->GetPieceType() == EPieceType::WallStud)
 	{
 		AWallStud* Stud = Cast<AWallStud>(CurrentPreviewPiece);
@@ -444,6 +448,13 @@ void UBuildingComponent::PlaceCurrentPiece()
 
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
+
+			// Show double stud hint if available
+			if (RectangleBuilder->IsDoubleStudAvailable() && GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+					TEXT("End stud placed — press D to double up for corner post"));
+			}
 
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Wall stud placed via suggestion (Total: %d)"), PlacedPieces.Num());
 			return;
@@ -596,7 +607,7 @@ void UBuildingComponent::CyclePieceType()
 		if (RectangleBuilder && RectangleBuilder->HasStudSuggestions())
 		{
 			FStudSuggestion NextStud = RectangleBuilder->GetNextStudSuggestion();
-			UE_LOG(LogTemp, Log, TEXT("Wall Stud selected: %d/%d studs to place, height=%.1f\""),
+			UE_LOG(LogTemp, Log, TEXT("Wall Stud selected: %d/%d studs to place (incl. end studs), height=%.1f\" — press D after end studs to double up"),
 				RectangleBuilder->GetPlacedStudCount(),
 				RectangleBuilder->GetStudSuggestions().Num(),
 				NextStud.StudHeightCm / 2.54f);
@@ -667,6 +678,65 @@ void UBuildingComponent::ScalePreview(float ScaleDelta)
 				UE_LOG(LogTemp, Warning, TEXT("Rim Board Length: %s"), *RimBoard->GetLengthDisplayString());
 			}
 		}
+	}
+}
+
+bool UBuildingComponent::IsDoubleStudAvailable() const
+{
+	return RectangleBuilder && RectangleBuilder->IsDoubleStudAvailable();
+}
+
+void UBuildingComponent::DoubleUpEndStud()
+{
+	if (!bIsInBuildMode || !RectangleBuilder || !RectangleBuilder->IsDoubleStudAvailable())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: DoubleUpEndStud - not available"));
+		return;
+	}
+
+	// Find the WallStud class in AvailablePieceTypes
+	TSubclassOf<ABuildablePiece> StudClass = nullptr;
+	for (TSubclassOf<ABuildablePiece> PieceClass : AvailablePieceTypes)
+	{
+		if (PieceClass)
+		{
+			ABuildablePiece* CDO = PieceClass->GetDefaultObject<ABuildablePiece>();
+			if (CDO && CDO->GetPieceType() == EPieceType::WallStud)
+			{
+				StudClass = PieceClass;
+				break;
+			}
+		}
+	}
+
+	if (!StudClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("BuildingComponent: DoubleUpEndStud - No WallStud class found"));
+		return;
+	}
+
+	// Spawn the double stud
+	FStudSuggestion DoubleSug = RectangleBuilder->GetPendingDoubleSuggestion();
+	AWallStud* DoubleStud = GetWorld()->SpawnActor<AWallStud>(
+		StudClass,
+		DoubleSug.Position,
+		DoubleSug.Rotation
+	);
+
+	if (DoubleStud && RectangleBuilder->DoubleUpEndStud(DoubleStud))
+	{
+		PlacedPieces.Add(DoubleStud);
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Double end stud placed (Total: %d)"), PlacedPieces.Num());
+
+		// Show on screen
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("Double stud placed"));
+		}
+	}
+	else if (DoubleStud)
+	{
+		DoubleStud->Destroy();
 	}
 }
 
