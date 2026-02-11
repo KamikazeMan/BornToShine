@@ -1,4 +1,4 @@
-// Born To Shine - Polished Radial Piece Selection Menu (C++ UMG Widget)
+// Born To Shine - Radial Piece Selection Menu (Rust/Fortnite quality)
 
 #pragma once
 
@@ -9,18 +9,21 @@
 #include "RadialPieceMenu.generated.h"
 
 /**
- * Polished radial wheel menu for selecting construction piece types.
+ * Production-quality radial wheel menu for selecting construction piece types.
  * Hold Tab to open, move mouse to highlight segment, release to select.
  *
- * Visual features:
- *   - Dark frosted-glass overlay with warm wood-tone accent colors
- *   - Icon textures per segment (set via FPieceTypeInfo)
- *   - Smooth fade-in, per-segment hover scale + glow
- *   - Hovered piece name displayed in center hub
- *   - Unavailable segments grayed out
- *   - Decorative border ring with wood accent
+ * Visual design (Rust / Satisfactory reference):
+ *   - Dark frosted semi-transparent backdrop (70% opacity)
+ *   - Large prominent icons per segment (64x64+)
+ *   - Piece name + size subtitle under each icon
+ *   - Selected segment: warm wood-tone highlight with soft glow
+ *   - Center hub: large icon + name of hovered piece
+ *   - Thin gold/bronze accent border, clean thin dividers
+ *   - Smooth fade-in, per-segment hover interpolation
+ *   - Unavailable segments dimmed out
+ *   - No ruler/tick marks on outer ring
  *
- * All rendering done in C++ via NativePaint — no Blueprint widget needed.
+ * All rendering in C++ NativePaint — no Blueprint widgets.
  */
 UCLASS()
 class BORNTOSHINE_API URadialPieceMenu : public UUserWidget
@@ -36,7 +39,7 @@ public:
 	/** Which segment is the mouse over (-1 = none) */
 	int32 GetHighlightedIndex() const { return HighlightedIndex; }
 
-	// --- Sound effect hooks (stubs — wire up audio later) ---
+	// Sound effect hooks (stubs — wire up audio later)
 	void PlaySoundOpen();
 	void PlaySoundClose();
 	void PlaySoundHover();
@@ -55,48 +58,49 @@ private:
 	int32 PrevHighlightedIndex;
 	int32 NumSegments;
 
-	// --- Geometry (pixels) ---
+	// --- Geometry (pixels) — doubled from original ---
 	float OuterRadius;
 	float InnerRadius;
 	float DeadZone;
-	float SegmentGapDeg;
-	float HoverGlowExtend;
-	float BorderWidth;
+	float CenterHubRadius;
 
 	// --- Animation ---
 	float FadeAlpha;
 	float FadeSpeed;
-	TArray<float> SegmentHoverScales; // Per-segment 0→1 hover interpolation
+	mutable TArray<float> SegmentHoverScales; // Per-segment 0→1 hover interpolation
 
 	// --- Icon brush cache ---
 	TArray<FSlateBrush> IconBrushes;
-	float IconDisplaySize;
+	float SegmentIconSize;        // Icon size in radial segments (64+)
+	float CenterIconSize;         // Enlarged icon in center hub
 
-	// --- Color palette (warm construction theme) ---
+	// --- Color palette ---
 	FLinearColor BgOverlayColor;
 	FLinearColor SegmentFillColor;
-	FLinearColor SegmentHoverColor;
-	FLinearColor SegmentGlowColor;
+	FLinearColor SegmentHoverFillColor;
+	FLinearColor SegmentHoverGlowColor;
 	FLinearColor SegmentUnavailableColor;
 	FLinearColor DividerColor;
-	FLinearColor OuterOutlineColor;
-	FLinearColor InnerOutlineColor;
+	FLinearColor BorderAccentColor;
 	FLinearColor CenterFillColor;
-	FLinearColor BorderRingColor;
-	FLinearColor TextNormalColor;
-	FLinearColor TextHighlightColor;
-	FLinearColor TextUnavailableColor;
-	FLinearColor SubtitleNormalColor;
+	FLinearColor CenterBorderColor;
+	FLinearColor TextWhite;
+	FLinearColor TextDimmed;
+	FLinearColor TextUnavailable;
+	FLinearColor SubtitleColor;
 
 	// --- Drawing helpers ---
 	void DrawFilledArc(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float InR, float OutR,
-		float StartDeg, float EndDeg, FLinearColor Color) const;
+		float StartDeg, float EndDeg, FLinearColor Color, int32 ArcSteps = 48) const;
 
 	void DrawArcOutline(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float Radius,
 		float StartDeg, float EndDeg, FLinearColor Color, float Thickness) const;
 
-	// Apply fade alpha to a color
+	void DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
+		const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const;
+
+	// Multiply color alpha by FadeAlpha
 	FLinearColor Faded(FLinearColor Color) const;
 };

@@ -1,4 +1,4 @@
-// Born To Shine - Polished Radial Piece Selection Menu
+// Born To Shine - Radial Piece Selection Menu (Rust/Fortnite quality)
 
 #include "RadialPieceMenu.h"
 #include "Rendering/DrawElements.h"
@@ -14,36 +14,44 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	PrevHighlightedIndex = -1;
 	NumSegments = 0;
 
-	// Geometry
-	OuterRadius = 240.0f;
-	InnerRadius = 90.0f;
-	DeadZone = 45.0f;
-	SegmentGapDeg = 1.5f;
-	HoverGlowExtend = 14.0f;
-	BorderWidth = 5.0f;
+	// --- Geometry: DOUBLED from original (was 240/90) ---
+	OuterRadius    = 480.0f;
+	InnerRadius    = 200.0f;
+	CenterHubRadius = 170.0f;
+	DeadZone       = 80.0f;
 
 	// Animation
 	FadeAlpha = 0.0f;
-	FadeSpeed = 6.0f;
+	FadeSpeed = 8.0f;
 
-	// Icons
-	IconDisplaySize = 40.0f;
+	// Icons — large and prominent
+	SegmentIconSize = 72.0f;
+	CenterIconSize  = 96.0f;
 
-	// --- Color palette: warm construction / wood-tone theme ---
-	BgOverlayColor         = FLinearColor(0.0f,  0.0f,  0.0f,  0.60f);
-	SegmentFillColor       = FLinearColor(0.10f, 0.08f, 0.06f, 0.90f);
-	SegmentHoverColor      = FLinearColor(0.72f, 0.52f, 0.28f, 0.95f);
-	SegmentGlowColor       = FLinearColor(0.82f, 0.62f, 0.32f, 0.35f);
-	SegmentUnavailableColor= FLinearColor(0.06f, 0.05f, 0.04f, 0.80f);
-	DividerColor           = FLinearColor(0.28f, 0.22f, 0.14f, 0.45f);
-	OuterOutlineColor      = FLinearColor(0.62f, 0.45f, 0.25f, 0.65f);
-	InnerOutlineColor      = FLinearColor(0.40f, 0.30f, 0.18f, 0.55f);
-	CenterFillColor        = FLinearColor(0.04f, 0.03f, 0.02f, 0.96f);
-	BorderRingColor        = FLinearColor(0.52f, 0.36f, 0.16f, 0.75f);
-	TextNormalColor        = FLinearColor(0.78f, 0.74f, 0.68f, 1.0f);
-	TextHighlightColor     = FLinearColor(1.0f,  0.96f, 0.88f, 1.0f);
-	TextUnavailableColor   = FLinearColor(0.35f, 0.32f, 0.28f, 1.0f);
-	SubtitleNormalColor    = FLinearColor(0.55f, 0.50f, 0.44f, 1.0f);
+	// --- Color palette: shipped-game quality ---
+	// Background: dark gray, 70% opacity
+	BgOverlayColor           = FLinearColor(0.02f, 0.02f, 0.03f, 0.70f);
+	// Unselected segments: subtle dark
+	SegmentFillColor         = FLinearColor(0.08f, 0.08f, 0.09f, 0.85f);
+	// Selected/hovered: warm wood tone
+	SegmentHoverFillColor    = FLinearColor(0.65f, 0.42f, 0.14f, 0.92f);
+	// Glow behind hovered segment
+	SegmentHoverGlowColor    = FLinearColor(0.80f, 0.55f, 0.18f, 0.30f);
+	// Unavailable: very dark
+	SegmentUnavailableColor  = FLinearColor(0.04f, 0.04f, 0.04f, 0.75f);
+	// Thin dividers
+	DividerColor             = FLinearColor(0.25f, 0.22f, 0.18f, 0.30f);
+	// Gold/bronze border accent
+	BorderAccentColor        = FLinearColor(0.72f, 0.55f, 0.22f, 0.50f);
+	// Center hub
+	CenterFillColor          = FLinearColor(0.03f, 0.03f, 0.04f, 0.95f);
+	CenterBorderColor        = FLinearColor(0.60f, 0.45f, 0.18f, 0.60f);
+	// Text: white
+	TextWhite                = FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	TextDimmed               = FLinearColor(0.70f, 0.68f, 0.65f, 1.0f);
+	TextUnavailable          = FLinearColor(0.30f, 0.28f, 0.25f, 1.0f);
+	// Subtitle: lighter gray
+	SubtitleColor            = FLinearColor(0.55f, 0.52f, 0.48f, 1.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -64,7 +72,7 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 		SegmentHoverScales[CurrentIndex] = 1.0f;
 	}
 
-	// Build icon brush cache
+	// Build icon brush cache — load all textures now
 	IconBrushes.Empty();
 	IconBrushes.SetNum(NumSegments);
 	for (int32 i = 0; i < NumSegments; i++)
@@ -73,7 +81,7 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 		if (Tex)
 		{
 			IconBrushes[i].SetResourceObject(Tex);
-			IconBrushes[i].ImageSize = FVector2D(IconDisplaySize, IconDisplaySize);
+			IconBrushes[i].ImageSize = FVector2D(SegmentIconSize, SegmentIconSize);
 			IconBrushes[i].DrawAs = ESlateBrushDrawType::Image;
 			IconBrushes[i].Tiling = ESlateBrushTileType::NoTile;
 		}
@@ -83,28 +91,25 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 }
 
 // ---------------------------------------------------------------------------
-// Sound effect stubs
+// Sound stubs
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::PlaySoundOpen()
 {
 	UE_LOG(LogTemp, Verbose, TEXT("RadialPieceMenu: [SFX] Menu opened"));
-	// TODO: Play open sound — call UGameplayStatics::PlaySound2D here
 }
 
 void URadialPieceMenu::PlaySoundClose()
 {
 	UE_LOG(LogTemp, Verbose, TEXT("RadialPieceMenu: [SFX] Menu closed"));
-	// TODO: Play close sound
 }
 
 void URadialPieceMenu::PlaySoundHover()
 {
 	UE_LOG(LogTemp, Verbose, TEXT("RadialPieceMenu: [SFX] Segment hover"));
-	// TODO: Play hover tick sound
 }
 
 // ---------------------------------------------------------------------------
-// Fade helper: multiply color alpha by FadeAlpha
+// Fade helper
 // ---------------------------------------------------------------------------
 FLinearColor URadialPieceMenu::Faded(FLinearColor Color) const
 {
@@ -120,10 +125,10 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	Super::NativeTick(MyGeometry, InDeltaTime);
 	if (NumSegments == 0) return;
 
-	// --- Fade in ---
+	// Fade in
 	FadeAlpha = FMath::FInterpTo(FadeAlpha, 1.0f, InDeltaTime, FadeSpeed);
 
-	// --- Mouse tracking ---
+	// Mouse tracking
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC) return;
 
@@ -151,14 +156,14 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		HighlightedIndex = FMath::Clamp((int32)(AngleDeg / SegAngle), 0, NumSegments - 1);
 	}
 
-	// --- Sound on segment change ---
+	// Sound on segment change
 	if (HighlightedIndex != PrevHighlightedIndex)
 	{
 		PlaySoundHover();
 		PrevHighlightedIndex = HighlightedIndex;
 	}
 
-	// --- Per-segment hover scale interpolation ---
+	// Per-segment hover scale interpolation
 	if (SegmentHoverScales.Num() != NumSegments)
 	{
 		SegmentHoverScales.Init(0.0f, NumSegments);
@@ -166,12 +171,12 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	for (int32 i = 0; i < NumSegments; i++)
 	{
 		float Target = (i == HighlightedIndex) ? 1.0f : 0.0f;
-		SegmentHoverScales[i] = FMath::FInterpTo(SegmentHoverScales[i], Target, InDeltaTime, 10.0f);
+		SegmentHoverScales[i] = FMath::FInterpTo(SegmentHoverScales[i], Target, InDeltaTime, 12.0f);
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Paint: full polished rendering
+// Paint: full production-quality rendering
 // ---------------------------------------------------------------------------
 int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
 	const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
@@ -184,9 +189,17 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	float SegAngle = 360.0f / NumSegments;
 
 	const FSlateBrush* DefaultBrush = FCoreStyle::Get().GetDefaultBrush();
+	TSharedRef<FSlateFontMeasure> FontMeasure =
+		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+
+	// Fonts — clean modern style
+	FSlateFontInfo SegNameFont = FCoreStyle::GetDefaultFontStyle("Bold", 13);
+	FSlateFontInfo SegSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", 11);
+	FSlateFontInfo CenterNameFont = FCoreStyle::GetDefaultFontStyle("Bold", 22);
+	FSlateFontInfo CenterSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", 14);
 
 	// =====================================================================
-	// Layer 1: Full-screen dark overlay
+	// LAYER 1: Full-screen dark semi-transparent overlay (frost effect)
 	// =====================================================================
 	FSlateDrawElement::MakeBox(
 		OutDrawElements, LayerId,
@@ -196,28 +209,21 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// Layer 2: Decorative border ring (outer)
-	// =====================================================================
-	DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-		OuterRadius, OuterRadius + BorderWidth,
-		-90.0f, 270.0f, Faded(BorderRingColor));
-	LayerId++;
-
-	// =====================================================================
-	// Layer 3: Hover glow (drawn BEHIND the hovered segment for bloom effect)
+	// LAYER 2: Hover glow (bloom behind hovered segment)
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
 		float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
 		if (HoverT < 0.01f) continue;
 
-		float StartDeg = i * SegAngle - 90.0f + SegmentGapDeg / 2.0f;
-		float EndDeg = (i + 1) * SegAngle - 90.0f - SegmentGapDeg / 2.0f;
+		float StartDeg = i * SegAngle - 90.0f;
+		float EndDeg = (i + 1) * SegAngle - 90.0f;
 
-		float GlowOutR = OuterRadius + HoverGlowExtend * HoverT;
-		float GlowInR = InnerRadius - 4.0f * HoverT;
+		// Glow extends outward and inward from the segment
+		float GlowOutR = OuterRadius + 18.0f * HoverT;
+		float GlowInR = InnerRadius - 8.0f * HoverT;
 
-		FLinearColor GlowCol = SegmentGlowColor;
+		FLinearColor GlowCol = SegmentHoverGlowColor;
 		GlowCol.A *= HoverT * FadeAlpha;
 		DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
 			GlowInR, GlowOutR, StartDeg, EndDeg, GlowCol);
@@ -225,18 +231,20 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// Layer 4: Segment fills
+	// LAYER 3: Segment fills (equal sized, no gaps between segments)
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
 		float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
 		bool bAvailable = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].bAvailable : true;
 
-		float StartDeg = i * SegAngle - 90.0f + SegmentGapDeg / 2.0f;
-		float EndDeg = (i + 1) * SegAngle - 90.0f - SegmentGapDeg / 2.0f;
+		// Thin 1-degree gap on each side of divider
+		float GapHalf = 0.6f;
+		float StartDeg = i * SegAngle - 90.0f + GapHalf;
+		float EndDeg = (i + 1) * SegAngle - 90.0f - GapHalf;
 
-		// Extend outer radius on hover for pop effect
-		float EffOutR = OuterRadius + HoverGlowExtend * 0.5f * HoverT;
+		// Slight outward push on hover
+		float EffOutR = OuterRadius + 6.0f * HoverT;
 
 		FLinearColor Fill;
 		if (!bAvailable)
@@ -245,7 +253,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		else
 		{
-			Fill = FMath::Lerp(SegmentFillColor, SegmentHoverColor, HoverT);
+			Fill = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT);
 		}
 
 		DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
@@ -254,7 +262,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// Layer 5: Divider lines between segments
+	// LAYER 4: Thin divider lines between segments
 	// =====================================================================
 	{
 		FPaintGeometry PG = AllottedGeometry.ToPaintGeometry();
@@ -263,7 +271,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			float Angle = FMath::DegreesToRadians(i * SegAngle - 90.0f);
 			FVector2D Dir(FMath::Cos(Angle), FMath::Sin(Angle));
 			FVector2D Inner = Center + Dir * InnerRadius;
-			FVector2D Outer = Center + Dir * (OuterRadius + 1.0f);
+			FVector2D Outer = Center + Dir * OuterRadius;
 
 			TArray<FVector2D> Pts;
 			Pts.Add(Inner);
@@ -275,29 +283,21 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// Layer 6: Circle outlines (outer + inner)
+	// LAYER 5: Gold/bronze accent border (outer ring — thin, no ticks)
 	// =====================================================================
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		OuterRadius, -90.0f, 270.0f, Faded(OuterOutlineColor), 2.0f);
+		OuterRadius, -90.0f, 270.0f, Faded(BorderAccentColor), 1.5f);
+	// Inner ring accent
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		InnerRadius, -90.0f, 270.0f, Faded(InnerOutlineColor), 1.5f);
+		InnerRadius, -90.0f, 270.0f, Faded(FLinearColor(BorderAccentColor.R, BorderAccentColor.G, BorderAccentColor.B, BorderAccentColor.A * 0.5f)), 1.0f);
 	LayerId++;
 
 	// =====================================================================
-	// Layer 7: Center hub fill
-	// =====================================================================
-	DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-		0.0f, InnerRadius - 2.0f, -90.0f, 270.0f, Faded(CenterFillColor));
-	// Subtle warm-tint ring just inside the inner radius
-	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		InnerRadius - 3.0f, -90.0f, 270.0f, Faded(FLinearColor(0.72f, 0.52f, 0.28f, 0.20f)), 2.0f);
-	LayerId++;
-
-	// =====================================================================
-	// Layer 8: Icons per segment
+	// LAYER 6: Icons per segment — LARGE and centered (main visual)
 	// =====================================================================
 	{
-		float IconR = InnerRadius + (OuterRadius - InnerRadius) * 0.55f;
+		// Icon sits in the upper portion of the segment arc
+		float IconR = InnerRadius + (OuterRadius - InnerRadius) * 0.58f;
 
 		for (int32 i = 0; i < NumSegments; i++)
 		{
@@ -305,11 +305,12 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			FVector2D IconCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * IconR;
 
 			bool bAvailable = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].bAvailable : true;
+			float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
 
 			if (IconBrushes.IsValidIndex(i) && IconBrushes[i].GetResourceObject())
 			{
-				float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
-				float ScaledSize = IconDisplaySize * (1.0f + 0.12f * HoverT);
+				// Icons scale up 15% on hover
+				float ScaledSize = SegmentIconSize * (1.0f + 0.15f * HoverT);
 
 				FVector2D TexSize(ScaledSize, ScaledSize);
 				FVector2D TexPos = IconCenter - TexSize / 2.0f;
@@ -318,7 +319,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 
 				FLinearColor IconTint = bAvailable
 					? FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha)
-					: FLinearColor(0.3f, 0.3f, 0.3f, FadeAlpha * 0.6f);
+					: FLinearColor(0.25f, 0.25f, 0.25f, FadeAlpha * 0.5f);
 
 				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
 					IconGeo.ToPaintGeometry(), &IconBrushes[i],
@@ -329,14 +330,44 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// Layer 9: Subtitle text per segment (below icon)
+	// LAYER 7: Piece name text per segment (small, below icon)
 	// =====================================================================
 	{
-		FSlateFontInfo SubFont = FCoreStyle::GetDefaultFontStyle("Regular", 10);
-		TSharedRef<FSlateFontMeasure> FontMeasure =
-			FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+		float NameR = InnerRadius + (OuterRadius - InnerRadius) * 0.28f;
 
-		float SubR = InnerRadius + (OuterRadius - InnerRadius) * 0.25f;
+		for (int32 i = 0; i < NumSegments; i++)
+		{
+			FString Name = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].DisplayName : TEXT("");
+			if (Name.IsEmpty()) continue;
+
+			bool bAvailable = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].bAvailable : true;
+			float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
+
+			float MidAngle = FMath::DegreesToRadians((i + 0.5f) * SegAngle - 90.0f);
+			FVector2D LabelCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * NameR;
+
+			FVector2D TextSize = FontMeasure->Measure(Name, SegNameFont);
+			FVector2D TextPos = LabelCenter - TextSize / 2.0f;
+
+			FLinearColor Tint;
+			if (!bAvailable)
+				Tint = TextUnavailable;
+			else
+				Tint = FMath::Lerp(TextDimmed, TextWhite, HoverT);
+			Tint.A *= FadeAlpha;
+
+			FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, TextGeo.ToPaintGeometry(),
+				Name, SegNameFont, ESlateDrawEffect::None, Tint);
+		}
+	}
+	LayerId++;
+
+	// =====================================================================
+	// LAYER 8: Size subtitle per segment (below name, even smaller)
+	// =====================================================================
+	{
+		float SubR = InnerRadius + (OuterRadius - InnerRadius) * 0.16f;
 
 		for (int32 i = 0; i < NumSegments; i++)
 		{
@@ -344,57 +375,87 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			if (Sub.IsEmpty()) continue;
 
 			bool bAvailable = SegmentInfos.IsValidIndex(i) ? SegmentInfos[i].bAvailable : true;
+			float HoverT = SegmentHoverScales.IsValidIndex(i) ? SegmentHoverScales[i] : 0.0f;
 
 			float MidAngle = FMath::DegreesToRadians((i + 0.5f) * SegAngle - 90.0f);
 			FVector2D LabelCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * SubR;
 
-			FVector2D TextSize = FontMeasure->Measure(Sub, SubFont);
+			FVector2D TextSize = FontMeasure->Measure(Sub, SegSubFont);
 			FVector2D TextPos = LabelCenter - TextSize / 2.0f;
 
-			FLinearColor Tint = bAvailable ? SubtitleNormalColor : TextUnavailableColor;
+			FLinearColor Tint;
+			if (!bAvailable)
+				Tint = TextUnavailable;
+			else
+				Tint = FMath::Lerp(SubtitleColor, FLinearColor(0.75f, 0.70f, 0.62f, 1.0f), HoverT);
 			Tint.A *= FadeAlpha;
 
 			FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
 			FSlateDrawElement::MakeText(OutDrawElements, LayerId, TextGeo.ToPaintGeometry(),
-				Sub, SubFont, ESlateDrawEffect::None, Tint);
+				Sub, SegSubFont, ESlateDrawEffect::None, Tint);
 		}
 	}
 	LayerId++;
 
 	// =====================================================================
-	// Layer 10: Center hub text (hovered piece name + subtitle)
+	// LAYER 9: Center hub — dark fill + border ring
+	// =====================================================================
+	DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry, Center,
+		CenterHubRadius, Faded(CenterFillColor));
+	// Gold accent ring around center hub
+	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+		CenterHubRadius, -90.0f, 270.0f, Faded(CenterBorderColor), 2.0f);
+	LayerId++;
+
+	// =====================================================================
+	// LAYER 10: Center hub content — large icon + piece name + subtitle
 	// =====================================================================
 	{
-		TSharedRef<FSlateFontMeasure> FontMeasure =
-			FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
-
 		bool bHasSelection = (HighlightedIndex >= 0 && SegmentInfos.IsValidIndex(HighlightedIndex));
 
-		// Main piece name
-		FSlateFontInfo NameFont = FCoreStyle::GetDefaultFontStyle("Bold", bHasSelection ? 18 : 14);
-		FString NameLabel = bHasSelection
-			? SegmentInfos[HighlightedIndex].DisplayName
-			: TEXT("Select Piece");
-
-		FVector2D NameSize = FontMeasure->Measure(NameLabel, NameFont);
-		FVector2D NamePos = Center - FVector2D(NameSize.X / 2.0f, NameSize.Y + 2.0f);
-
-		FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
-		FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
-			NameLabel, NameFont, ESlateDrawEffect::None, Faded(TextHighlightColor));
-
-		// Subtitle under the name
-		if (bHasSelection && !SegmentInfos[HighlightedIndex].Subtitle.IsEmpty())
+		if (bHasSelection)
 		{
-			FSlateFontInfo SubFont = FCoreStyle::GetDefaultFontStyle("Regular", 11);
-			FString SubLabel = SegmentInfos[HighlightedIndex].Subtitle;
+			const FPieceTypeInfo& Info = SegmentInfos[HighlightedIndex];
 
-			FVector2D SubSize = FontMeasure->Measure(SubLabel, SubFont);
-			FVector2D SubPos = Center + FVector2D(-SubSize.X / 2.0f, 4.0f);
+			// Large icon in center
+			if (IconBrushes.IsValidIndex(HighlightedIndex) && IconBrushes[HighlightedIndex].GetResourceObject())
+			{
+				FVector2D TexSize(CenterIconSize, CenterIconSize);
+				FVector2D TexPos = Center - FVector2D(CenterIconSize / 2.0f, CenterIconSize / 2.0f + 24.0f);
 
-			FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
-			FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
-				SubLabel, SubFont, ESlateDrawEffect::None, Faded(SubtitleNormalColor));
+				FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
+				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
+					IconGeo.ToPaintGeometry(), &IconBrushes[HighlightedIndex],
+					ESlateDrawEffect::None, Faded(TextWhite));
+			}
+
+			// Piece name below icon
+			FVector2D NameSize = FontMeasure->Measure(Info.DisplayName, CenterNameFont);
+			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, CenterIconSize / 2.0f - 14.0f);
+			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
+				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(TextWhite));
+
+			// Size subtitle below name
+			if (!Info.Subtitle.IsEmpty())
+			{
+				FVector2D SubSize = FontMeasure->Measure(Info.Subtitle, CenterSubFont);
+				FVector2D SubPos = NamePos + FVector2D(NameSize.X / 2.0f - SubSize.X / 2.0f, NameSize.Y + 4.0f);
+				FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
+				FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
+					Info.Subtitle, CenterSubFont, ESlateDrawEffect::None, Faded(SubtitleColor));
+			}
+		}
+		else
+		{
+			// No selection: "Select Piece" prompt
+			FString Prompt = TEXT("Select Piece");
+			FSlateFontInfo PromptFont = FCoreStyle::GetDefaultFontStyle("Regular", 16);
+			FVector2D PromptSize = FontMeasure->Measure(Prompt, PromptFont);
+			FVector2D PromptPos = Center - PromptSize / 2.0f;
+			FGeometry PromptGeo = AllottedGeometry.MakeChild(PromptSize, FSlateLayoutTransform(PromptPos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, PromptGeo.ToPaintGeometry(),
+				Prompt, PromptFont, ESlateDrawEffect::None, Faded(TextDimmed));
 		}
 	}
 	LayerId++;
@@ -403,21 +464,21 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 }
 
 // ---------------------------------------------------------------------------
-// Draw a filled annular arc using concentric polyline rings
+// DrawFilledArc: filled annular arc using concentric polyline rings
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::DrawFilledArc(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 	const FGeometry& Geo, FVector2D Center, float InR, float OutR,
-	float StartDeg, float EndDeg, FLinearColor Color) const
+	float StartDeg, float EndDeg, FLinearColor Color, int32 ArcSteps) const
 {
 	if (Color.A < 0.001f) return;
 
-	const int32 ArcSteps = 36;
-	const int32 NumRings = 24;
 	float Span = OutR - InR;
 	if (Span < 1.0f) return;
 
+	// More rings for larger arcs = smoother fill
+	int32 NumRings = FMath::Max(16, FMath::CeilToInt(Span / 3.5f));
 	float RingSpacing = Span / (float)NumRings;
-	float LineWidth = RingSpacing * 1.9f;
+	float LineWidth = RingSpacing * 1.95f; // Slight overlap to prevent gaps
 
 	FPaintGeometry PG = Geo.ToPaintGeometry();
 
@@ -441,7 +502,7 @@ void URadialPieceMenu::DrawFilledArc(FSlateWindowElementList& OutDrawElements, i
 }
 
 // ---------------------------------------------------------------------------
-// Draw an arc outline (thin polyline)
+// DrawArcOutline: thin polyline circle arc
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::DrawArcOutline(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 	const FGeometry& Geo, FVector2D Center, float Radius,
@@ -449,7 +510,7 @@ void URadialPieceMenu::DrawArcOutline(FSlateWindowElementList& OutDrawElements, 
 {
 	if (Color.A < 0.001f) return;
 
-	const int32 NumSteps = 72;
+	const int32 NumSteps = 96;
 	TArray<FVector2D> Points;
 	Points.Reserve(NumSteps + 1);
 
@@ -462,4 +523,14 @@ void URadialPieceMenu::DrawArcOutline(FSlateWindowElementList& OutDrawElements, 
 
 	FSlateDrawElement::MakeLines(OutDrawElements, LayerId, Geo.ToPaintGeometry(),
 		Points, ESlateDrawEffect::None, Color, true, Thickness);
+}
+
+// ---------------------------------------------------------------------------
+// DrawCircleFill: solid filled circle using filled arc from 0 to full
+// ---------------------------------------------------------------------------
+void URadialPieceMenu::DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
+	const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const
+{
+	DrawFilledArc(OutDrawElements, LayerId, Geo, Center, 0.0f, Radius,
+		-90.0f, 270.0f, Color, 64);
 }
