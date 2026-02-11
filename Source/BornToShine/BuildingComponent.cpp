@@ -136,10 +136,18 @@ void UBuildingComponent::SpawnPreviewPiece()
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
+	TSubclassOf<ABuildablePiece> PieceClass = AvailablePieceTypes[CurrentPieceTypeIndex];
+	if (!PieceClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("BuildingComponent: AvailablePieceTypes[%d] is NULL — skip"),
+			CurrentPieceTypeIndex);
+		return;
+	}
+
 	FVector SpawnLocation = Owner->GetActorLocation() + Owner->GetActorForwardVector() * PreviewDistance;
 
 	CurrentPreviewPiece = GetWorld()->SpawnActor<ABuildablePiece>(
-		AvailablePieceTypes[CurrentPieceTypeIndex],
+		PieceClass,
 		SpawnLocation,
 		PreviewRotation
 	);
@@ -147,7 +155,29 @@ void UBuildingComponent::SpawnPreviewPiece()
 	if (CurrentPreviewPiece)
 	{
 		CurrentPreviewPiece->SetPreviewMode(true);
-		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Spawned preview piece"));
+
+		// Diagnostic: verify the mesh loaded
+		UStaticMeshComponent* Mesh = CurrentPreviewPiece->GetMeshComponent();
+		bool bHasMesh = Mesh && Mesh->GetStaticMesh();
+		bool bHasMaterial = Mesh && Mesh->GetMaterial(0);
+
+		UE_LOG(LogTemp, Warning, TEXT("SpawnPreviewPiece[%d]: Class=%s  Type=%s  HasMesh=%d  HasMaterial=%d  Visible=%d"),
+			CurrentPieceTypeIndex,
+			*PieceClass->GetName(),
+			*UEnum::GetDisplayValueAsText(CurrentPreviewPiece->GetPieceType()).ToString(),
+			bHasMesh, bHasMaterial,
+			Mesh ? Mesh->IsVisible() : -1);
+
+		if (!bHasMesh)
+		{
+			UE_LOG(LogTemp, Error, TEXT("  >> NO MESH on preview! If using raw C++ class, create a BP_ wrapper with a static mesh assigned."));
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
+				FString::Printf(TEXT("WARNING: %s has no mesh — create a Blueprint with a static mesh"), *PieceClass->GetName()));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnPreviewPiece: SpawnActor FAILED for class %s"), *PieceClass->GetName());
 	}
 }
 

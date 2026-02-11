@@ -54,6 +54,9 @@ void AMoonshinePlayerController::SetupInputComponent()
 		// in Enhanced Input, Enhanced Input consumes X first and this never fires.
 		// If IA_ToggleBoardType is NOT configured, this catches the X key press.
 		InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
+
+		// Delete key: always available as an alternative delete trigger
+		InputComponent->BindKey(EKeys::Delete, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
 	}
 }
 
@@ -116,6 +119,23 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 		}
 	}
 
+	// Debug: log when trace finds/loses a piece (throttled to avoid spam)
+	{
+		static float LastTraceLog = 0.0f;
+		float Now = GetWorld()->GetTimeSeconds();
+		if (Now - LastTraceLog > 2.0f)
+		{
+			if (HitPiece)
+				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: Targeting %s (%s)"), *HitPiece->GetName(),
+					*UEnum::GetDisplayValueAsText(HitPiece->GetPieceState()).ToString());
+			else if (bHit)
+				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: Hit %s (not a BuildablePiece)"), *Hit.GetActor()->GetName());
+			else
+				UE_LOG(LogTemp, Log, TEXT("DeleteTrace: No hit"));
+			LastTraceLog = Now;
+		}
+	}
+
 	// Update highlight state
 	ABuildablePiece* CurrentHighlight = HighlightedPiece.Get();
 
@@ -152,31 +172,32 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::OnDeletePressed()
 {
-	// Called from MoonshineCharacter::OnToggleBoardType when X key
-	// is NOT being used for board type toggle (already filtered there).
+	UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed FIRED — DeleteMode=%d  HasHighlight=%d"),
+		bDeleteModeActive, HighlightedPiece.IsValid());
+
+	if (!bDeleteModeActive)
+	{
+		// Outside delete mode, only Shift+X works (safety measure)
+		bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
+		if (!bShiftHeld)
+		{
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow,
+				TEXT("Press F7 first to enable delete mode, then look at a piece and press X"));
+			return;
+		}
+	}
 
 	ABuildablePiece* Target = HighlightedPiece.Get();
 	if (!Target)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed: No highlighted piece to delete"));
-		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Yellow, TEXT("No piece targeted - look at a piece first"));
+		UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed: No highlighted piece"));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+			TEXT("No piece targeted — look at a placed piece (F7 must be ON)"));
 		return;
 	}
 
-	bool bShiftHeld = IsInputKeyDown(EKeys::LeftShift) || IsInputKeyDown(EKeys::RightShift);
-
-	if (Target->GetPieceState() == EPieceState::Nailed)
-	{
-		// In delete mode (F7), allow deleting nailed pieces with just X
-		// Outside delete mode, require Shift+X as a safety measure
-		if (!bDeleteModeActive && !bShiftHeld)
-		{
-			FString Msg = TEXT("Piece is nailed! Use F7 delete mode, or hold Shift+X.");
-			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, Msg);
-			return;
-		}
-		UE_LOG(LogTemp, Warning, TEXT("Deleting nailed piece: %s"), *Target->GetName());
-	}
+	UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed: Deleting %s (State=%d)"),
+		*Target->GetName(), (int32)Target->GetPieceState());
 
 	// Clear highlight before removing
 	Target->SetHighlighted(false);
@@ -188,7 +209,7 @@ void AMoonshinePlayerController::OnDeletePressed()
 
 	FString Msg = FString::Printf(TEXT("Deleted: %s"), *PieceName);
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Orange, Msg);
-	UE_LOG(LogTemp, Log, TEXT("Deleted piece: %s"), *PieceName);
+	UE_LOG(LogTemp, Warning, TEXT("Deleted piece: %s"), *PieceName);
 }
 
 // ---------------------------------------------------------------------------
