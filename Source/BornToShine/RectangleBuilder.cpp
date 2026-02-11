@@ -512,8 +512,12 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     Board->SetActorLocation(Suggestion.Position);
     Board->SetActorRotation(Suggestion.Rotation);
 
-    // 4. Mark as placed
+    // 4. Mark as placed (and auto-nail if BP says so)
     Board->SetPreviewMode(false);
+    if (Board->ShouldAutoNail())
+    {
+        Board->NailInPlace();
+    }
 
     // 4b. Extend mesh for flush corners on boards placed via suggestion (3 and 4)
     Board->ExtendMeshForFlushCorners();
@@ -781,8 +785,12 @@ bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
     Joist->SetActorLocation(Suggestion.Position);
     Joist->SetActorRotation(Suggestion.Rotation);
 
-    // Mark as placed
+    // Mark as placed (and auto-nail if BP says so)
     Joist->SetPreviewMode(false);
+    if (Joist->ShouldAutoNail())
+    {
+        Joist->NailInPlace();
+    }
 
     // Occupy top-face sockets on the through boards
     if (Suggestion.Board1)
@@ -910,8 +918,12 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
     Plate->SetActorLocation(Suggestion.Position);
     Plate->SetActorRotation(Suggestion.Rotation);
 
-    // Mark as placed
+    // Mark as placed (and auto-nail if BP says so)
     Plate->SetPreviewMode(false);
+    if (Plate->ShouldAutoNail())
+    {
+        Plate->NailInPlace();
+    }
 
     // Extend mesh for flush corners (same visual fix as rim boards)
     Plate->ExtendMeshForFlushCorners();

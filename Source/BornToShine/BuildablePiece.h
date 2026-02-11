@@ -99,6 +99,9 @@ public:
 	// Get the mesh component (for line trace hit detection)
 	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
 
+	// Should this piece auto-nail when placed?
+	bool ShouldAutoNail() const { return bAutoNailOnPlace; }
+
 protected:
 	virtual void BeginPlay() override;
 

@@ -1184,10 +1184,17 @@ void ABuildablePiece::UpdateVisualFeedback()
 		MeshComponent->SetMaterial(0, NailedMaterial);
 		DynamicMaterial = nullptr; // Clear stale pointer so SetHighlighted creates a fresh one
 		MeshComponent->SetRenderCustomDepth(false);
+		UE_LOG(LogTemp, Log, TEXT("UpdateVisualFeedback [%s]: Nailed with NailedMaterial, Visible=%d"),
+			*GetName(), MeshComponent->IsVisible());
 		return;
 	}
 
-	if (!DynamicMaterial) return;
+	if (!DynamicMaterial)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UpdateVisualFeedback [%s]: DynamicMaterial is NULL, State=%d, NailedMat=%s, MeshVisible=%d"),
+			*GetName(), (int32)PieceState, NailedMaterial ? TEXT("SET") : TEXT("NULL"), MeshComponent->IsVisible());
+		return;
+	}
 
 	FLinearColor TargetColor;
 

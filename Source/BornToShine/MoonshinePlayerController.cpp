@@ -123,10 +123,10 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 	if (HitPiece && GEngine)
 	{
 		FString PieceName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceType()).ToString();
-		FString Hint = (HitPiece->GetPieceState() == EPieceState::Nailed)
-			? FString::Printf(TEXT("[Shift+X] Delete: %s (nailed)"), *PieceName)
-			: FString::Printf(TEXT("[X] Delete: %s"), *PieceName);
-		GEngine->AddOnScreenDebugMessage(42, 0.0f, FColor::White, Hint);
+		FString StateName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceState()).ToString();
+		// In delete mode, X always works (even on nailed pieces)
+		FString Hint = FString::Printf(TEXT("[X] Delete: %s (%s)"), *PieceName, *StateName);
+		GEngine->AddOnScreenDebugMessage(42, 0.0f, FColor::Yellow, Hint);
 	}
 }
 
@@ -148,14 +148,15 @@ void AMoonshinePlayerController::OnDeletePressed()
 
 	if (Target->GetPieceState() == EPieceState::Nailed)
 	{
-		if (!bShiftHeld)
+		// In delete mode (F7), allow deleting nailed pieces with just X
+		// Outside delete mode, require Shift+X as a safety measure
+		if (!bDeleteModeActive && !bShiftHeld)
 		{
-			// Nailed pieces need Shift+X
-			FString Msg = TEXT("Piece is nailed! Hold Shift+X to force delete.");
+			FString Msg = TEXT("Piece is nailed! Use F7 delete mode, or hold Shift+X.");
 			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, Msg);
 			return;
 		}
-		UE_LOG(LogTemp, Warning, TEXT("Force-deleting nailed piece: %s"), *Target->GetName());
+		UE_LOG(LogTemp, Warning, TEXT("Deleting nailed piece: %s"), *Target->GetName());
 	}
 
 	// Clear highlight before removing
