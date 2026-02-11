@@ -1096,13 +1096,15 @@ void URectangleBuilderComponent::CalculateStudLayout()
         // --- LEFT END STUD: flush with left plate end ---
         // Stud center at -HalfLen + StudWidth/2 (outside face flush with plate end)
         float LeftEndX = -HalfLen + StudWidthCm / 2.0f;
-        StudSuggestions.Add(MakeStudSuggestion(LeftEndX, true, true, NAME_None));
+        StudSuggestions.Add(MakeStudSuggestion(LeftEndX, true, true, FName(TEXT("PlateTop_EndLeft"))));
 
         // --- INTERIOR STUDS at 16" OC (from existing Wall_Bottom_Plate sockets) ---
+        // Skip end sockets (PlateTop_EndLeft/EndRight) — those are handled above
         TArray<FConstructionSocket> PlateSockets = Plate->GetAllSockets();
         for (const FConstructionSocket& Socket : PlateSockets)
         {
             if (Socket.SocketType != EConstructionSocketType::Wall_Bottom_Plate) continue;
+            if (Socket.SocketName.ToString().Contains(TEXT("End"))) continue;
 
             FVector SocketWorldPos = Plate->GetActorTransform().TransformPosition(Socket.LocalPosition);
             FVector StudCenter = SocketWorldPos;
@@ -1124,7 +1126,7 @@ void URectangleBuilderComponent::CalculateStudLayout()
 
         // --- RIGHT END STUD: flush with right plate end ---
         float RightEndX = HalfLen - StudWidthCm / 2.0f;
-        StudSuggestions.Add(MakeStudSuggestion(RightEndX, true, false, NAME_None));
+        StudSuggestions.Add(MakeStudSuggestion(RightEndX, true, false, FName(TEXT("PlateTop_EndRight"))));
     }
 
     int32 EndStudCount = 0;

@@ -130,11 +130,33 @@ void ABottomPlate::CreateEndSockets()
 
 void ABottomPlate::CreateTopFaceSockets()
 {
-	// Top face sockets at 16" OC for future wall stud attachment
+	// Top face sockets for wall stud attachment
 	float Spacing = 40.64f; // 16" OC
 	float HalfLen = BoardLength / 2.0f;
 	float SocketZ = BoardHeight / 2.0f;
+	const float StudHalfWidth = 3.81f / 2.0f; // 1.5" stud, half-width = 1.905cm
 
+	// --- End sockets: flush with plate ends (for end studs) ---
+	// Stud center at ±(HalfLen - StudHalfWidth) so outer face is flush with plate end
+	{
+		FConstructionSocket LeftEndSocket;
+		LeftEndSocket.SocketName = FName(TEXT("PlateTop_EndLeft"));
+		LeftEndSocket.SocketType = EConstructionSocketType::Wall_Bottom_Plate;
+		LeftEndSocket.LocalPosition = FVector(-HalfLen + StudHalfWidth, 0.0f, SocketZ);
+		LeftEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
+		LeftEndSocket.bIsOccupied = false;
+		Sockets.Add(LeftEndSocket);
+
+		FConstructionSocket RightEndSocket;
+		RightEndSocket.SocketName = FName(TEXT("PlateTop_EndRight"));
+		RightEndSocket.SocketType = EConstructionSocketType::Wall_Bottom_Plate;
+		RightEndSocket.LocalPosition = FVector(HalfLen - StudHalfWidth, 0.0f, SocketZ);
+		RightEndSocket.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
+		RightEndSocket.bIsOccupied = false;
+		Sockets.Add(RightEndSocket);
+	}
+
+	// --- Interior sockets at 16" OC ---
 	float CurrentX = -HalfLen + Spacing;
 	int32 Count = 0;
 
@@ -152,7 +174,7 @@ void ABottomPlate::CreateTopFaceSockets()
 		Count++;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Created %d top face sockets for stud placement"), Count);
+	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Created %d top face sockets (2 end + %d interior) for stud placement"), Count + 2, Count);
 }
 
 void ABottomPlate::SetBoardLengthFeet(int32 LengthInFeet)
