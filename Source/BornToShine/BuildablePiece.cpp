@@ -442,6 +442,22 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	// ============================================================
 	for (const FConstructionSocket& Socket : Sockets)
 	{
+		// Skip reception sockets — these are targets for OTHER pieces to snap to,
+		// not for positioning THIS piece. Using them as source sockets causes
+		// incorrect snap angles (e.g., rim board TopFace matching a joist end
+		// produces an uncontrolled rotation instead of the proper 90-degree corner).
+		if (PieceType == EPieceType::RimBoard &&
+			(Socket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
+			 Socket.SocketType == EConstructionSocketType::RimBoard_Side_Face))
+		{
+			continue;
+		}
+		if (PieceType == EPieceType::FloorJoist &&
+			Socket.SocketType == EConstructionSocketType::Joist_Top_Face)
+		{
+			continue;
+		}
+
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
@@ -859,6 +875,20 @@ void ABuildablePiece::CommitPlacement()
 	{
 		CurrentSnapCandidate.SecondTargetPiece->OccupySocket(
 			CurrentSnapCandidate.SecondTargetSocketName, this);
+	}
+
+	// Rim board: extend mesh at corners so board faces sit flush.
+	// This is a safety net for boards placed via the normal snap path
+	// (the RectangleBuilder also calls this for suggestion-based boards).
+	if (PieceType == EPieceType::RimBoard &&
+		CurrentSnapCandidate.SourceSocketType == EConstructionSocketType::RimBoard_End_Corner &&
+		CurrentSnapCandidate.TargetSocketType == EConstructionSocketType::RimBoard_End_Corner)
+	{
+		ARimBoard* RimBoard = Cast<ARimBoard>(this);
+		if (RimBoard)
+		{
+			RimBoard->ExtendMeshForFlushCorners();
+		}
 	}
 
 	// Bottom plate: extend mesh so corners flush out (same as rim boards)

@@ -166,7 +166,7 @@ public:
     // --- Joist Layout System ---
 
     // Does the builder have joist suggestions ready?
-    bool HasJoistSuggestions() const { return JoistSuggestions.Num() > 0; }
+    bool HasJoistSuggestions() const { return PlacedJoistCount < JoistSuggestions.Num(); }
 
     // Get the next joist suggestion (first unplaced)
     FJoistSuggestion GetNextJoistSuggestion() const;
