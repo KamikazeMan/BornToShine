@@ -660,10 +660,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
 
-				// Y offset: shift plate inward by HalfWidth so outer face
-				// aligns with the plywood edge. Try both ± directions along
-				// RimRight and pick whichever moves the plate closer to
-				// the frame center (= inward).
+				// Y offset: shift plate by HalfWidth so outer face aligns with
+				// plywood edge. Direction depends on outside vs inside board:
+				//   Outside boards: plywood extends past outer face, shift OUTWARD
+				//   Inside boards: plywood recessed from outer face, shift INWARD
 				if (AllRimBoards.Num() >= 2 && TargetPiece)
 				{
 					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
@@ -683,12 +683,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 					FVector FrameCenter = (MinPos + MaxPos) / 2.0f;
 
-					// Pick the direction that moves the plate toward frame center
 					FVector OptionA = CandidateLocation + RimRight * PlateHalfWidth;
 					FVector OptionB = CandidateLocation - RimRight * PlateHalfWidth;
 					float DistA = FVector::DistSquaredXY(OptionA, FrameCenter);
 					float DistB = FVector::DistSquaredXY(OptionB, FrameCenter);
-					CandidateLocation = (DistA < DistB) ? OptionA : OptionB;
+
+					// Outside boards: shift AWAY from center (plywood overhangs outward)
+					// Inside boards: shift TOWARD center
+					ARimBoard* TargetRimBoard = Cast<ARimBoard>(TargetPiece);
+					bool bIsOutside = TargetRimBoard ? TargetRimBoard->bIsOutsideBoard : false;
+
+					if (bIsOutside)
+					{
+						CandidateLocation = (DistA > DistB) ? OptionA : OptionB;
+					}
+					else
+					{
+						CandidateLocation = (DistA < DistB) ? OptionA : OptionB;
+					}
 				}
 
 				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f loc=(%.2f,%.2f,%.2f)"),
