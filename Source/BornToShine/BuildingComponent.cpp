@@ -40,6 +40,34 @@ void UBuildingComponent::BeginPlay()
 		RectangleBuilder = NewObject<URectangleBuilderComponent>(GetOwner());
 		RectangleBuilder->RegisterComponent();
 	}
+
+	// Auto-register piece types that are missing from AvailablePieceTypes.
+	// The C++ classes have default cube meshes so they render without Blueprint setup.
+	auto HasPieceType = [this](EPieceType TypeToFind) -> bool
+	{
+		for (const TSubclassOf<ABuildablePiece>& PieceClass : AvailablePieceTypes)
+		{
+			if (PieceClass)
+			{
+				ABuildablePiece* CDO = PieceClass->GetDefaultObject<ABuildablePiece>();
+				if (CDO && CDO->GetPieceType() == TypeToFind) return true;
+			}
+		}
+		return false;
+	};
+
+	if (!HasPieceType(EPieceType::Plywood))
+	{
+		AvailablePieceTypes.Add(APlywoodSheet::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added PlywoodSheet to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::WallPlate))
+	{
+		AvailablePieceTypes.Add(ABottomPlate::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added BottomPlate to AvailablePieceTypes"));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: %d piece types available"), AvailablePieceTypes.Num());
 }
 
 void UBuildingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

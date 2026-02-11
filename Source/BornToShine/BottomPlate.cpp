@@ -19,6 +19,21 @@ ABottomPlate::ABottomPlate()
 	if (MeshComponent)
 	{
 		MeshComponent->SetupAttachment(SceneRoot);
+
+		// Default cube mesh so the piece is visible even without a Blueprint.
+		// A BP_BottomPlate Blueprint can override this with a custom mesh.
+		static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
+			TEXT("/Engine/BasicShapes/Cube.Cube"));
+		if (CubeMesh.Succeeded())
+		{
+			MeshComponent->SetStaticMesh(CubeMesh.Object);
+			// Scale to 2x4 lumber dimensions: length x width x height
+			MeshComponent->SetRelativeScale3D(FVector(
+				BoardLength / 100.0f,   // X = length
+				BoardWidth / 100.0f,    // Y = width (1.5")
+				BoardHeight / 100.0f    // Z = height (3.5")
+			));
+		}
 	}
 
 	// Bottom plates require manual nailing

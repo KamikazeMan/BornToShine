@@ -4,6 +4,7 @@
 #include "ConstructionTypes.h"
 #include "ConstructionPhaseManager.h"
 #include "BuildablePiece.h"
+#include "BuildingComponent.h"
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
@@ -84,6 +85,19 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(GetPawn());
+
+	// Also ignore the preview piece — otherwise it blocks the trace and
+	// prevents placed pieces behind it from being highlighted/deleted.
+	if (APawn* MyPawn = GetPawn())
+	{
+		if (UBuildingComponent* BC = MyPawn->FindComponentByClass<UBuildingComponent>())
+		{
+			if (ABuildablePiece* Preview = BC->GetCurrentPreviewPiece())
+			{
+				Params.AddIgnoredActor(Preview);
+			}
+		}
+	}
 
 	bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, CamLoc, TraceEnd, ECC_Visibility, Params);
 
