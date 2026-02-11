@@ -386,14 +386,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// PRE-FETCH ALL RIM BOARDS (for plywood alignment)
+	// PRE-FETCH NEARBY FRAME RIM BOARDS (for plywood alignment)
 	// On large foundations (e.g. 24'), rim boards may be beyond
-	// SnapSearchRadius. Must use PhaseManager to get ALL of them.
+	// SnapSearchRadius (500cm). Use a larger radius (2000cm ~65ft)
+	// to capture the full frame while excluding distant foundations.
 	// ============================================================
 	TArray<ABuildablePiece*> AllRimBoards;
 	if (PieceType == EPieceType::Plywood && AConstructionPhaseManager::Instance)
 	{
-		AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
+		const float FrameSearchRadius = 2000.0f; // ~65ft covers any residential frame
+		FVector PlywoodPos = GetActorLocation();
+		TArray<ABuildablePiece*> AllRimBoardsRaw = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
+		for (ABuildablePiece* RB : AllRimBoardsRaw)
+		{
+			if (RB && FVector::Dist(RB->GetActorLocation(), PlywoodPos) <= FrameSearchRadius)
+			{
+				AllRimBoards.Add(RB);
+			}
+		}
 	}
 
 	// ============================================================
