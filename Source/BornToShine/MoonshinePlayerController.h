@@ -40,7 +40,7 @@ protected:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetCurrentPhaseDescription() const;
 
-	// Dev quick save/load (F5/F9)
+	// Dev quick save/load (F6/F9)
 	void QuickSave();
 	void QuickLoad();
 

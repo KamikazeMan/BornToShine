@@ -1,6 +1,7 @@
 // Born To Shine - Player Controller
 
 #include "MoonshinePlayerController.h"
+#include "ConstructionTypes.h"
 #include "ConstructionPhaseManager.h"
 #include "BuildablePiece.h"
 #include "RimBoard.h"
@@ -40,10 +41,10 @@ void AMoonshinePlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	// Dev quick save/load bindings
+	// Dev quick save/load bindings (F6/F9 — F5 conflicts with UE5 shader complexity view)
 	if (InputComponent)
 	{
-		InputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
+		InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
 		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
 		// X key delete is routed through MoonshineCharacter::OnToggleBoardType
 		// (Enhanced Input consumes X before legacy BindKey fires)
@@ -104,6 +105,16 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 		}
 
 		HighlightedPiece = HitPiece;
+	}
+
+	// Show delete hint when hovering over a piece
+	if (HitPiece && GEngine)
+	{
+		FString PieceName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceType()).ToString();
+		FString Hint = (HitPiece->GetPieceState() == EPieceState::Nailed)
+			? FString::Printf(TEXT("[Shift+X] Delete: %s (nailed)"), *PieceName)
+			: FString::Printf(TEXT("[X] Delete: %s"), *PieceName);
+		GEngine->AddOnScreenDebugMessage(42, 0.0f, FColor::White, Hint);
 	}
 }
 
@@ -182,7 +193,7 @@ FString AMoonshinePlayerController::GetCurrentPhaseDescription() const
 }
 
 // ---------------------------------------------------------------------------
-// Dev Quick Save (F5) — serialize all placed pieces to JSON
+// Dev Quick Save (F6) — serialize all placed pieces to JSON
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::QuickSave()
 {

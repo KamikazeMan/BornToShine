@@ -464,8 +464,11 @@ void UBuildingComponent::RotatePreviewLeft()
 {
 	if (CurrentPreviewPiece)
 	{
-		PreviewRotation.Yaw -= 15.0f; // 15 degree rotation step
-		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateLeft - PreviewRotation.Yaw=%.1f"), PreviewRotation.Yaw);
+		// Plywood snaps to rim board directions — use 90° steps so one press
+		// toggles between the two perpendicular frame orientations.
+		float Step = (CurrentPreviewPiece->GetPieceType() == EPieceType::Plywood) ? 90.0f : 15.0f;
+		PreviewRotation.Yaw -= Step;
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateLeft - PreviewRotation.Yaw=%.1f (step=%.0f)"), PreviewRotation.Yaw, Step);
 	}
 }
 
@@ -473,8 +476,9 @@ void UBuildingComponent::RotatePreviewRight()
 {
 	if (CurrentPreviewPiece)
 	{
-		PreviewRotation.Yaw += 15.0f; // 15 degree rotation step
-		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateRight - PreviewRotation.Yaw=%.1f"), PreviewRotation.Yaw);
+		float Step = (CurrentPreviewPiece->GetPieceType() == EPieceType::Plywood) ? 90.0f : 15.0f;
+		PreviewRotation.Yaw += Step;
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: RotateRight - PreviewRotation.Yaw=%.1f (step=%.0f)"), PreviewRotation.Yaw, Step);
 	}
 }
 

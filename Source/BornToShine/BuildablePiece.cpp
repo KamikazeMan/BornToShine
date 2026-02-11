@@ -759,9 +759,11 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					int32 NumSheets = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
 					float EffSlotWidth = FrameWidth / NumSheets;
 
-					// Pick the slot closest to the player's current placement
-					FVector CurrentOffset = CandidateLocation - RefOrigin;
-					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
+					// Pick the slot closest to where the PLAYER IS AIMING.
+					// GetActorLocation() is the raw crosshair hit set before snap
+					// detection — using CandidateLocation gravitates to center.
+					FVector AimedOffset = GetActorLocation() - RefOrigin;
+					float CurrentRgt = FVector::DotProduct(AimedOffset, RefRgt);
 
 					float BestSlot = TileMin + EffSlotWidth * 0.5f;
 					float BestDist = FLT_MAX;
@@ -1148,6 +1150,7 @@ void ABuildablePiece::UpdateVisualFeedback()
 	if (PieceState == EPieceState::Nailed && NailedMaterial)
 	{
 		MeshComponent->SetMaterial(0, NailedMaterial);
+		DynamicMaterial = nullptr; // Clear stale pointer so SetHighlighted creates a fresh one
 		MeshComponent->SetRenderCustomDepth(false);
 		return;
 	}
@@ -1279,24 +1282,22 @@ void ABuildablePiece::SetHighlighted(bool bHighlight)
 		// Save current material so we can restore it
 		PreHighlightMaterial = MeshComponent->GetMaterial(0);
 
-		// Use custom depth for outline effect + tint the color
+		// Use custom depth for outline effect
 		MeshComponent->SetRenderCustomDepth(true);
 		MeshComponent->SetCustomDepthStencilValue(1);
 
-		// If we have a DynamicMaterial, tint it; otherwise create a temporary one
-		if (DynamicMaterial)
+		// Create a fresh DynamicMaterial from the current mesh material.
+		// DynamicMaterial may be null (e.g. nailed pieces) so always create new.
+		UMaterialInterface* BaseMat = PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0);
+		if (BaseMat)
 		{
-			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"),
-				FLinearColor(1.0f, 0.4f, 0.4f, 0.9f)); // Red-ish highlight
-		}
-		else
-		{
-			// Nailed pieces use NailedMaterial directly — swap to a tinted dynamic mat
-			DynamicMaterial = UMaterialInstanceDynamic::Create(
-				PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0), this);
+			DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMat, this);
 			MeshComponent->SetMaterial(0, DynamicMaterial);
-			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"),
-				FLinearColor(1.0f, 0.4f, 0.4f, 0.9f));
+			// Try common parameter names — at least one should work for most materials
+			FLinearColor HighlightColor(1.0f, 0.3f, 0.3f, 0.9f); // Red highlight
+			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), HighlightColor);
+			DynamicMaterial->SetVectorParameterValue(FName("Color"), HighlightColor);
+			DynamicMaterial->SetVectorParameterValue(FName("Tint"), HighlightColor);
 		}
 	}
 	else
@@ -1308,11 +1309,13 @@ void ABuildablePiece::SetHighlighted(bool bHighlight)
 		{
 			// Restore the nailed material
 			MeshComponent->SetMaterial(0, NailedMaterial);
-			DynamicMaterial = nullptr; // We created a temp one during highlight
+			DynamicMaterial = nullptr;
 		}
-		else if (DynamicMaterial)
+		else if (PreHighlightMaterial)
 		{
-			// Restore original color via UpdateVisualFeedback
+			// Restore original dynamic material from pre-highlight
+			DynamicMaterial = UMaterialInstanceDynamic::Create(PreHighlightMaterial, this);
+			MeshComponent->SetMaterial(0, DynamicMaterial);
 			UpdateVisualFeedback();
 		}
 	}
