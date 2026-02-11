@@ -1094,8 +1094,13 @@ void URectangleBuilderComponent::CalculateStudLayout()
         };
 
         // --- LEFT END STUD: flush with left plate end ---
-        // Stud center at -HalfLen + StudWidth/2 (outside face flush with plate end)
-        float LeftEndX = -HalfLen + StudWidthCm / 2.0f;
+        // Use actual socket position (accounts for ExtendMeshForFlushCorners shift)
+        float LeftEndX = -HalfLen + StudWidthCm / 2.0f; // Default: non-extended plate
+        FConstructionSocket* LeftEndSocket = Plate->GetSocketByName(FName(TEXT("PlateTop_EndLeft")));
+        if (LeftEndSocket)
+        {
+            LeftEndX = LeftEndSocket->LocalPosition.X;
+        }
         StudSuggestions.Add(MakeStudSuggestion(LeftEndX, true, true, FName(TEXT("PlateTop_EndLeft"))));
 
         // --- INTERIOR STUDS at 16" OC (from existing Wall_Bottom_Plate sockets) ---
@@ -1125,7 +1130,13 @@ void URectangleBuilderComponent::CalculateStudLayout()
         }
 
         // --- RIGHT END STUD: flush with right plate end ---
-        float RightEndX = HalfLen - StudWidthCm / 2.0f;
+        // Use actual socket position (accounts for ExtendMeshForFlushCorners shift)
+        float RightEndX = HalfLen - StudWidthCm / 2.0f; // Default: non-extended plate
+        FConstructionSocket* RightEndSocket = Plate->GetSocketByName(FName(TEXT("PlateTop_EndRight")));
+        if (RightEndSocket)
+        {
+            RightEndX = RightEndSocket->LocalPosition.X;
+        }
         StudSuggestions.Add(MakeStudSuggestion(RightEndX, true, false, FName(TEXT("PlateTop_EndRight"))));
     }
 

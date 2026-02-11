@@ -217,6 +217,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 			CurrentPreviewPiece->SetActorLocation(JoistSug.Position);
 			CurrentPreviewPiece->SetActorRotation(JoistSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
 			return;
 		}
 	}
@@ -264,6 +265,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 			CurrentPreviewPiece->SetActorLocation(PreviewPos);
 			CurrentPreviewPiece->SetActorRotation(PlateSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
 			return;
 		}
 	}
@@ -286,6 +288,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 			CurrentPreviewPiece->SetActorLocation(StudSug.Position);
 			CurrentPreviewPiece->SetActorRotation(StudSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
 			return;
 		}
 	}
@@ -308,6 +311,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 		// Set the preview directly at the suggested transform — no snap detection
 		CurrentPreviewPiece->SetActorLocation(Suggestion.Position);
 		CurrentPreviewPiece->SetActorRotation(Suggestion.Rotation);
+		CurrentPreviewPiece->MarkSnapped(true);
 		return;
 	}
 

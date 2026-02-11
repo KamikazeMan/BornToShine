@@ -92,6 +92,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void FreeSocket(FName SocketName);
 
+	// Mark piece as snapped (used by suggestion system to indicate valid placement
+	// without running the full snap pipeline)
+	void MarkSnapped(bool bSnapped) { bIsSnapped = bSnapped; }
+
 	// Highlight / unhighlight for delete-target feedback
 	void SetHighlighted(bool bHighlight);
 	bool IsHighlighted() const { return bIsHighlighted; }

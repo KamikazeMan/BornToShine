@@ -65,6 +65,9 @@ void AMoonshinePlayerController::SetupInputComponent()
 		// Tab: hold to open radial piece menu, release to select
 		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::OpenRadialMenu);
 		InputComponent->BindKey(EKeys::Tab, IE_Released, this, &AMoonshinePlayerController::CloseRadialMenu);
+
+		// D key: double up end stud (only acts when a double stud is pending)
+		InputComponent->BindKey(EKeys::D, IE_Pressed, this, &AMoonshinePlayerController::OnDoubleStudPressed);
 	}
 }
 
@@ -251,6 +254,20 @@ void AMoonshinePlayerController::ToggleDeleteMode()
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Delete Mode OFF"));
 		UE_LOG(LogTemp, Log, TEXT("Delete Mode: DISABLED"));
 	}
+}
+
+void AMoonshinePlayerController::OnDoubleStudPressed()
+{
+	APawn* MyPawn = GetPawn();
+	if (!MyPawn) return;
+
+	UBuildingComponent* BC = MyPawn->FindComponentByClass<UBuildingComponent>();
+	if (!BC || !BC->IsInBuildMode()) return;
+
+	// Only act if a double stud is actually pending
+	if (!BC->IsDoubleStudAvailable()) return;
+
+	BC->DoubleUpEndStud();
 }
 
 void AMoonshinePlayerController::ClearHighlight()

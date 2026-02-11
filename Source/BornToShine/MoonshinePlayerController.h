@@ -68,6 +68,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Delete")
 	float DeleteTraceDistance;
 
+	// Double up end stud (D key while placing wall studs)
+	void OnDoubleStudPressed();
+
 	// --- Post-load helpers ---
 	void RestoreSocketConnections(TArray<ABuildablePiece*>& LoadedPieces);
 	void RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces);

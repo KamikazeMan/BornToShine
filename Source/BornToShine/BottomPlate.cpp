@@ -247,6 +247,21 @@ void ABottomPlate::ExtendMeshForFlushCorners()
 		CurrentScale3D.Z
 	));
 
-	UE_LOG(LogTemp, Log, TEXT("BottomPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
-		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
+	// Shift end stud sockets outward to match extended plate ends.
+	// Extension adds BoardWidth/2 to each side. End studs must be flush
+	// with the visual plate end, so move them outward by BoardWidth/2.
+	float Extension = BoardWidth / 2.0f;
+	FConstructionSocket* LeftEnd = GetSocketByName(FName(TEXT("PlateTop_EndLeft")));
+	if (LeftEnd)
+	{
+		LeftEnd->LocalPosition.X -= Extension;
+	}
+	FConstructionSocket* RightEnd = GetSocketByName(FName(TEXT("PlateTop_EndRight")));
+	if (RightEnd)
+	{
+		RightEnd->LocalPosition.X += Extension;
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("BottomPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f, end sockets shifted ±%.2f"),
+		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio, Extension);
 }
