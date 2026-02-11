@@ -833,13 +833,22 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     CompletedRimBoards.Add(Board4);
 
     // Bottom plate Z offset from rim board center:
-    //   + RimBoardHeight/2  (to rim board mesh top)
-    //   + PlywoodThickness  (plywood sheet sitting on rim board)
-    //   + PlateHeight/2     (plate center above plywood top)
-    const float RimBoardHalfHeight = 13.97f / 2.0f;  // 6.985cm
+    //   + RimBoardHeight     (full height: center-to-top + snap system's extra half-height for plywood)
+    //   + PlywoodThickness   (plywood sheet on top of rim board)
+    //   + PlateHalfHeight    (plate center above plywood top surface)
+    // This puts the plate bottom resting on the plywood top surface.
+    const float RimBoardHeight = 13.97f;              // 5.5" = 13.97cm (full height, not half)
     const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
     const float PlateHalfHeight = 8.89f / 2.0f;      // 2x4 is 3.5" = 8.89cm, half = 4.445cm
-    const float ZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
+    const float ZOffset = RimBoardHeight + PlywoodThickness + PlateHalfHeight;
+
+    // Inward Y offset: shift plate toward the building center so its outer face
+    // aligns with the plywood outer edge (not overhanging)
+    const float PlateHalfWidth = 3.81f / 2.0f;       // 1.5" = 3.81cm, half = 1.905cm
+
+    // Rectangle center — used to determine "inward" direction for each board
+    FVector RectCenter = (Board1->GetActorLocation() + Board2->GetActorLocation() +
+                          Board3->GetActorLocation() + Board4->GetActorLocation()) / 4.0f;
 
     ARimBoard* Boards[4] = { Board1, Board2, Board3, Board4 };
 
@@ -847,8 +856,14 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     {
         ARimBoard* Board = Boards[i];
 
+        // Compute inward direction: perpendicular to the board, pointing toward rectangle center
+        FVector BoardRight = Board->GetActorRotation().RotateVector(FVector::RightVector);
+        FVector ToCenter = RectCenter - Board->GetActorLocation();
+        float Dot = FVector::DotProduct(ToCenter, BoardRight);
+        FVector InwardDir = BoardRight * FMath::Sign(Dot);
+
         FPlateSuggestion Suggestion;
-        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset);
+        Suggestion.Position = Board->GetActorLocation() + FVector(0.0f, 0.0f, ZOffset) + InwardDir * PlateHalfWidth;
         Suggestion.Rotation = Board->GetActorRotation();
         Suggestion.LengthFeet = Board->GetBoardLengthFeet();
         Suggestion.SourceRimBoard = Board;
@@ -856,10 +871,14 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
         Suggestion.bIsValid = true;
 
         PlateSuggestions.Add(Suggestion);
+
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Plate %d suggestion - Pos=(%.1f, %.1f, %.1f) InwardOffset=(%.3f, %.3f, %.3f)"),
+            i, Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+            InwardDir.X * PlateHalfWidth, InwardDir.Y * PlateHalfWidth, InwardDir.Z * PlateHalfWidth);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (Z offset=%.2f cm above rim boards)"),
-        PlateSuggestions.Num(), ZOffset);
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (ZOffset=%.2f, InwardY=%.3f)"),
+        PlateSuggestions.Num(), ZOffset, PlateHalfWidth);
 }
 
 FPlateSuggestion URectangleBuilderComponent::GetNextPlateSuggestion() const
