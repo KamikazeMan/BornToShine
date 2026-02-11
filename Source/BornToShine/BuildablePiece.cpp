@@ -447,6 +447,116 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
+	// PRE-COMPUTE PLYWOOD SLOT POSITION (once for all candidates)
+	// Uses the FRAME CENTROID as origin so all candidates get the
+	// same tile/span ranges and the same slot selection.
+	// ============================================================
+	FVector PlywoodSlotXY = FVector::ZeroVector;
+	bool bHavePlywoodSlot = false;
+
+	if (PieceType == EPieceType::Plywood && bHavePlywoodRefYaw)
+	{
+		FRotator PlywoodRot(0.0f, PlywoodRefYaw, 0.0f);
+		FVector RefFwd = PlywoodRot.RotateVector(FVector::ForwardVector);
+		FVector RefRgt = PlywoodRot.RotateVector(FVector::RightVector);
+
+		// Compute frame centroid as a fixed reference origin
+		FVector FrameCenter = FVector::ZeroVector;
+		int32 FramePieceCount = 0;
+		for (ABuildablePiece* P : NearbyPieces)
+		{
+			if (P && P->GetPieceType() == EPieceType::RimBoard)
+			{
+				FrameCenter += P->GetActorLocation();
+				FramePieceCount++;
+			}
+		}
+		if (FramePieceCount > 0) FrameCenter /= FramePieceCount;
+
+		const float HalfW = 3.81f / 2.0f; // Rim board half-width
+
+		float TileMin = FLT_MAX, TileMax = -FLT_MAX;
+		float SpanMin = FLT_MAX, SpanMax = -FLT_MAX;
+		int32 ParallelCount = 0, PerpCount = 0;
+
+		for (ABuildablePiece* P : NearbyPieces)
+		{
+			if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+
+			FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
+			float Dot = FMath::Abs(FVector::DotProduct(BoardFwd, RefFwd));
+			FVector LocalCenter = P->GetActorLocation() - FrameCenter;
+
+			if (Dot > 0.7f)
+			{
+				ParallelCount++;
+				float CenterRgt = FVector::DotProduct(LocalCenter, RefRgt);
+				TileMin = FMath::Min(TileMin, CenterRgt - HalfW);
+				TileMax = FMath::Max(TileMax, CenterRgt + HalfW);
+			}
+			else
+			{
+				PerpCount++;
+				float CenterFwd = FVector::DotProduct(LocalCenter, RefFwd);
+				SpanMin = FMath::Min(SpanMin, CenterFwd - HalfW);
+				SpanMax = FMath::Max(SpanMax, CenterFwd + HalfW);
+			}
+		}
+
+		if (ParallelCount >= 2 && PerpCount >= 2)
+		{
+			const float SheetShort = 121.92f; // 4ft
+			const float SheetLong = 243.84f;  // 8ft
+
+			// Tiling: divide frame width into 4ft columns
+			float FrameWidth = TileMax - TileMin;
+			int32 NumCols = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
+			float ColWidth = FrameWidth / NumCols;
+
+			// Spanning: divide frame depth into 8ft rows
+			float FrameDepth = SpanMax - SpanMin;
+			int32 NumRows = FMath::Max(1, FMath::RoundToInt(FrameDepth / SheetLong));
+			float RowDepth = FrameDepth / NumRows;
+
+			// Use player's aimed position (actor location = crosshair hit)
+			FVector AimedOffset = GetActorLocation() - FrameCenter;
+			float AimedRgt = FVector::DotProduct(AimedOffset, RefRgt);
+			float AimedFwd = FVector::DotProduct(AimedOffset, RefFwd);
+
+			// Pick closest column
+			float BestCol = TileMin + ColWidth * 0.5f;
+			float BestColDist = FLT_MAX;
+			for (int32 ci = 0; ci < NumCols; ci++)
+			{
+				float ColCenter = TileMin + ColWidth * (ci + 0.5f);
+				float D = FMath::Abs(AimedRgt - ColCenter);
+				if (D < BestColDist) { BestColDist = D; BestCol = ColCenter; }
+			}
+
+			// Pick closest row
+			float BestRow = SpanMin + RowDepth * 0.5f;
+			float BestRowDist = FLT_MAX;
+			for (int32 ri = 0; ri < NumRows; ri++)
+			{
+				float RowCenter = SpanMin + RowDepth * (ri + 0.5f);
+				float D = FMath::Abs(AimedFwd - RowCenter);
+				if (D < BestRowDist) { BestRowDist = D; BestRow = RowCenter; }
+			}
+
+			PlywoodSlotXY = FrameCenter + RefFwd * BestRow + RefRgt * BestCol;
+			bHavePlywoodSlot = true;
+
+			int32 ChosenCol = (int32)((BestCol - TileMin) / ColWidth) + 1;
+			int32 ChosenRow = (int32)((BestRow - SpanMin) / RowDepth) + 1;
+			UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SLOT: Col=%d/%d Row=%d/%d FrameW=%.1f FrameD=%.1f Aim=(%.1f,%.1f) Pos=(%.1f,%.1f)"),
+				ChosenCol, NumCols, ChosenRow, NumRows,
+				FrameWidth, FrameDepth,
+				AimedRgt, AimedFwd,
+				PlywoodSlotXY.X, PlywoodSlotXY.Y);
+		}
+	}
+
+	// ============================================================
 	// STANDARD SINGLE-SOCKET SNAP CANDIDATES
 	// ============================================================
 	for (const FConstructionSocket& Socket : Sockets)
@@ -699,95 +809,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
-			// Plywood XY alignment: compute position from frame rectangle
-			// Classify rim boards as parallel or perpendicular to plywood,
-			// then use each group's WIDTH (not length) in the cross-axis
-			if ((Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
-				 Socket.SocketType == EConstructionSocketType::Plywood_Corner) &&
-				(TgtSocketType == EConstructionSocketType::RimBoard_Top_Face ||
-				 TgtSocketType == EConstructionSocketType::Joist_Top_Face) &&
-				TargetPiece)
+			// Plywood XY alignment: apply pre-computed slot position
+			// (computed once before the loop using frame centroid as origin)
+			if (bHavePlywoodSlot &&
+				(Socket.SocketType == EConstructionSocketType::Plywood_Edge ||
+				 Socket.SocketType == EConstructionSocketType::Plywood_Corner))
 			{
-				FVector RefFwd = CandidateRotation.RotateVector(FVector::ForwardVector);
-				FVector RefRgt = CandidateRotation.RotateVector(FVector::RightVector);
-				FVector RefOrigin = TargetPiece->GetActorLocation();
-				const float HalfW = 3.81f / 2.0f; // Rim board half-width
-
-				// Parallel boards define tiling range (right axis, 4ft sheets)
-				// Perpendicular boards define spanning range (forward axis, 8ft sheet)
-				float TileMin = FLT_MAX, TileMax = -FLT_MAX;
-				float SpanMin = FLT_MAX, SpanMax = -FLT_MAX;
-				int32 ParallelCount = 0, PerpCount = 0;
-
-				for (ABuildablePiece* P : NearbyPieces)
-				{
-					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
-
-					FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
-					float Dot = FMath::Abs(FVector::DotProduct(BoardFwd, RefFwd));
-					FVector LocalCenter = P->GetActorLocation() - RefOrigin;
-
-					if (Dot > 0.7f)
-					{
-						// Parallel board — its outer faces (width) define tiling range
-						ParallelCount++;
-						float CenterRgt = FVector::DotProduct(LocalCenter, RefRgt);
-						TileMin = FMath::Min(TileMin, CenterRgt - HalfW);
-						TileMax = FMath::Max(TileMax, CenterRgt + HalfW);
-					}
-					else
-					{
-						// Perpendicular board — its outer faces (width) define span range
-						PerpCount++;
-						float CenterFwd = FVector::DotProduct(LocalCenter, RefFwd);
-						SpanMin = FMath::Min(SpanMin, CenterFwd - HalfW);
-						SpanMax = FMath::Max(SpanMax, CenterFwd + HalfW);
-					}
-				}
-
-				if (ParallelCount >= 2 && PerpCount >= 2)
-				{
-					const float SheetShort = 121.92f; // 4ft nominal
-
-					// Center plywood along forward axis to span between perp boards
-					float PlywoodFwd = (SpanMin + SpanMax) / 2.0f;
-
-					// Frame-fitted slot spacing: divide actual frame width by number
-					// of sheets so each slot covers its portion of the frame exactly.
-					// The mesh is pre-scaled to match this effective width.
-					float FrameWidth = TileMax - TileMin;
-					int32 NumSheets = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
-					float EffSlotWidth = FrameWidth / NumSheets;
-
-					// Pick the slot closest to where the PLAYER IS AIMING.
-					// GetActorLocation() is the raw crosshair hit set before snap
-					// detection — using CandidateLocation gravitates to center.
-					FVector AimedOffset = GetActorLocation() - RefOrigin;
-					float CurrentRgt = FVector::DotProduct(AimedOffset, RefRgt);
-
-					float BestSlot = TileMin + EffSlotWidth * 0.5f;
-					float BestDist = FLT_MAX;
-					for (int32 si = 0; si < NumSheets; si++)
-					{
-						float SlotCenter = TileMin + EffSlotWidth * (si + 0.5f);
-						float D = FMath::Abs(CurrentRgt - SlotCenter);
-						if (D < BestDist)
-						{
-							BestDist = D;
-							BestSlot = SlotCenter;
-						}
-					}
-
-					float SavedZ = CandidateLocation.Z;
-					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
-					CandidateLocation.Z = SavedZ;
-
-					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d EffW=%.1f Ctr=(%.1f,%.1f)"),
-						TileMin, TileMax, SpanMin, SpanMax,
-						(int32)((BestSlot - TileMin) / EffSlotWidth) + 1, NumSheets,
-						EffSlotWidth,
-						CandidateLocation.X, CandidateLocation.Y);
-				}
+				float SavedZ = CandidateLocation.Z;
+				CandidateLocation.X = PlywoodSlotXY.X;
+				CandidateLocation.Y = PlywoodSlotXY.Y;
+				CandidateLocation.Z = SavedZ;
 			}
 
 			FSnapCandidate Candidate;
@@ -1279,43 +1310,43 @@ void ABuildablePiece::SetHighlighted(bool bHighlight)
 
 	if (bHighlight)
 	{
-		// Save current material so we can restore it
-		PreHighlightMaterial = MeshComponent->GetMaterial(0);
-
-		// Use custom depth for outline effect
 		MeshComponent->SetRenderCustomDepth(true);
 		MeshComponent->SetCustomDepthStencilValue(1);
 
-		// Create a fresh DynamicMaterial from the current mesh material.
-		// DynamicMaterial may be null (e.g. nailed pieces) so always create new.
-		UMaterialInterface* BaseMat = PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0);
-		if (BaseMat)
+		FLinearColor HighlightColor(1.0f, 0.3f, 0.3f, 0.9f); // Red highlight
+
+		if (DynamicMaterial)
 		{
+			// Placed piece — reuse the EXISTING DynamicMaterial (no new material).
+			// Just tint it red. UpdateVisualFeedback will restore the color later.
+			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), HighlightColor);
+		}
+		else
+		{
+			// Nailed piece — DynamicMaterial was cleared by UpdateVisualFeedback.
+			// Save the current material and create ONE temp MID for tinting.
+			PreHighlightMaterial = MeshComponent->GetMaterial(0);
+			UMaterialInterface* BaseMat = PreHighlightMaterial ? PreHighlightMaterial : MeshComponent->GetMaterial(0);
 			DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMat, this);
 			MeshComponent->SetMaterial(0, DynamicMaterial);
-			// Try common parameter names — at least one should work for most materials
-			FLinearColor HighlightColor(1.0f, 0.3f, 0.3f, 0.9f); // Red highlight
 			DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), HighlightColor);
 			DynamicMaterial->SetVectorParameterValue(FName("Color"), HighlightColor);
-			DynamicMaterial->SetVectorParameterValue(FName("Tint"), HighlightColor);
 		}
 	}
 	else
 	{
-		// Restore
 		MeshComponent->SetRenderCustomDepth(false);
 
-		if (PieceState == EPieceState::Nailed && NailedMaterial)
+		if (PreHighlightMaterial)
 		{
-			// Restore the nailed material
-			MeshComponent->SetMaterial(0, NailedMaterial);
+			// Was a nailed piece — restore the original material, discard temp MID
+			MeshComponent->SetMaterial(0, PreHighlightMaterial);
 			DynamicMaterial = nullptr;
+			PreHighlightMaterial = nullptr;
 		}
-		else if (PreHighlightMaterial)
+		else if (DynamicMaterial)
 		{
-			// Restore original dynamic material from pre-highlight
-			DynamicMaterial = UMaterialInstanceDynamic::Create(PreHighlightMaterial, this);
-			MeshComponent->SetMaterial(0, DynamicMaterial);
+			// Was a placed piece — restore color on the same DynamicMaterial
 			UpdateVisualFeedback();
 		}
 	}
