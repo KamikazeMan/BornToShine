@@ -2,6 +2,7 @@
 
 #include "BuildablePiece.h"
 #include "RimBoard.h"
+#include "BottomPlate.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -405,28 +406,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// PRE-COMPUTE BUILDING CENTER FOR BOTTOM PLATE Y OFFSET
-	// Use ALL placed rim boards (not just nearby) so the center
-	// is accurate regardless of snap search radius.
+	// PRE-FETCH ALL RIM BOARDS FOR BOTTOM PLATE Y OFFSET
+	// Used below to find the opposite parallel rim board and
+	// determine the inward direction for each target board.
 	// ============================================================
-	FVector BuildingCenter = FVector::ZeroVector;
-	int32 CenterPieceCount = 0;
-
+	TArray<ABuildablePiece*> AllRimBoards;
 	if (PieceType == EPieceType::WallPlate && AConstructionPhaseManager::Instance)
 	{
-		TArray<ABuildablePiece*> AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
-		for (ABuildablePiece* P : AllRimBoards)
-		{
-			if (P)
-			{
-				BuildingCenter += P->GetActorLocation();
-				CenterPieceCount++;
-			}
-		}
-		if (CenterPieceCount > 0)
-		{
-			BuildingCenter /= CenterPieceCount;
-		}
+		AllRimBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
 	}
 
 	// ============================================================
@@ -672,23 +659,52 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
 
-				// Y offset: shift inward toward building center by HalfWidth
-				// so the plate's outer face aligns with the plywood edge
-				if (CenterPieceCount > 0 && TargetPiece)
+				// Y offset: find the OPPOSITE parallel rim board and shift
+				// toward it by HalfWidth so the plate's outer face is flush
+				// with the plywood edge.
+				if (AllRimBoards.Num() > 0 && TargetPiece)
 				{
 					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
+					FVector RimFwd = CandidateRotation.RotateVector(FVector::ForwardVector);
 					FVector RimRight = CandidateRotation.RotateVector(FVector::RightVector);
-					FVector ToCenter = (BuildingCenter - TargetPiece->GetActorLocation()).GetSafeNormal();
-					float Dot = FVector::DotProduct(ToCenter, RimRight);
-					float InwardSign = (Dot > 0) ? 1.0f : -1.0f;
-					CandidateLocation += RimRight * InwardSign * PlateHalfWidth;
+
+					// Find the parallel rim board on the opposite side of the frame
+					float MaxPerpDist = 0.0f;
+					ABuildablePiece* OppositeBoard = nullptr;
+					for (ABuildablePiece* P : AllRimBoards)
+					{
+						if (!P || P == TargetPiece) continue;
+						FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
+						float DotFwd = FMath::Abs(FVector::DotProduct(BoardFwd, RimFwd));
+						if (DotFwd > 0.7f) // parallel board
+						{
+							FVector Delta = P->GetActorLocation() - TargetPiece->GetActorLocation();
+							float PerpDist = FMath::Abs(FVector::DotProduct(Delta, RimRight));
+							if (PerpDist > MaxPerpDist)
+							{
+								MaxPerpDist = PerpDist;
+								OppositeBoard = P;
+							}
+						}
+					}
+
+					if (OppositeBoard)
+					{
+						FVector ToOpposite = OppositeBoard->GetActorLocation() - TargetPiece->GetActorLocation();
+						float Dot = FVector::DotProduct(ToOpposite, RimRight);
+						float InwardSign = (Dot > 0) ? 1.0f : -1.0f;
+						CandidateLocation += RimRight * InwardSign * PlateHalfWidth;
+
+						UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE Y: target=%s opposite=%s dot=%.2f sign=%.0f"),
+							*TargetPiece->GetName(), *OppositeBoard->GetName(), Dot, InwardSign);
+					}
 				}
 
-				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f InwardOffset=%.2f"),
+				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP: src=%s tgt=%s Z=%.2f loc=(%.2f,%.2f,%.2f)"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),
 					CandidateLocation.Z,
-					(CenterPieceCount > 0) ? 1.905f : 0.0f);
+					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 			}
 
 			// Plywood XY alignment: compute position from frame rectangle
@@ -920,6 +936,19 @@ void ABuildablePiece::CommitPlacement()
 	{
 		CurrentSnapCandidate.SecondTargetPiece->OccupySocket(
 			CurrentSnapCandidate.SecondTargetSocketName, this);
+	}
+
+	// Bottom plate: extend mesh so corners flush out (same as rim boards)
+	// Called here (not ApplySnap) so it only runs once at placement time.
+	if (PieceType == EPieceType::WallPlate &&
+		CurrentSnapCandidate.SourceSocketType == EConstructionSocketType::BottomPlate_Bottom &&
+		CurrentSnapCandidate.TargetSocketType == EConstructionSocketType::RimBoard_Top_Face)
+	{
+		ABottomPlate* Plate = Cast<ABottomPlate>(this);
+		if (Plate)
+		{
+			Plate->ExtendMeshForFlushCorners();
+		}
 	}
 
 	// Register with PhaseManager
