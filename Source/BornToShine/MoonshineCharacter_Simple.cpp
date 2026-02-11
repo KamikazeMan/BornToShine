@@ -412,7 +412,16 @@ void AMoonshineCharacter_Simple::OnZoomStop()
 
 void AMoonshineCharacter_Simple::OnToggleBoardType()
 {
-	// In build mode with a rim board preview: toggle board type
+	AMoonshinePlayerController* PC = Cast<AMoonshinePlayerController>(GetController());
+
+	// When delete mode is active (F7), X ALWAYS routes to delete — skip board type toggle
+	if (PC && PC->IsDeleteModeActive())
+	{
+		PC->OnDeletePressed();
+		return;
+	}
+
+	// Normal path: toggle board type if we have a rim board preview
 	if (BuildingComponent)
 	{
 		ABuildablePiece* PreviewPiece = BuildingComponent->GetCurrentPreviewPiece();
@@ -437,7 +446,6 @@ void AMoonshineCharacter_Simple::OnToggleBoardType()
 	}
 
 	// Fallthrough: X key pressed but not toggling board type -> try delete
-	AMoonshinePlayerController* PC = Cast<AMoonshinePlayerController>(GetController());
 	if (PC)
 	{
 		PC->OnDeletePressed();

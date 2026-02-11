@@ -123,9 +123,9 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 	if (HitPiece && GEngine)
 	{
 		FString PieceName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceType()).ToString();
-		FString StateName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceState()).ToString();
+		FString PieceStateName = UEnum::GetDisplayValueAsText(HitPiece->GetPieceState()).ToString();
 		// In delete mode, X always works (even on nailed pieces)
-		FString Hint = FString::Printf(TEXT("[X] Delete: %s (%s)"), *PieceName, *StateName);
+		FString Hint = FString::Printf(TEXT("[X] Delete: %s (%s)"), *PieceName, *PieceStateName);
 		GEngine->AddOnScreenDebugMessage(42, 0.0f, FColor::Yellow, Hint);
 	}
 }
@@ -141,6 +141,8 @@ void AMoonshinePlayerController::OnDeletePressed()
 	ABuildablePiece* Target = HighlightedPiece.Get();
 	if (!Target)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed: No highlighted piece to delete"));
+		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 1.0f, FColor::Yellow, TEXT("No piece targeted - look at a piece first"));
 		return;
 	}
 
