@@ -214,12 +214,10 @@ void ABottomPlate::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
 
-	// Extend X by the ratio (BoardLength + 2*BoardWidth) / BoardLength
-	// to add BoardWidth (3.81cm) to each end. The extra extension (vs rim boards'
-	// single BoardWidth) compensates for the inward Y offset — at corners, the
-	// perpendicular plate is shifted inward, creating a wider gap to bridge.
+	// Extend X by the ratio (BoardLength + BoardWidth) / BoardLength
+	// to add HalfWidth (1.905cm) to each end — same formula as rim boards.
 	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	float Ratio = (BoardLength + 2.0f * BoardWidth) / BoardLength;
+	float Ratio = (BoardLength + BoardWidth) / BoardLength;
 
 	MeshComponent->SetRelativeScale3D(FVector(
 		CurrentScale3D.X * Ratio,
