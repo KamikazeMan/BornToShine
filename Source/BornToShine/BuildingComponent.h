@@ -86,6 +86,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Building")
 	TArray<FString> GetPieceTypeNames() const;
 
+	// Rich piece info for the radial menu (icons, subtitles, availability).
+	// If empty, auto-generated from AvailablePieceTypes at runtime.
+	UFUNCTION(BlueprintCallable, Category = "Building")
+	TArray<FPieceTypeInfo> GetPieceTypeInfos() const;
+
+	// Configure in the editor: icon textures, display names, subtitles per piece.
+	// Entries are matched 1:1 with AvailablePieceTypes by index.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Building|Radial Menu")
+	TArray<FPieceTypeInfo> PieceTypeInfos;
+
 protected:
 	virtual void BeginPlay() override;
 

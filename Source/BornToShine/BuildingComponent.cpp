@@ -731,3 +731,59 @@ TArray<FString> UBuildingComponent::GetPieceTypeNames() const
 	}
 	return Names;
 }
+
+TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
+{
+	// If manually configured in the editor, use those (matched 1:1 with AvailablePieceTypes)
+	if (PieceTypeInfos.Num() > 0 && PieceTypeInfos.Num() == AvailablePieceTypes.Num())
+	{
+		return PieceTypeInfos;
+	}
+
+	// Auto-generate from AvailablePieceTypes with default subtitles
+	TArray<FString> Names = GetPieceTypeNames();
+	TArray<FPieceTypeInfo> Infos;
+
+	for (int32 i = 0; i < AvailablePieceTypes.Num(); i++)
+	{
+		FPieceTypeInfo Info;
+		Info.DisplayName = Names.IsValidIndex(i) ? Names[i] : TEXT("?");
+		Info.bAvailable = true;
+
+		if (AvailablePieceTypes[i])
+		{
+			ABuildablePiece* CDO = AvailablePieceTypes[i]->GetDefaultObject<ABuildablePiece>();
+			if (CDO)
+			{
+				Info.PieceType = CDO->GetPieceType();
+
+				// Default subtitles per piece type
+				switch (Info.PieceType)
+				{
+				case EPieceType::Foundation:  Info.Subtitle = TEXT("12x12"); break;
+				case EPieceType::RimBoard:    Info.Subtitle = TEXT("2x6 8ft"); break;
+				case EPieceType::FloorJoist:  Info.Subtitle = TEXT("16in OC"); break;
+				case EPieceType::Plywood:     Info.Subtitle = TEXT("4x8"); break;
+				case EPieceType::WallPlate:   Info.Subtitle = TEXT("2x4"); break;
+				case EPieceType::WallStud:    Info.Subtitle = TEXT("92-5/8\""); break;
+				case EPieceType::CornerPost:  Info.Subtitle = TEXT("4-Stud"); break;
+				default: break;
+				}
+			}
+
+			// Use editor-configured info if it exists at this index (partial config)
+			if (PieceTypeInfos.IsValidIndex(i))
+			{
+				const FPieceTypeInfo& EditorInfo = PieceTypeInfos[i];
+				if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
+				if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
+				if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
+				Info.bAvailable = EditorInfo.bAvailable;
+			}
+		}
+
+		Infos.Add(Info);
+	}
+
+	return Infos;
+}

@@ -5,8 +5,9 @@
 #include "CoreMinimal.h"
 #include "ConstructionTypes.generated.h"
 
-// Forward declaration for FSnapCandidate
+// Forward declarations
 class ABuildablePiece;
+class UTexture2D;
 
 /**
  * Defines the type of construction piece
@@ -277,4 +278,38 @@ struct FSnapCandidate
 	}
 
 	bool IsValid() const { return TargetPiece != nullptr; }
+};
+
+/**
+ * Rich info for each piece type in the radial menu.
+ * Configure in the editor on BuildingComponent::PieceTypeInfos.
+ */
+USTRUCT(BlueprintType)
+struct FPieceTypeInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piece Info")
+	EPieceType PieceType;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piece Info")
+	FString DisplayName;
+
+	// Short label shown in segment (e.g. "8ft", "16in OC", "4x8")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piece Info")
+	FString Subtitle;
+
+	// Icon texture — assign in the editor via soft object path
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piece Info")
+	TSoftObjectPtr<UTexture2D> Icon;
+
+	// If false, segment is drawn grayed out
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Piece Info")
+	bool bAvailable;
+
+	FPieceTypeInfo()
+		: PieceType(EPieceType::None)
+		, bAvailable(true)
+	{
+	}
 };

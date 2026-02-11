@@ -277,14 +277,15 @@ void AMoonshinePlayerController::OpenRadialMenu()
 	UBuildingComponent* BC = MyPawn->FindComponentByClass<UBuildingComponent>();
 	if (!BC || !BC->IsInBuildMode()) return;
 
-	TArray<FString> Names = BC->GetPieceTypeNames();
-	if (Names.Num() == 0) return;
+	TArray<FPieceTypeInfo> Infos = BC->GetPieceTypeInfos();
+	if (Infos.Num() == 0) return;
 
 	RadialMenu = CreateWidget<URadialPieceMenu>(this);
 	if (!RadialMenu) return;
 
-	RadialMenu->InitMenu(Names, BC->GetCurrentPieceTypeIndex());
+	RadialMenu->InitMenu(Infos, BC->GetCurrentPieceTypeIndex());
 	RadialMenu->AddToViewport(100);
+	RadialMenu->PlaySoundOpen();
 
 	// Center mouse on screen
 	int32 VPX, VPY;
@@ -298,7 +299,7 @@ void AMoonshinePlayerController::OpenRadialMenu()
 	BC->SetComponentTickEnabled(false);
 	bRadialMenuOpen = true;
 
-	UE_LOG(LogTemp, Log, TEXT("Radial menu opened (%d segments)"), Names.Num());
+	UE_LOG(LogTemp, Log, TEXT("Radial menu opened (%d segments)"), Infos.Num());
 }
 
 void AMoonshinePlayerController::CloseRadialMenu()
@@ -308,6 +309,7 @@ void AMoonshinePlayerController::CloseRadialMenu()
 	int32 Selected = -1;
 	if (RadialMenu)
 	{
+		RadialMenu->PlaySoundClose();
 		Selected = RadialMenu->GetHighlightedIndex();
 		RadialMenu->RemoveFromParent();
 		RadialMenu = nullptr;
