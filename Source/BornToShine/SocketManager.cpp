@@ -29,6 +29,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreatePlywoodRules();
 	CreateBottomPlateRules();
 	CreateWallStudRules();
+	CreateCornerPostRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -206,6 +207,32 @@ void ASocketManager::CreateWallStudRules()
 	CompatibilityRules.Add(PlateTopStudRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added wall stud compatibility rules"));
+}
+
+void ASocketManager::CreateCornerPostRules()
+{
+	// Corner post bottom snaps to CornerPost_Seat sockets on plate ends.
+	// Same generous snap distance as wall studs (socket is ~117cm below actor origin).
+	FSocketCompatibilityRule PostBottomRule;
+	PostBottomRule.SourceSocketType = EConstructionSocketType::CornerPost_Bottom;
+	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::CornerPost_Seat);
+	PostBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PostBottomRule.SnapDistance = 250.0f;
+	PostBottomRule.bCheckAlignment = false;
+	PostBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PostBottomRule);
+
+	// Reverse: CornerPost_Seat accepts CornerPost_Bottom
+	FSocketCompatibilityRule SeatRule;
+	SeatRule.SourceSocketType = EConstructionSocketType::CornerPost_Seat;
+	SeatRule.CompatibleSocketTypes.Add(EConstructionSocketType::CornerPost_Bottom);
+	SeatRule.RequiredPhase = EConstructionPhase::WallFrame;
+	SeatRule.SnapDistance = 250.0f;
+	SeatRule.bCheckAlignment = false;
+	SeatRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(SeatRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added corner post compatibility rules"));
 }
 
 bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const

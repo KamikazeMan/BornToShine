@@ -677,6 +677,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Special handling for corner post-to-plate snaps
+			// Corner post matches plate yaw, forced vertical (same as wall studs)
+			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
+				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Special handling for bottom plate end-to-end snaps (corners/inline)
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_End &&
 				TgtSocketType == EConstructionSocketType::BottomPlate_End &&

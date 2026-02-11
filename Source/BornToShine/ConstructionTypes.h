@@ -21,6 +21,7 @@ enum class EPieceType : uint8
 	Plywood				UMETA(DisplayName = "Plywood Sheathing"),
 	WallStud			UMETA(DisplayName = "Wall Stud"),
 	WallPlate			UMETA(DisplayName = "Wall Plate"),
+	CornerPost			UMETA(DisplayName = "Corner Post"),
 	Header				UMETA(DisplayName = "Header"),
 	Rafter				UMETA(DisplayName = "Rafter")
 };
@@ -73,6 +74,11 @@ enum class EConstructionSocketType : uint8
 	Wall_Top_Plate				UMETA(DisplayName = "Wall Top Plate"),
 	Wall_Stud_Bottom			UMETA(DisplayName = "Wall Stud Bottom"),
 	Wall_Stud_Top				UMETA(DisplayName = "Wall Stud Top"),
+
+	// Corner Post Sockets
+	CornerPost_Bottom			UMETA(DisplayName = "Corner Post Bottom"),
+	CornerPost_Top				UMETA(DisplayName = "Corner Post Top"),
+	CornerPost_Seat				UMETA(DisplayName = "Corner Post Seat"),
 
 	None						UMETA(DisplayName = "None")
 };

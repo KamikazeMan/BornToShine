@@ -130,11 +130,31 @@ void ABottomPlate::CreateEndSockets()
 
 void ABottomPlate::CreateTopFaceSockets()
 {
-	// Top face sockets at 16" OC for wall stud attachment
-	float Spacing = 40.64f; // 16" OC
 	float HalfLen = BoardLength / 2.0f;
 	float SocketZ = BoardHeight / 2.0f;
 
+	// --- Corner post seat sockets at both plate ends ---
+	// Corner posts snap to these instead of the 16" OC stud sockets
+	{
+		FConstructionSocket LeftSeat;
+		LeftSeat.SocketName = FName(TEXT("CornerSeat_Left"));
+		LeftSeat.SocketType = EConstructionSocketType::CornerPost_Seat;
+		LeftSeat.LocalPosition = FVector(-HalfLen, 0.0f, SocketZ);
+		LeftSeat.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
+		LeftSeat.bIsOccupied = false;
+		Sockets.Add(LeftSeat);
+
+		FConstructionSocket RightSeat;
+		RightSeat.SocketName = FName(TEXT("CornerSeat_Right"));
+		RightSeat.SocketType = EConstructionSocketType::CornerPost_Seat;
+		RightSeat.LocalPosition = FVector(HalfLen, 0.0f, SocketZ);
+		RightSeat.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
+		RightSeat.bIsOccupied = false;
+		Sockets.Add(RightSeat);
+	}
+
+	// --- Interior stud sockets at 16" OC ---
+	float Spacing = 40.64f; // 16" OC
 	float CurrentX = -HalfLen + Spacing;
 	int32 Count = 0;
 
@@ -152,7 +172,7 @@ void ABottomPlate::CreateTopFaceSockets()
 		Count++;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Created %d top face sockets at 16\" OC for stud placement"), Count);
+	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Created %d top face sockets (2 corner seats + %d interior at 16\" OC)"), Count + 2, Count);
 }
 
 void ABottomPlate::SetBoardLengthFeet(int32 LengthInFeet)
