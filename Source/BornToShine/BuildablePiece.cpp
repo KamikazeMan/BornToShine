@@ -49,11 +49,22 @@ void ABuildablePiece::BeginPlay()
 
 	InitializeSockets();
 
-	// Create dynamic material instance for visual feedback
+	// Create dynamic material instance for visual feedback.
+	// Guard: only create MID from a Material or MaterialInstanceConstant,
+	// never from another MID (Unreal rejects MID-from-MID parent chains).
 	if (MeshComponent && MeshComponent->GetMaterial(0))
 	{
-		DynamicMaterial = UMaterialInstanceDynamic::Create(MeshComponent->GetMaterial(0), this);
-		MeshComponent->SetMaterial(0, DynamicMaterial);
+		UMaterialInterface* BaseMat = MeshComponent->GetMaterial(0);
+		if (Cast<UMaterialInstanceDynamic>(BaseMat))
+		{
+			// Already a MID (e.g. from hot-reload or re-entrance) — reuse it
+			DynamicMaterial = Cast<UMaterialInstanceDynamic>(BaseMat);
+		}
+		else
+		{
+			DynamicMaterial = UMaterialInstanceDynamic::Create(BaseMat, this);
+			MeshComponent->SetMaterial(0, DynamicMaterial);
+		}
 	}
 
 	UpdateVisualFeedback();
@@ -1321,8 +1332,13 @@ void ABuildablePiece::SetHighlighted(bool bHighlight)
 		// Save whatever material is currently on the mesh
 		PreHighlightMaterial = MeshComponent->GetMaterial(0);
 
-		// Create a fresh MID from the current material for tinting
+		// Walk up the parent chain to find a Material or MaterialInstanceConstant.
+		// Unreal rejects MID-from-MID parent chains (causes "not a valid parent" error).
 		UMaterialInterface* BaseMat = PreHighlightMaterial;
+		while (UMaterialInstanceDynamic* ParentMID = Cast<UMaterialInstanceDynamic>(BaseMat))
+		{
+			BaseMat = ParentMID->Parent;
+		}
 		if (!BaseMat) BaseMat = UMaterial::GetDefaultMaterial(MD_Surface);
 
 		UMaterialInstanceDynamic* HighlightMID = UMaterialInstanceDynamic::Create(BaseMat, this);

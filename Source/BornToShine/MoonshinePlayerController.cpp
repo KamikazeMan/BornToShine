@@ -49,8 +49,11 @@ void AMoonshinePlayerController::SetupInputComponent()
 		InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
 		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
 		InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AMoonshinePlayerController::ToggleDeleteMode);
-		// X key delete is routed through MoonshineCharacter_Simple::OnToggleBoardType
-		// (Enhanced Input consumes X before legacy BindKey fires)
+
+		// X key: Legacy fallback for delete. If IA_ToggleBoardType is set up
+		// in Enhanced Input, Enhanced Input consumes X first and this never fires.
+		// If IA_ToggleBoardType is NOT configured, this catches the X key press.
+		InputComponent->BindKey(EKeys::X, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
 	}
 }
 

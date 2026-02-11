@@ -18,21 +18,6 @@ APlywoodSheet::APlywoodSheet()
 	if (MeshComponent)
 	{
 		MeshComponent->SetupAttachment(SceneRoot);
-
-		// Default cube mesh so the piece is visible even without a Blueprint.
-		// A BP_PlywoodSheet Blueprint can override this with a custom mesh.
-		static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeMesh(
-			TEXT("/Engine/BasicShapes/Cube.Cube"));
-		if (CubeMesh.Succeeded())
-		{
-			MeshComponent->SetStaticMesh(CubeMesh.Object);
-			// Scale to 4x8 sheet: length x width x thickness
-			MeshComponent->SetRelativeScale3D(FVector(
-				SheetLength / 100.0f,    // X = 8ft
-				SheetWidth / 100.0f,     // Y = 4ft
-				SheetThickness / 100.0f  // Z = 3/4"
-			));
-		}
 	}
 
 	// Plywood is auto-nailed (glued/nailed in real framing)
