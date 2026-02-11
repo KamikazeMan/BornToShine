@@ -182,13 +182,16 @@ void ASocketManager::CreateBottomPlateRules()
 
 void ASocketManager::CreateWallStudRules()
 {
-	// Wall stud bottom socket snaps to Wall_Bottom_Plate sockets (on bottom plate top face)
+	// Wall stud bottom socket snaps to Wall_Bottom_Plate sockets (on bottom plate top face).
+	// Snap distance is large (250cm) because the stud's bottom socket is ~117cm below
+	// the actor origin (half the stud height). When the preview is near the plate,
+	// the socket world position is far underground — needs a generous search radius.
 	FSocketCompatibilityRule StudBottomRule;
 	StudBottomRule.SourceSocketType = EConstructionSocketType::Wall_Stud_Bottom;
 	StudBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Bottom_Plate);
 	StudBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
-	StudBottomRule.SnapDistance = 50.0f;
-	StudBottomRule.bCheckAlignment = false; // Stud just needs to sit on top of plate
+	StudBottomRule.SnapDistance = 250.0f;
+	StudBottomRule.bCheckAlignment = false;
 	StudBottomRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(StudBottomRule);
 
@@ -197,7 +200,7 @@ void ASocketManager::CreateWallStudRules()
 	PlateTopStudRule.SourceSocketType = EConstructionSocketType::Wall_Bottom_Plate;
 	PlateTopStudRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Bottom);
 	PlateTopStudRule.RequiredPhase = EConstructionPhase::WallFrame;
-	PlateTopStudRule.SnapDistance = 50.0f;
+	PlateTopStudRule.SnapDistance = 250.0f;
 	PlateTopStudRule.bCheckAlignment = false;
 	PlateTopStudRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(PlateTopStudRule);

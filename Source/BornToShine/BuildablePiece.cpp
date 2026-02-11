@@ -628,6 +628,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Special handling for wall stud-to-bottom plate snaps
+			// Stud matches plate yaw (1.5" edge along wall), forced vertical (no pitch/roll)
+			if (Socket.SocketType == EConstructionSocketType::Wall_Stud_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Special handling for bottom plate end-to-end snaps (corners/inline)
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_End &&
 				TgtSocketType == EConstructionSocketType::BottomPlate_End &&
@@ -929,8 +940,8 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	FVector FinalLocation = Candidate.SnapLocation;
 	FRotator FinalRotation = Candidate.SnapRotation;
 
-	// Force plywood and wall plates perfectly flat — only yaw varies
-	if (PieceType == EPieceType::Plywood || PieceType == EPieceType::WallPlate)
+	// Force plywood, wall plates, and wall studs vertical — only yaw varies
+	if (PieceType == EPieceType::Plywood || PieceType == EPieceType::WallPlate || PieceType == EPieceType::WallStud)
 	{
 		FinalRotation.Pitch = 0.0f;
 		FinalRotation.Roll = 0.0f;

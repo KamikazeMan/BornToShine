@@ -34,8 +34,12 @@ void AWallStud::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Set initial mesh scale
-	UpdateMeshScale();
+	// Mesh stays at scale (1,1,1) — the user's 2x4 mesh is already correctly proportioned.
+	// Only sockets need to know the height for positioning.
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+	}
 
 	UE_LOG(LogTemp, Log, TEXT("WallStud: BeginPlay - Height=%.1fcm (%.2f in), Total sockets: %d"),
 		StudHeight, GetStudHeightInches(), Sockets.Num());
@@ -86,7 +90,6 @@ void AWallStud::SetStudHeightInches(float HeightInInches)
 	if (!FMath::IsNearlyEqual(NewHeightCm, StudHeight, 0.01f))
 	{
 		StudHeight = NewHeightCm;
-		UpdateMeshScale();
 		RegenerateSockets();
 
 		UE_LOG(LogTemp, Log, TEXT("WallStud: Height changed to %s"), *GetHeightDisplayString());
@@ -134,15 +137,6 @@ void AWallStud::RegenerateSockets()
 
 void AWallStud::UpdateMeshScale()
 {
-	if (!MeshComponent) return;
-
-	// Scale mesh to match stud dimensions:
-	// X = along wall (1.5" narrow edge)
-	// Y = in/out (3.5" wide face)
-	// Z = vertical height
-	MeshComponent->SetRelativeScale3D(FVector(
-		StudWidth / 100.0f,    // X = 1.5" = 0.0381
-		StudDepth / 100.0f,    // Y = 3.5" = 0.0889
-		StudHeight / 100.0f    // Z = height = ~2.3527
-	));
+	// No-op: the user's 2x4 mesh is already correctly proportioned.
+	// Mesh stays at (1,1,1). Socket positions handle all geometry.
 }
