@@ -2,7 +2,6 @@
 
 #include "BuildablePiece.h"
 #include "RimBoard.h"
-#include "BottomPlate.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -176,7 +175,27 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 	if (NearbyPieces.Num() == 0)
 	{
+		static float LastLogTime = 0.0f;
+		float CurrentTime = GetWorld()->GetTimeSeconds();
+		if (CurrentTime - LastLogTime > 2.0f)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s: No nearby pieces within %.0fcm of (%.1f, %.1f, %.1f)"),
+				*GetName(), SnapSearchRadius, GetActorLocation().X, GetActorLocation().Y, GetActorLocation().Z);
+			LastLogTime = CurrentTime;
+		}
 		return Candidates;
+	}
+
+	// Debug: Log search info (throttled)
+	static float LastSearchLogTime = 0.0f;
+	{
+		float CurrentTime = GetWorld()->GetTimeSeconds();
+		if (CurrentTime - LastSearchLogTime > 2.0f)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s: Searching %d nearby pieces with %d sockets"),
+				*GetName(), NearbyPieces.Num(), Sockets.Num());
+			LastSearchLogTime = CurrentTime;
+		}
 	}
 
 	// ============================================================
@@ -386,27 +405,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	}
 
 	// ============================================================
-	// PRE-FETCH NEARBY FRAME RIM BOARDS (for plywood alignment)
-	// On large foundations (e.g. 24'), rim boards may be beyond
-	// SnapSearchRadius (500cm). Use a larger radius (2000cm ~65ft)
-	// to capture the full frame while excluding distant foundations.
-	// ============================================================
-	TArray<ABuildablePiece*> AllRimBoards;
-	if (PieceType == EPieceType::Plywood && AConstructionPhaseManager::Instance)
-	{
-		const float FrameSearchRadius = 2000.0f; // ~65ft covers any residential frame
-		FVector PlywoodPos = GetActorLocation();
-		TArray<ABuildablePiece*> AllRimBoardsRaw = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
-		for (ABuildablePiece* RB : AllRimBoardsRaw)
-		{
-			if (RB && FVector::Dist(RB->GetActorLocation(), PlywoodPos) <= FrameSearchRadius)
-			{
-				AllRimBoards.Add(RB);
-			}
-		}
-	}
-
-	// ============================================================
 	// PRE-COMPUTE STABLE PLYWOOD REFERENCE YAW
 	// Plywood must use a single consistent yaw for ALL candidates
 	// to prevent rotation flipping as different snap targets win.
@@ -419,9 +417,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	{
 		float BestNormYaw = 360.0f;
 
-		for (ABuildablePiece* P : AllRimBoards)
+		for (ABuildablePiece* P : NearbyPieces)
 		{
-			if (!P) continue;
+			if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
 
 			float Y = P->GetActorRotation().Yaw;
 			// Normalize to [0, 180) — boards at 0 and 180 are the same direction
@@ -442,22 +440,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 	// ============================================================
 	for (const FConstructionSocket& Socket : Sockets)
 	{
-		// Skip reception sockets — these are targets for OTHER pieces to snap to,
-		// not for positioning THIS piece. Using them as source sockets causes
-		// incorrect snap angles (e.g., rim board TopFace matching a joist end
-		// produces an uncontrolled rotation instead of the proper 90-degree corner).
-		if (PieceType == EPieceType::RimBoard &&
-			(Socket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
-			 Socket.SocketType == EConstructionSocketType::RimBoard_Side_Face))
-		{
-			continue;
-		}
-		if (PieceType == EPieceType::FloorJoist &&
-			Socket.SocketType == EConstructionSocketType::Joist_Top_Face)
-		{
-			continue;
-		}
-
 		FVector SocketWorldLocation = GetActorTransform().TransformPosition(Socket.LocalPosition);
 		FRotator SocketWorldRotation = GetActorRotation() + Socket.LocalRotation;
 
@@ -642,21 +624,33 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					const float BoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 					CandidateLocation.Z += BoardHalfHeight;
 				}
+
+				UE_LOG(LogTemp, Warning, TEXT("PLYWOOD SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					SnapLoc.Z,
+					SocketWorldOffset.Z,
+					CandidateLocation.Z);
 			}
 
-			// Bottom plate Z offset: plate sits on top of plywood, above rim board.
-			// From TopFace socket (rim board midpoint):
+			// Bottom plate Z offset: plate sits on top of plywood, which sits on
+			// top of the rim board. From the TopFace socket (at rim board midpoint):
 			//   + RimBoardHalfHeight (6.985cm) to reach actual mesh top
 			//   + PlywoodThickness (1.905cm) for plywood sheet on top
-			// No Y offset needed: plate and rim board are both 3.81cm wide,
-			// so centering on the rim board aligns the plate face with the
-			// plywood edge automatically.
+			// Total = 8.89cm above the TopFace socket position
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_Bottom &&
 				TgtSocketType == EConstructionSocketType::RimBoard_Top_Face)
 			{
 				const float RimBoardHalfHeight = 13.97f / 2.0f; // 6.985cm
 				const float PlywoodThickness = 1.905f; // 3/4"
 				CandidateLocation.Z += RimBoardHalfHeight + PlywoodThickness; // 8.89cm
+
+				UE_LOG(LogTemp, Warning, TEXT("BOTTOM PLATE SNAP Z: src=%s tgt=%s SnapLoc.Z=%.2f SocketOffset.Z=%.2f ActorZ=%.2f"),
+					*Socket.SocketName.ToString(),
+					*TargetSocketName.ToString(),
+					SnapLoc.Z,
+					SocketWorldOffset.Z,
+					CandidateLocation.Z);
 			}
 
 			// Plywood XY alignment: compute position from frame rectangle
@@ -679,9 +673,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				float SpanMin = FLT_MAX, SpanMax = -FLT_MAX;
 				int32 ParallelCount = 0, PerpCount = 0;
 
-				for (ABuildablePiece* P : AllRimBoards)
+				for (ABuildablePiece* P : NearbyPieces)
 				{
-					if (!P) continue;
+					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
 
 					FVector BoardFwd = P->GetActorRotation().RotateVector(FVector::ForwardVector);
 					float Dot = FMath::Abs(FVector::DotProduct(BoardFwd, RefFwd));
@@ -719,12 +713,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					int32 NumSheets = FMath::Max(1, FMath::RoundToInt(FrameWidth / SheetShort));
 					float EffSlotWidth = FrameWidth / NumSheets;
 
-					// Pick the slot closest to the player's AIM position (actor location
-					// before snap), not the candidate position from the socket match.
-					// This ensures the player can aim at different areas of the frame
-					// to select different sheet slots.
-					FVector AimOffset = GetActorLocation() - RefOrigin;
-					float CurrentRgt = FVector::DotProduct(AimOffset, RefRgt);
+					// Pick the slot closest to the player's current placement
+					FVector CurrentOffset = CandidateLocation - RefOrigin;
+					float CurrentRgt = FVector::DotProduct(CurrentOffset, RefRgt);
 
 					float BestSlot = TileMin + EffSlotWidth * 0.5f;
 					float BestDist = FLT_MAX;
@@ -742,6 +733,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					float SavedZ = CandidateLocation.Z;
 					CandidateLocation = RefOrigin + RefFwd * PlywoodFwd + RefRgt * BestSlot;
 					CandidateLocation.Z = SavedZ;
+
+					UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FRAME: Tile=[%.1f,%.1f] Span=[%.1f,%.1f] Slot=%d/%d EffW=%.1f Ctr=(%.1f,%.1f)"),
+						TileMin, TileMax, SpanMin, SpanMax,
+						(int32)((BestSlot - TileMin) / EffSlotWidth) + 1, NumSheets,
+						EffSlotWidth,
+						CandidateLocation.X, CandidateLocation.Y);
 				}
 			}
 
@@ -849,6 +846,16 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
 
+	// Debug: Log final Z for plywood placements
+	if (PieceType == EPieceType::Plywood)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD FINAL POS: Actor Z=%.2f  SnapTo=%s (socket=%s) Priority=%d"),
+			FinalLocation.Z,
+			Candidate.TargetPiece ? *Candidate.TargetPiece->GetName() : TEXT("null"),
+			*Candidate.TargetSocketName.ToString(),
+			Candidate.Priority);
+	}
+
 	// Update snap state
 	bIsSnapped = true;
 	SnappedToPiece = Candidate.TargetPiece;
@@ -875,33 +882,6 @@ void ABuildablePiece::CommitPlacement()
 	{
 		CurrentSnapCandidate.SecondTargetPiece->OccupySocket(
 			CurrentSnapCandidate.SecondTargetSocketName, this);
-	}
-
-	// Rim board: extend mesh at corners so board faces sit flush.
-	// This is a safety net for boards placed via the normal snap path
-	// (the RectangleBuilder also calls this for suggestion-based boards).
-	if (PieceType == EPieceType::RimBoard &&
-		CurrentSnapCandidate.SourceSocketType == EConstructionSocketType::RimBoard_End_Corner &&
-		CurrentSnapCandidate.TargetSocketType == EConstructionSocketType::RimBoard_End_Corner)
-	{
-		ARimBoard* RimBoard = Cast<ARimBoard>(this);
-		if (RimBoard)
-		{
-			RimBoard->ExtendMeshForFlushCorners();
-		}
-	}
-
-	// Bottom plate: extend mesh so corners flush out (same as rim boards)
-	// Called here (not ApplySnap) so it only runs once at placement time.
-	if (PieceType == EPieceType::WallPlate &&
-		CurrentSnapCandidate.SourceSocketType == EConstructionSocketType::BottomPlate_Bottom &&
-		CurrentSnapCandidate.TargetSocketType == EConstructionSocketType::RimBoard_Top_Face)
-	{
-		ABottomPlate* Plate = Cast<ABottomPlate>(this);
-		if (Plate)
-		{
-			Plate->ExtendMeshForFlushCorners();
-		}
 	}
 
 	// Register with PhaseManager
@@ -954,11 +934,11 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 600;
 	}
 
-	// Plywood edge to Plywood edge (sheet-to-sheet, HIGH PRIORITY — wins over joist snap)
+	// Plywood edge to Plywood edge (sheet-to-sheet, MEDIUM PRIORITY)
 	if (SocketA == EConstructionSocketType::Plywood_Edge &&
 		SocketB == EConstructionSocketType::Plywood_Edge)
 	{
-		return 650;
+		return 500;
 	}
 
 	// Bottom plate end-to-end (corner/inline connections)

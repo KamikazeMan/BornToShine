@@ -50,9 +50,7 @@ void ABottomPlate::InitializeSockets()
 void ABottomPlate::CreateBottomSockets()
 {
 	float HalfLen = BoardLength / 2.0f;
-	// Mesh pivot is at BOTTOM (like rim boards), so Z=0 is the mesh bottom face.
-	// This ensures the plate sits directly on the plywood surface.
-	float SocketZ = 0.0f;
+	float SocketZ = -BoardHeight / 2.0f;
 	float Spacing = 40.64f; // 16" OC
 
 	// End bottom sockets (at both ends of the plate)
@@ -192,27 +190,6 @@ int32 ABottomPlate::GetBoardLengthFeet() const
 FString ABottomPlate::GetLengthDisplayString() const
 {
 	return FString::Printf(TEXT("%d ft (%.1f cm)"), CurrentLengthFeet, BoardLength);
-}
-
-void ABottomPlate::ExtendMeshForFlushCorners()
-{
-	if (!MeshComponent) return;
-
-	// Extend X by the ratio (EffectiveLength + BoardWidth) / EffectiveLength
-	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
-	// Mesh is centered at origin so scaling extends equally both directions.
-	FVector MeshScale = MeshComponent->GetRelativeScale3D();
-	float EffLen = GetEffectiveLength();
-	float Ratio = (EffLen + BoardWidth) / EffLen;
-
-	MeshComponent->SetRelativeScale3D(FVector(
-		MeshScale.X * Ratio,
-		MeshScale.Y,
-		MeshScale.Z
-	));
-
-	UE_LOG(LogTemp, Log, TEXT("BottomPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
-		*GetName(), Ratio, MeshScale.X, MeshScale.X * Ratio);
 }
 
 void ABottomPlate::ScalePiece(float ScaleDelta)

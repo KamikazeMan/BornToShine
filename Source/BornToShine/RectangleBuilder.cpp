@@ -41,16 +41,6 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
 {
     if (!Board) return;
 
-    // Starting a new rectangle — clear stale joist state from previous build
-    // so joist suggestions don't carry over to the wrong frame.
-    if (TrackedBoards.Num() == 0)
-    {
-        JoistSuggestions.Empty();
-        PlacedJoistCount = 0;
-        ThroughBoard1 = nullptr;
-        ThroughBoard3 = nullptr;
-    }
-
     TrackedBoards.AddUnique(Board);
     RecalculateState();
 
