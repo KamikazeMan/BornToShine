@@ -19,6 +19,11 @@ ABuildablePiece::ABuildablePiece()
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
 	RootComponent = MeshComponent;
 
+	// Ensure mesh responds to line traces (visibility channel).
+	// QueryOnly is enough for traces (no physics needed for building pieces).
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	MeshComponent->SetCollisionResponseToAllChannels(ECR_Block);
+
 	// Default values
 	PieceType = EPieceType::None;
 	PieceState = EPieceState::Preview;

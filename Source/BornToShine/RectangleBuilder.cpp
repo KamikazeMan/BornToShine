@@ -962,8 +962,50 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
         Plate->SetBoardLengthFeet(Suggestion.LengthFeet);
     }
 
-    // Set position and rotation (directly above the rim board)
-    Plate->SetActorLocation(Suggestion.Position);
+    // --- Recalculate plate Z from actual plywood actors ---
+    // CalculatePlateLayout runs when the rectangle completes (before plywood is placed),
+    // so the Z in the suggestion is a fallback estimate. Now that plywood is placed,
+    // recalculate Z from the real plywood top surface.
+    const float PlateHalfHeight = 8.89f / 2.0f; // 4.445cm
+    FVector PlatePos = Suggestion.Position;
+
+    if (AConstructionPhaseManager::Instance)
+    {
+        TArray<ABuildablePiece*> PlywoodPieces =
+            AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Plywood);
+
+        float BestPlywoodTopZ = 0.0f;
+        bool bFoundPlywood = false;
+
+        for (ABuildablePiece* Piece : PlywoodPieces)
+        {
+            APlywoodSheet* Ply = Cast<APlywoodSheet>(Piece);
+            if (!Ply) continue;
+
+            float PlyTopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
+
+            if (!bFoundPlywood || PlyTopZ > BestPlywoodTopZ)
+            {
+                BestPlywoodTopZ = PlyTopZ;
+            }
+            bFoundPlywood = true;
+        }
+
+        if (bFoundPlywood)
+        {
+            float NewZ = BestPlywoodTopZ + PlateHalfHeight;
+            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_FIX: PlywoodTopZ=%.3f + PlateHalfH=%.3f = NewZ=%.3f (was %.3f, delta=%.3f)"),
+                BestPlywoodTopZ, PlateHalfHeight, NewZ, PlatePos.Z, NewZ - PlatePos.Z);
+            PlatePos.Z = NewZ;
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_FIX: No plywood found at placement time! Using suggestion Z=%.3f"), PlatePos.Z);
+        }
+    }
+
+    // Set position and rotation (on top of the plywood, above the rim board)
+    Plate->SetActorLocation(PlatePos);
     Plate->SetActorRotation(Suggestion.Rotation);
 
     // Mark as placed (and auto-nail if BP says so)
@@ -984,9 +1026,9 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
 
     PlacedPlateCount++;
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Placed bottom plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %dft"),
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed bottom plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %dft"),
         PlacedPlateCount, PlateSuggestions.Num(),
-        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        PlatePos.X, PlatePos.Y, PlatePos.Z,
         Suggestion.Rotation.Yaw, Suggestion.LengthFeet);
 
     return true;

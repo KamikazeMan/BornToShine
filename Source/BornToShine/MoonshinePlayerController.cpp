@@ -92,6 +92,7 @@ void AMoonshinePlayerController::UpdatePieceHighlight()
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(GetPawn());
+	Params.bTraceComplex = true; // Use render mesh for traces (Rhino meshes may lack simple collision)
 
 	// Also ignore the preview piece — otherwise it blocks the trace and
 	// prevents placed pieces behind it from being highlighted/deleted.

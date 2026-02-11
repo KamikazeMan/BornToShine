@@ -7,6 +7,7 @@
 #include "PlywoodSheet.h"
 #include "BottomPlate.h"
 #include "RectangleBuilder.h"
+#include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/Character.h"
@@ -216,7 +217,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 	// PLATE SUGGESTION OVERRIDE: When placing a bottom plate and the RectangleBuilder
 	// has plate suggestions (from a completed rim board rectangle), position the preview
-	// at the next plate location directly above the corresponding rim board.
+	// at the next plate location on top of the plywood.
 	if (RectangleBuilder && RectangleBuilder->HasPlateSuggestions() &&
 		CurrentPreviewPiece->GetPieceType() == EPieceType::WallPlate)
 	{
@@ -229,7 +230,33 @@ void UBuildingComponent::UpdatePreviewPosition()
 				PreviewPlate->SetBoardLengthFeet(PlateSug.LengthFeet);
 			}
 
-			CurrentPreviewPiece->SetActorLocation(PlateSug.Position);
+			// Recalculate Z from actual plywood top surface (suggestion Z was estimated before plywood existed)
+			FVector PreviewPos = PlateSug.Position;
+			const float PlateHalfHeight = 8.89f / 2.0f;
+			if (AConstructionPhaseManager::Instance)
+			{
+				TArray<ABuildablePiece*> PlywoodPieces =
+					AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Plywood);
+				float BestPlywoodTopZ = 0.0f;
+				bool bFoundPly = false;
+				for (ABuildablePiece* P : PlywoodPieces)
+				{
+					APlywoodSheet* Ply = Cast<APlywoodSheet>(P);
+					if (!Ply) continue;
+					float TopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
+					if (!bFoundPly || TopZ > BestPlywoodTopZ)
+					{
+						BestPlywoodTopZ = TopZ;
+					}
+					bFoundPly = true;
+				}
+				if (bFoundPly)
+				{
+					PreviewPos.Z = BestPlywoodTopZ + PlateHalfHeight;
+				}
+			}
+
+			CurrentPreviewPiece->SetActorLocation(PreviewPos);
 			CurrentPreviewPiece->SetActorRotation(PlateSug.Rotation);
 			return;
 		}
