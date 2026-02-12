@@ -680,14 +680,45 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Special handling for corner post-to-plate snaps
-			// Corner post matches plate yaw, forced vertical (same as wall studs)
+			// Orient the inside corner of the L-shaped post toward the building center.
+			// Calculate frame center from rim boards, then set yaw so the L's concave
+			// face (inside corner at 45° from forward) points at the center.
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
 			{
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
-				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+
+				FVector FrameCenterRot = FVector::ZeroVector;
+				int32 RimCountRot = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenterRot += P->GetActorLocation();
+						RimCountRot++;
+					}
+				}
+				if (RimCountRot > 0)
+				{
+					FrameCenterRot /= RimCountRot;
+					FVector ToCenter = FrameCenterRot - SnapLoc;
+					ToCenter.Z = 0.0f;
+
+					// Angle from corner toward frame center
+					float ToCenterYaw = FMath::RadiansToDegrees(FMath::Atan2(ToCenter.Y, ToCenter.X));
+
+					// The L-shaped post's inside corner bisects its two stud faces at 45°
+					// from the forward axis.  Snap to the nearest 90° so the post aligns
+					// cleanly with the rectangular building walls.
+					CandidateRotation.Yaw = FMath::RoundToFloat((ToCenterYaw - 45.0f) / 90.0f) * 90.0f;
+				}
+				else
+				{
+					// Fallback when no rim boards found: match plate yaw
+					CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+				}
 			}
 
 			// Special handling for bottom plate end-to-end snaps (corners/inline)
@@ -902,10 +933,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Corner post Z correction + flush alignment.
-			// The CornerSeat socket sits at BoardHeight/2, but a flat 2x4 plate
-			// is only BoardWidth thick.  Read the plate mesh's actual top Z so
-			// the post sits on the real visual surface, then push OUTWARD so
-			// the post's outer stud face is flush with the plate's outer face.
+			// Z: read the plate mesh's actual top surface so the post lands
+			// on the real visual top (not the socket approximation).
+			// XY: offset inward by half a stud width from the plate end so the
+			// post's outer face is flush with the plate end.
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
@@ -929,91 +960,27 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: align post outer faces with plate outer faces ---
-				// Use CandidateLocation (corner position) for the ToCenter vector
-				// so both Y (perpendicular) and X (along-wall) components are strong.
-				// Using plate center would make DotX ≈ 0 and X flush would never fire.
-				FVector FrameCenter = FVector::ZeroVector;
-				int32 RimCount = 0;
-				for (ABuildablePiece* P : NearbyPieces)
+				// --- Flush: offset inward by half a stud width from plate end ---
+				// The corner post origin is at the center of the first stud.
+				// Shift 1.905cm (half of 3.81cm stud width) toward the plate center
+				// so the stud's outer face is flush with the plate end — same offset
+				// a regular stud has when sitting on a plate.
 				{
-					if (P && P->GetPieceType() == EPieceType::RimBoard)
-					{
-						FrameCenter += P->GetActorLocation();
-						RimCount++;
-					}
-				}
-				if (RimCount > 0)
-				{
-					FrameCenter /= RimCount;
-					// Vector from the CORNER POST to frame center — strong signal
-					// in both perpendicular (Y) and along-wall (X) directions.
-					FVector ToCenter = FrameCenter - CandidateLocation;
-					ToCenter.Z = 0.0f;
+					const float HalfStudWidth = 3.81f / 2.0f; // 1.905cm
 
-					// Read both mesh bounds (with Origin for asymmetric shapes)
-					FBoxSphereBounds PlateBnds, PostBnds;
-					bool bHavePlate = false, bHavePost = false;
-					if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
+					FVector PlateForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+					FVector SeatToPlateCenter = TargetPiece->GetActorLocation() - SnapLoc;
+					SeatToPlateCenter.Z = 0.0f;
+
+					float DotAlong = FVector::DotProduct(SeatToPlateCenter, PlateForward);
+					if (FMath::Abs(DotAlong) > KINDA_SMALL_NUMBER)
 					{
-						if (UStaticMeshComponent* PM = Plate->GetMeshComponent())
-						{
-							if (PM->GetStaticMesh())
-							{
-								PlateBnds = PM->GetStaticMesh()->GetBounds();
-								bHavePlate = true;
-							}
-						}
-					}
-					if (MeshComponent && MeshComponent->GetStaticMesh())
-					{
-						PostBnds = MeshComponent->GetStaticMesh()->GetBounds();
-						bHavePost = true;
+						CandidateLocation += PlateForward * FMath::Sign(DotAlong) * HalfStudWidth;
 					}
 
-					if (bHavePlate && bHavePost)
-					{
-						FVector PlateRight   = CandidateRotation.RotateVector(FVector::RightVector);
-						FVector PlateForward = CandidateRotation.RotateVector(FVector::ForwardVector);
-
-						UE_LOG(LogTemp, Log,
-							TEXT("CornerPost flush: FrameCenter=(%.1f,%.1f) PostPos=(%.1f,%.1f) ToCenter=(%.1f,%.1f) PlateRight=(%.2f,%.2f) PlateForward=(%.2f,%.2f)"),
-							FrameCenter.X, FrameCenter.Y,
-							CandidateLocation.X, CandidateLocation.Y,
-							ToCenter.X, ToCenter.Y,
-							PlateRight.X, PlateRight.Y,
-							PlateForward.X, PlateForward.Y);
-
-						// --- Y flush: perpendicular to this plate ---
-						float DotY = FVector::DotProduct(ToCenter, PlateRight);
-						if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
-						{
-							float OutSign = -FMath::Sign(DotY); // away from center
-							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
-							float PostEdge  = PostBnds.Origin.Y  + OutSign * PostBnds.BoxExtent.Y;
-							float ShiftY = PlateEdge - PostEdge;
-							CandidateLocation += PlateRight * ShiftY;
-
-							UE_LOG(LogTemp, Log,
-								TEXT("CornerPost flushY: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, DotY=%.2f)"),
-								PlateEdge, PostEdge, ShiftY, OutSign, DotY);
-						}
-
-						// --- X flush: along plate length (for adjacent wall) ---
-						float DotX = FVector::DotProduct(ToCenter, PlateForward);
-						if (FMath::Abs(DotX) > KINDA_SMALL_NUMBER)
-						{
-							float OutSign = -FMath::Sign(DotX);
-							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
-							float PostEdge  = PostBnds.Origin.X  + OutSign * PostBnds.BoxExtent.X;
-							float ShiftX = PlateEdge - PostEdge;
-							CandidateLocation += PlateForward * ShiftX;
-
-							UE_LOG(LogTemp, Log,
-								TEXT("CornerPost flushX: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, DotX=%.2f)"),
-								PlateEdge, PostEdge, ShiftX, OutSign, DotX);
-						}
-					}
+					UE_LOG(LogTemp, Log,
+						TEXT("CornerPost flush: shifted %.2fcm along plate toward center (DotAlong=%.2f)"),
+						HalfStudWidth, DotAlong);
 				}
 			}
 
