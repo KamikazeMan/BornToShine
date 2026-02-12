@@ -935,9 +935,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Corner post Z correction + flush alignment.
 			// Z: read the plate mesh's actual top surface so the post lands
 			// on the real visual top (not the socket approximation).
-			// XY: shift 1.905cm along the plate toward its center. No
-			// perpendicular shift — the re-centered mesh origin sits on
-			// the plate width like a regular wall stud.
+			// XY: 1.905cm along plate toward center (end flush) +
+			// 1.905cm perpendicular OUTWARD from frame center (the L's
+			// second stud extends inward, so origin pushes outward).
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
@@ -961,16 +961,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: 1.905cm along plate toward plate center ---
-				// The corner post origin is now at the center of the first stud
-				// (re-centered in Rhino). It sits on the plate width like a
-				// regular wall stud — no perpendicular offset needed. Only shift
-				// along the plate so the stud end face is flush with the plate end.
+				// --- Flush: along plate + perpendicular offset ---
+				// Along plate: 1.905cm toward plate center (stud end flush with plate end).
+				// Perpendicular: 1.905cm AWAY from frame center (outward) so the
+				// first stud's outer face aligns with the adjacent wall's plate face.
+				// The L-shape's second stud extends inward, so the origin must push out.
 				{
 					const float HalfStudWidth = 3.81f / 2.0f; // 1.905cm
 
 					FVector PlateForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+					FVector PlateRight   = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
 
+					// Along plate: toward plate center
 					FVector SeatToPlateCenter = TargetPiece->GetActorLocation() - SnapLoc;
 					SeatToPlateCenter.Z = 0.0f;
 
@@ -980,9 +982,34 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						CandidateLocation += PlateForward * FMath::Sign(DotAlong) * HalfStudWidth;
 					}
 
+					// Perpendicular: AWAY from frame center (outward)
+					FVector FrameCenterFlush = FVector::ZeroVector;
+					int32 RimCountFlush = 0;
+					for (ABuildablePiece* P : NearbyPieces)
+					{
+						if (P && P->GetPieceType() == EPieceType::RimBoard)
+						{
+							FrameCenterFlush += P->GetActorLocation();
+							RimCountFlush++;
+						}
+					}
+					if (RimCountFlush > 0)
+					{
+						FrameCenterFlush /= RimCountFlush;
+						FVector ToCenter = FrameCenterFlush - CandidateLocation;
+						ToCenter.Z = 0.0f;
+
+						float DotPerp = FVector::DotProduct(ToCenter, PlateRight);
+						if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
+						{
+							// Negative sign = away from center (outward)
+							CandidateLocation += PlateRight * -FMath::Sign(DotPerp) * HalfStudWidth;
+						}
+					}
+
 					UE_LOG(LogTemp, Log,
-						TEXT("CornerPost flush: shifted %.2fcm along plate (DotAlong=%.2f, PlateYaw=%.1f) FinalPos=(%.2f,%.2f,%.2f)"),
-						HalfStudWidth, DotAlong, TargetPiece->GetActorRotation().Yaw,
+						TEXT("CornerPost flush: along=%.2f perp=outward PlateYaw=%.1f FinalPos=(%.2f,%.2f,%.2f)"),
+						DotAlong, TargetPiece->GetActorRotation().Yaw,
 						CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 				}
 			}
