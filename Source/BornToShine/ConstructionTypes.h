@@ -24,7 +24,8 @@ enum class EPieceType : uint8
 	WallPlate			UMETA(DisplayName = "Wall Plate"),
 	CornerPost			UMETA(DisplayName = "Corner Post"),
 	Header				UMETA(DisplayName = "Header"),
-	Rafter				UMETA(DisplayName = "Rafter")
+	Rafter				UMETA(DisplayName = "Rafter"),
+	DoorFrame			UMETA(DisplayName = "Door Frame")
 };
 
 /**
@@ -80,6 +81,10 @@ enum class EConstructionSocketType : uint8
 	CornerPost_Bottom			UMETA(DisplayName = "Corner Post Bottom"),
 	CornerPost_Top				UMETA(DisplayName = "Corner Post Top"),
 	CornerPost_Seat				UMETA(DisplayName = "Corner Post Seat"),
+
+	// Door Frame Sockets
+	DoorFrame_Bottom			UMETA(DisplayName = "Door Frame Bottom"),
+	DoorFrame_Top				UMETA(DisplayName = "Door Frame Top"),
 
 	None						UMETA(DisplayName = "None")
 };

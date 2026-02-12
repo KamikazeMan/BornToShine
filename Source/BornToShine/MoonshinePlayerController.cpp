@@ -385,7 +385,7 @@ void AMoonshinePlayerController::QuickSave()
 	TArray<TSharedPtr<FJsonValue>> PiecesArray;
 
 	// Walk every piece type and serialize each placed piece
-	for (uint8 t = 0; t <= (uint8)EPieceType::Rafter; t++)
+	for (uint8 t = 0; t <= (uint8)EPieceType::DoorFrame; t++)
 	{
 		TArray<ABuildablePiece*> Pieces =
 			AConstructionPhaseManager::Instance->GetPiecesOfType((EPieceType)t);
@@ -477,7 +477,7 @@ void AMoonshinePlayerController::QuickLoad()
 	// ---- Destroy all existing placed pieces ----
 	if (AConstructionPhaseManager::Instance)
 	{
-		for (uint8 t = 0; t <= (uint8)EPieceType::Rafter; t++)
+		for (uint8 t = 0; t <= (uint8)EPieceType::DoorFrame; t++)
 		{
 			// GetPiecesOfType returns a copy, safe to iterate while destroying
 			TArray<ABuildablePiece*> Pieces =

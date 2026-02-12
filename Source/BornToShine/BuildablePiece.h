@@ -42,7 +42,7 @@ public:
 
 	// Set piece to preview mode (ghost)
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	void SetPreviewMode(bool bIsPreview);
+	virtual void SetPreviewMode(bool bIsPreview);
 
 	// Attempt to place the piece (snaps to valid sockets)
 	UFUNCTION(BlueprintCallable, Category = "Construction")

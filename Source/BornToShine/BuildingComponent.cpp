@@ -7,6 +7,7 @@
 #include "PlywoodSheet.h"
 #include "BottomPlate.h"
 #include "WallStud.h"
+#include "DoorFrame.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
@@ -72,6 +73,11 @@ void UBuildingComponent::BeginPlay()
 	{
 		AvailablePieceTypes.Add(AWallStud::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added WallStud to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::DoorFrame))
+	{
+		AvailablePieceTypes.Add(ADoorFrame::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added DoorFrame to AvailablePieceTypes"));
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: %d piece types available"), AvailablePieceTypes.Num());
@@ -767,6 +773,7 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::WallPlate:   Info.Subtitle = TEXT("2x4"); break;
 				case EPieceType::WallStud:    Info.Subtitle = TEXT("92-5/8\""); break;
 				case EPieceType::CornerPost:  Info.Subtitle = TEXT("4-Stud"); break;
+				case EPieceType::DoorFrame:   Info.Subtitle = TEXT("36\""); break;
 				default: break;
 				}
 			}

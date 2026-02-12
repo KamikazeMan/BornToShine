@@ -73,6 +73,7 @@ protected:
 	void CreateBottomPlateRules();
 	void CreateWallStudRules();
 	void CreateCornerPostRules();
+	void CreateDoorFrameRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(

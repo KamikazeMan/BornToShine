@@ -30,6 +30,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateBottomPlateRules();
 	CreateWallStudRules();
 	CreateCornerPostRules();
+	CreateDoorFrameRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -233,6 +234,32 @@ void ASocketManager::CreateCornerPostRules()
 	CompatibilityRules.Add(SeatRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added corner post compatibility rules"));
+}
+
+void ASocketManager::CreateDoorFrameRules()
+{
+	// Door frame bottom socket snaps to Wall_Bottom_Plate sockets (same as wall studs).
+	// Same generous snap distance — door frame bottom socket is ~117cm below actor origin.
+	FSocketCompatibilityRule DoorBottomRule;
+	DoorBottomRule.SourceSocketType = EConstructionSocketType::DoorFrame_Bottom;
+	DoorBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Bottom_Plate);
+	DoorBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	DoorBottomRule.SnapDistance = 250.0f;
+	DoorBottomRule.bCheckAlignment = false;
+	DoorBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(DoorBottomRule);
+
+	// Reverse: Wall_Bottom_Plate accepts DoorFrame_Bottom
+	FSocketCompatibilityRule PlateTopDoorRule;
+	PlateTopDoorRule.SourceSocketType = EConstructionSocketType::Wall_Bottom_Plate;
+	PlateTopDoorRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoorFrame_Bottom);
+	PlateTopDoorRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PlateTopDoorRule.SnapDistance = 250.0f;
+	PlateTopDoorRule.bCheckAlignment = false;
+	PlateTopDoorRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PlateTopDoorRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added door frame compatibility rules"));
 }
 
 bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const

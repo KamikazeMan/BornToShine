@@ -679,6 +679,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Door frame snaps to bottom plate the same way as wall studs
+			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Special handling for corner post-to-plate snaps
 			// Orient the inside corner of the L-shaped post toward the building center.
 			// Calculate frame center from rim boards, then set yaw so the L's concave
@@ -1230,6 +1240,15 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
 		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
 		 SocketB == EConstructionSocketType::Wall_Stud_Bottom))
+	{
+		return 750;
+	}
+
+	// Door frame bottom to bottom plate top (same priority as wall studs)
+	if ((SocketA == EConstructionSocketType::DoorFrame_Bottom &&
+		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
+		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
+		 SocketB == EConstructionSocketType::DoorFrame_Bottom))
 	{
 		return 750;
 	}
