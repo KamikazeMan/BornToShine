@@ -139,17 +139,23 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 // ---------------------------------------------------------------------------
 // AutoDeleteOverlappingPieces
 // Removes wall studs and bottom plate sections that overlap the door frame.
+// Uses XY projection along the door frame's local axes (Z-independent).
 // ---------------------------------------------------------------------------
 void ADoorFrame::AutoDeleteOverlappingPieces()
 {
 	if (!AConstructionPhaseManager::Instance) return;
 
-	// Get our world-space bounding box (with some tolerance)
-	FBox DoorBox = MeshComponent->Bounds.GetBox();
+	FVector DoorLoc = GetActorLocation();
+	FRotator DoorRot = GetActorRotation();
 
-	// Shrink slightly so we don't catch studs just outside the frame
-	const float Tolerance = 2.0f; // cm
-	DoorBox = DoorBox.ExpandBy(-Tolerance);
+	// Door frame's local axes
+	FVector DoorRight = DoorRot.RotateVector(FVector::RightVector);
+	FVector DoorForward = DoorRot.RotateVector(FVector::ForwardVector);
+
+	// Half-width of the door frame mesh (distance from center to outer king stud face)
+	float HalfWidth = RoughOpeningWidth / 2.0f;
+	// Depth tolerance — studs are roughly in-line with the door frame on the wall
+	const float DepthTolerance = 15.0f; // cm
 
 	int32 DeletedStuds = 0;
 	int32 DeletedPlates = 0;
@@ -163,12 +169,16 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		{
 			if (!Piece || Piece == this) continue;
 
-			// Check if stud center is inside the door frame box
-			FVector StudLoc = Piece->GetActorLocation();
-			if (DoorBox.IsInside(StudLoc))
+			FVector Delta = Piece->GetActorLocation() - DoorLoc;
+			Delta.Z = 0.0f; // Ignore height — studs and door are on the same wall
+
+			float AlongWidth = FMath::Abs(FVector::DotProduct(Delta, DoorRight));
+			float AlongDepth = FMath::Abs(FVector::DotProduct(Delta, DoorForward));
+
+			if (AlongWidth < HalfWidth && AlongDepth < DepthTolerance)
 			{
-				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting WallStud %s at (%.1f, %.1f, %.1f)"),
-					*Piece->GetName(), StudLoc.X, StudLoc.Y, StudLoc.Z);
+				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting WallStud %s (width=%.1f, depth=%.1f)"),
+					*Piece->GetName(), AlongWidth, AlongDepth);
 
 				AConstructionPhaseManager::Instance->UnregisterPiece(Piece);
 				Piece->Destroy();
@@ -178,51 +188,35 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	}
 
 	// --- Delete bottom plate section under the door opening ---
-	// A bottom plate whose center falls inside the door frame's XY footprint
-	// is the plate section that needs to be cut out for the door.
 	{
-		TArray<ABuildablePiece*> Plates =
-			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallPlate);
+		TArray<ABuildablePiece*> Nearby =
+			AConstructionPhaseManager::Instance->GetNearbyPieces(DoorLoc, 500.0f);
 
-		// Also check BottomPlate type pieces that might be registered differently
-		TArray<ABuildablePiece*> BottomPlates;
-		// WallPlate type might not be used — check for actual BottomPlate actors
-		// by iterating nearby pieces
-		if (AConstructionPhaseManager::Instance)
+		for (ABuildablePiece* P : Nearby)
 		{
-			// Get all nearby pieces and filter for bottom plates
-			TArray<ABuildablePiece*> Nearby =
-				AConstructionPhaseManager::Instance->GetNearbyPieces(GetActorLocation(), 500.0f);
+			if (!P || P == this) continue;
 
-			for (ABuildablePiece* P : Nearby)
+			ABottomPlate* Plate = Cast<ABottomPlate>(P);
+			if (!Plate) continue;
+
+			FVector Delta = Plate->GetActorLocation() - DoorLoc;
+			Delta.Z = 0.0f;
+
+			float AlongWidth = FMath::Abs(FVector::DotProduct(Delta, DoorRight));
+			float AlongDepth = FMath::Abs(FVector::DotProduct(Delta, DoorForward));
+
+			if (AlongWidth < HalfWidth && AlongDepth < DepthTolerance)
 			{
-				if (!P || P == this) continue;
+				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting BottomPlate %s (width=%.1f, depth=%.1f)"),
+					*Plate->GetName(), AlongWidth, AlongDepth);
 
-				ABottomPlate* Plate = Cast<ABottomPlate>(P);
-				if (!Plate) continue;
-
-				// Check if this plate overlaps with the door frame XY footprint
-				// A plate under the door has its center near the door's XY position
-				FVector PlateLoc = Plate->GetActorLocation();
-
-				// Use the door frame box but extend Z to catch the plate below
-				FBox PlateCheckBox = DoorBox;
-				PlateCheckBox.Min.Z -= 50.0f; // Extend downward to catch plate below
-				PlateCheckBox.Max.Z = DoorBox.Min.Z + 20.0f; // Only check below door frame
-
-				if (PlateCheckBox.IsInside(PlateLoc))
-				{
-					UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting BottomPlate %s at (%.1f, %.1f, %.1f)"),
-						*Plate->GetName(), PlateLoc.X, PlateLoc.Y, PlateLoc.Z);
-
-					AConstructionPhaseManager::Instance->UnregisterPiece(Plate);
-					Plate->Destroy();
-					DeletedPlates++;
-				}
+				AConstructionPhaseManager::Instance->UnregisterPiece(Plate);
+				Plate->Destroy();
+				DeletedPlates++;
 			}
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleted %d studs and %d plate sections"),
-		DeletedStuds, DeletedPlates);
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleted %d studs and %d plates (HalfWidth=%.1f)"),
+		DeletedStuds, DeletedPlates, HalfWidth);
 }

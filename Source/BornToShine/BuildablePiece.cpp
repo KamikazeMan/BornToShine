@@ -993,6 +993,32 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
+			// Door frame Z correction — same pattern as corner post.
+			// The Wall_Bottom_Plate socket sits at the plate center, but the
+			// door frame must rest on the plate's real visual top surface.
+			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
+				{
+					UStaticMeshComponent* PlateMesh = Plate->GetMeshComponent();
+					if (PlateMesh && PlateMesh->GetStaticMesh())
+					{
+						FBoxSphereBounds PB = PlateMesh->GetStaticMesh()->GetBounds();
+						float PlateRelZ = PlateMesh->GetRelativeLocation().Z;
+						float PlateActualTopZ = (PB.Origin.Z + PB.BoxExtent.Z) + PlateRelZ;
+						float SocketTopZ = Plate->BoardHeight / 2.0f;
+						float ZFix = PlateActualTopZ - SocketTopZ;
+						CandidateLocation.Z += ZFix;
+
+						UE_LOG(LogTemp, Log,
+							TEXT("DoorFrame Z-fix: PlateTopMesh=%.2f SocketTop=%.2f → correction=%.2f"),
+							PlateActualTopZ, SocketTopZ, ZFix);
+					}
+				}
+			}
+
 			// Plywood XY alignment: apply pre-computed slot position
 			// (computed once before the loop using frame centroid as origin)
 			if (bHavePlywoodSlot &&
