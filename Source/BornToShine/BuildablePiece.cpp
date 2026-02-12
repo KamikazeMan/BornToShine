@@ -800,6 +800,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
 			FVector CandidateLocation = SnapLoc - SocketWorldOffset;
 
+			// Corner post snap diagnostics
+			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
+				TgtSocketType == EConstructionSocketType::CornerPost_Seat)
+			{
+				UE_LOG(LogTemp, Log,
+					TEXT("CornerPost SNAP: SocketLocal=(%.2f,%.2f,%.2f) SnapLoc=(%.2f,%.2f,%.2f) "
+					     "→ ActorZ=%.2f  MeshBottomZ=%.2f (should match plate top)"),
+					SocketLocalOffset.X, SocketLocalOffset.Y, SocketLocalOffset.Z,
+					SnapLoc.X, SnapLoc.Y, SnapLoc.Z,
+					CandidateLocation.Z,
+					CandidateLocation.Z + SocketLocalOffset.Z);
+			}
+
 			// Joist top-face snap: lower joist so its top is flush with rim board top.
 			// Snap location is at top-face socket (rim center Z + halfHeight).
 			// Joist center should be at rim center Z, so subtract halfHeight.

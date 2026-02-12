@@ -36,6 +36,10 @@ void ACornerPost::BeginPlay()
 		MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
 	}
 
+	// Re-align sockets to the actual mesh extents so the post sits flush
+	// on the bottom plate regardless of Rhino export pivot position.
+	AdjustSocketsToMeshBounds();
+
 	UE_LOG(LogTemp, Log, TEXT("CornerPost: BeginPlay - Height=%.1fcm, Total sockets: %d"),
 		PostHeight, Sockets.Num());
 }
@@ -72,6 +76,52 @@ void ACornerPost::CreateTopSocket()
 	TopSocket.Orientation = ESocketOrientation::Vertical;
 	TopSocket.bIsOccupied = false;
 	Sockets.Add(TopSocket);
+}
+
+void ACornerPost::AdjustSocketsToMeshBounds()
+{
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
+
+	// Mesh bottom/top in actor-local space (accounts for any BP mesh offset)
+	float MeshBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float MeshTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float ActualHeight = MeshTopZ - MeshBottomZ;
+
+	if (ActualHeight < 1.0f)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("CornerPost: Mesh height too small (%.2f cm) — skipping socket adjustment"),
+			ActualHeight);
+		return;
+	}
+
+	float OldBottomZ = -PostHeight / 2.0f;
+	float OldTopZ    =  PostHeight / 2.0f;
+
+	// Update PostHeight to reflect the real mesh
+	PostHeight = ActualHeight;
+
+	for (FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketName == FName("PostBottom"))
+		{
+			Socket.LocalPosition.Z = MeshBottomZ;
+		}
+		else if (Socket.SocketName == FName("PostTop"))
+		{
+			Socket.LocalPosition.Z = MeshTopZ;
+		}
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("CornerPost: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, MeshRelZ=%.2f → "
+		     "PostBottom Z: %.2f→%.2f, PostTop Z: %.2f→%.2f"),
+		Bounds.Origin.Z - Bounds.BoxExtent.Z, Bounds.Origin.Z + Bounds.BoxExtent.Z,
+		ActualHeight, MeshRelLoc.Z,
+		OldBottomZ, MeshBottomZ, OldTopZ, MeshTopZ);
 }
 
 void ACornerPost::ScalePiece(float ScaleDelta)

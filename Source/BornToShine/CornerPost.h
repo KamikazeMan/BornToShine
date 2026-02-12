@@ -58,4 +58,9 @@ private:
 
 	void CreateBottomSocket();
 	void CreateTopSocket();
+
+	// After sockets are created with default PostHeight, re-align them
+	// to the actual mesh bounds so the snap point matches the real mesh
+	// bottom/top regardless of the Rhino export pivot.
+	void AdjustSocketsToMeshBounds();
 };
