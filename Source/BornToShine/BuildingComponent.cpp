@@ -767,15 +767,13 @@ TArray<FString> UBuildingComponent::GetPieceTypeNames() const
 
 TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 {
-	// Build from the larger of AvailablePieceTypes / PieceTypeInfos so entries
-	// from EITHER array always appear.  Auto-generate defaults, then overlay
-	// any editor-configured PieceTypeInfos on top.
+	// Build infos from AvailablePieceTypes only (source of truth for spawnable
+	// pieces).  Overlay editor-configured PieceTypeInfos matched by PieceType
+	// (not by index), so the two arrays don't need to be in the same order.
 	TArray<FString> Names = GetPieceTypeNames();
 	TArray<FPieceTypeInfo> Infos;
 
-	int32 Count = FMath::Max(AvailablePieceTypes.Num(), PieceTypeInfos.Num());
-
-	for (int32 i = 0; i < Count; i++)
+	for (int32 i = 0; i < AvailablePieceTypes.Num(); i++)
 	{
 		FPieceTypeInfo Info;
 		Info.DisplayName = Names.IsValidIndex(i) ? Names[i] : TEXT("?");
@@ -802,18 +800,19 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				default: break;
 				}
 			}
-		}
 
-		// Overlay editor-configured info if it exists at this index
-		if (PieceTypeInfos.IsValidIndex(i))
-		{
-			const FPieceTypeInfo& EditorInfo = PieceTypeInfos[i];
-			if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
-			if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
-			if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
-			Info.bAvailable = EditorInfo.bAvailable;
-			if (Info.PieceType == EPieceType::None && EditorInfo.PieceType != EPieceType::None)
-				Info.PieceType = EditorInfo.PieceType;
+			// Find matching editor info by PieceType (decoupled from index order)
+			for (const FPieceTypeInfo& EditorInfo : PieceTypeInfos)
+			{
+				if (EditorInfo.PieceType == Info.PieceType)
+				{
+					if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
+					if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
+					if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
+					Info.bAvailable = EditorInfo.bAvailable;
+					break;
+				}
+			}
 		}
 
 		Infos.Add(Info);

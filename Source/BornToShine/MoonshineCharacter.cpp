@@ -174,10 +174,7 @@ void AMoonshineCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 			EnhancedInputComponent->BindAction(NailPieceAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnNailPiece);
 		}
 
-		if (CyclePieceAction)
-		{
-			EnhancedInputComponent->BindAction(CyclePieceAction, ETriggerEvent::Started, this, &AMoonshineCharacter::OnCyclePieceType);
-		}
+		// CyclePieceAction (Q/E) removed — player uses radial wheel (Tab) only
 
 		if (ToggleBoardTypeAction)
 		{

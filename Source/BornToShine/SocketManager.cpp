@@ -325,10 +325,9 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
-			// Skip occupied sockets UNLESS the source is plywood or bottom plate.
-			// Plywood rests ON TOP of the framing — it should snap to the same
-			// support points that joists already occupy (TopFace sockets).
-			// Bottom plates sit ON TOP of plywood — they also need occupied TopFace sockets.
+			// Skip occupied sockets UNLESS:
+			// - Source is plywood/bottom plate targeting framing top faces
+			// - Target is Wall_Bottom_Plate (continuous surface, multiple pieces sit on it)
 			if (TargetSocket.bIsOccupied)
 			{
 				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
@@ -336,7 +335,8 @@ bool ASocketManager::FindBestSnapPoint(
 				bool bBottomPlateSource = (SourceSocket.SocketType == EConstructionSocketType::BottomPlate_Bottom);
 				bool bFramingTarget = (TargetSocket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
 				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face);
-				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget))
+				bool bWallPlateTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Bottom_Plate);
+				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) && !bWallPlateTarget)
 				{
 					continue;
 				}
