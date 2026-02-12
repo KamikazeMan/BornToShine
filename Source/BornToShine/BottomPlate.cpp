@@ -183,6 +183,7 @@ void ABottomPlate::SetBoardLengthFeet(int32 LengthInFeet)
 	{
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f;
+		bMeshExtended = false; // Scale reset — allow re-extension
 
 		// Update mesh scale
 		if (MeshComponent)
@@ -233,6 +234,7 @@ void ABottomPlate::RegenerateSockets()
 void ABottomPlate::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
+	if (bMeshExtended) return; // Already extended — don't double up on reload
 
 	// Extend X by the ratio (BoardLength + BoardWidth) / BoardLength
 	// to add HalfWidth (1.905cm) to each end — same formula as rim boards.
@@ -244,6 +246,8 @@ void ABottomPlate::ExtendMeshForFlushCorners()
 		CurrentScale3D.Y,
 		CurrentScale3D.Z
 	));
+
+	bMeshExtended = true;
 
 	UE_LOG(LogTemp, Log, TEXT("BottomPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
 		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);

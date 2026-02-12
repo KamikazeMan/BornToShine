@@ -83,4 +83,7 @@ private:
 
 	static constexpr int32 MinLengthFeet = 1;
 	static constexpr int32 MaxLengthFeet = 16;
+
+	// Guard against double-extending mesh (e.g. on save/load)
+	bool bMeshExtended = false;
 };

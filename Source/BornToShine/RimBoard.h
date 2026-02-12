@@ -117,4 +117,7 @@ private:
 
 	// Flag to prevent manual scaling when auto-scaling is active (closing rectangle)
 	bool bAutoScalingActive = false;
+
+	// Guard against double-extending mesh (e.g. on save/load)
+	bool bMeshExtended = false;
 };

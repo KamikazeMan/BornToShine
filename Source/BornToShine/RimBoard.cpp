@@ -260,6 +260,7 @@ void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 	{
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f;
+		bMeshExtended = false; // Scale reset — allow re-extension
 
 		// Update mesh scale
 		if (MeshComponent)
@@ -314,6 +315,7 @@ void ARimBoard::RegenerateSockets()
 void ARimBoard::ToggleBoardType()
 {
 	bIsOutsideBoard = !bIsOutsideBoard;
+	bMeshExtended = false; // Scale reset — allow re-extension
 
 	RegenerateSockets();
 
@@ -338,6 +340,7 @@ void ARimBoard::ToggleBoardType()
 void ARimBoard::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
+	if (bMeshExtended) return; // Already extended — don't double up on reload
 
 	// Extend X by the ratio (EffectiveLength + BoardWidth) / EffectiveLength
 	// to add HalfWidth (1.905cm) to each end. Only X changes; Y and Z stay.
@@ -351,6 +354,8 @@ void ARimBoard::ExtendMeshForFlushCorners()
 		CurrentScale3D.Y,
 		CurrentScale3D.Z
 	));
+
+	bMeshExtended = true;
 
 	UE_LOG(LogTemp, Log, TEXT("RimBoard [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
 		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
