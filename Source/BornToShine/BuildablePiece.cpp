@@ -929,7 +929,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: push outward so post face aligns with plate face ---
+				// --- Flush: align post bounding box edges with plate faces ---
+				// The L-shaped post isn't symmetric, so we use Origin + Extent
+				// to find the actual outward-facing edge in each direction.
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
 				for (ABuildablePiece* P : NearbyPieces)
@@ -946,42 +948,65 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
 					ToCenter.Z = 0.0f;
 
-					// Plate Y half-width (perpendicular to plate length)
-					float PlateHalfY = 0.0f;
+					// Read both mesh bounds (with Origin for asymmetric shapes)
+					FBoxSphereBounds PlateBnds, PostBnds;
+					bool bHavePlate = false, bHavePost = false;
 					if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
 					{
 						if (UStaticMeshComponent* PM = Plate->GetMeshComponent())
 						{
 							if (PM->GetStaticMesh())
 							{
-								PlateHalfY = PM->GetStaticMesh()->GetBounds().BoxExtent.Y;
+								PlateBnds = PM->GetStaticMesh()->GetBounds();
+								bHavePlate = true;
 							}
 						}
 					}
-
-					// Post Y half-width (same axis after rotation alignment)
-					float PostHalfY = 0.0f;
 					if (MeshComponent && MeshComponent->GetStaticMesh())
 					{
-						PostHalfY = MeshComponent->GetStaticMesh()->GetBounds().BoxExtent.Y;
+						PostBnds = MeshComponent->GetStaticMesh()->GetBounds();
+						bHavePost = true;
 					}
 
-					// Outward offset = plate half-width − post half-width
-					// Positive → post is narrower, push outward to flush
-					// Negative → post is wider, push inward to flush
-					float FlushOffset = PlateHalfY - PostHalfY;
-
-					FVector PlateRight = CandidateRotation.RotateVector(FVector::RightVector);
-					float DotY = FVector::DotProduct(ToCenter, PlateRight);
-					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
+					if (bHavePlate && bHavePost)
 					{
-						// Sign(DotY) points inward → negate for outward
-						CandidateLocation -= PlateRight * FMath::Sign(DotY) * FlushOffset;
-					}
+						FVector PlateRight   = CandidateRotation.RotateVector(FVector::RightVector);
+						FVector PlateForward = CandidateRotation.RotateVector(FVector::ForwardVector);
 
-					UE_LOG(LogTemp, Log,
-						TEXT("CornerPost flush: PlateHalfY=%.2f PostHalfY=%.2f → offset=%.2f (outward)"),
-						PlateHalfY, PostHalfY, FlushOffset);
+						// --- Y flush: perpendicular to this plate ---
+						float DotY = FVector::DotProduct(ToCenter, PlateRight);
+						if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
+						{
+							float OutSign = -FMath::Sign(DotY); // away from center
+							// Plate's outward edge (symmetric plate → Origin.Y ≈ 0)
+							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
+							// Post's outward edge (L-shape → Origin.Y may be non-zero)
+							float PostEdge  = PostBnds.Origin.Y  + OutSign * PostBnds.BoxExtent.Y;
+							float ShiftY = PlateEdge - PostEdge;
+							CandidateLocation += PlateRight * ShiftY;
+
+							UE_LOG(LogTemp, Log,
+								TEXT("CornerPost flushY: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, BndsOriginY=%.2f)"),
+								PlateEdge, PostEdge, ShiftY, OutSign, PostBnds.Origin.Y);
+						}
+
+						// --- X flush: along plate length (for adjacent wall) ---
+						float DotX = FVector::DotProduct(ToCenter, PlateForward);
+						if (FMath::Abs(DotX) > KINDA_SMALL_NUMBER)
+						{
+							float OutSign = -FMath::Sign(DotX);
+							// Adjacent plate has same width as this plate
+							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
+							// Post's outward edge in the X direction
+							float PostEdge  = PostBnds.Origin.X  + OutSign * PostBnds.BoxExtent.X;
+							float ShiftX = PlateEdge - PostEdge;
+							CandidateLocation += PlateForward * ShiftX;
+
+							UE_LOG(LogTemp, Log,
+								TEXT("CornerPost flushX: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, BndsOriginX=%.2f)"),
+								PlateEdge, PostEdge, ShiftX, OutSign, PostBnds.Origin.X);
+						}
+					}
 				}
 			}
 
