@@ -123,13 +123,25 @@ void ADoorFrame::ScalePiece(float ScaleDelta)
 }
 
 // ---------------------------------------------------------------------------
-// SetPreviewMode override — triggers auto-delete when placed
+// TryPlace override — runs auto-delete after successful placement
+// ---------------------------------------------------------------------------
+bool ADoorFrame::TryPlace()
+{
+	if (!Super::TryPlace()) return false;
+
+	// Now that the door frame is registered and positioned, remove overlaps
+	AutoDeleteOverlappingPieces();
+	return true;
+}
+
+// ---------------------------------------------------------------------------
+// SetPreviewMode override — fallback for save/load path
 // ---------------------------------------------------------------------------
 void ADoorFrame::SetPreviewMode(bool bIsPreview)
 {
 	Super::SetPreviewMode(bIsPreview);
 
-	// When transitioning from preview to placed, remove overlapping pieces
+	// When transitioning from preview to placed (save/load path), remove overlapping pieces
 	if (!bIsPreview)
 	{
 		AutoDeleteOverlappingPieces();

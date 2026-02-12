@@ -46,7 +46,7 @@ public:
 
 	// Attempt to place the piece (snaps to valid sockets)
 	UFUNCTION(BlueprintCallable, Category = "Construction")
-	bool TryPlace();
+	virtual bool TryPlace();
 
 	// Nail the piece in place (locks it)
 	UFUNCTION(BlueprintCallable, Category = "Construction")

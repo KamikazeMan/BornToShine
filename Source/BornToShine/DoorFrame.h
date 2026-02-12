@@ -44,6 +44,9 @@ public:
 	/** Disable scroll-wheel scaling. */
 	virtual void ScalePiece(float ScaleDelta) override;
 
+	/** Override placement to trigger auto-delete of overlapping studs/plates. */
+	virtual bool TryPlace() override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;
