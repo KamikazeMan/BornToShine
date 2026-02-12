@@ -478,22 +478,12 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 					ESlateDrawEffect::None, CenterIconTint);
 			}
 
-			// Piece name
+			// Piece name (centered below icon)
 			FVector2D NameSize = FontMeasure->Measure(Info.DisplayName, CenterNameFont);
 			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, CenterIconSize / 2.0f - 14.0f);
 			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
 			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
 				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(TextWhite));
-
-			// Subtitle (only in center hub)
-			if (!Info.Subtitle.IsEmpty())
-			{
-				FVector2D SubSize = FontMeasure->Measure(Info.Subtitle, CenterSubFont);
-				FVector2D SubPos = NamePos + FVector2D(NameSize.X / 2.0f - SubSize.X / 2.0f, NameSize.Y + 4.0f);
-				FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
-				FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
-					Info.Subtitle, CenterSubFont, ESlateDrawEffect::None, Faded(SubtitleColor));
-			}
 		}
 		else
 		{

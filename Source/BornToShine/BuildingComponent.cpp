@@ -740,13 +740,9 @@ TArray<FString> UBuildingComponent::GetPieceTypeNames() const
 
 TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 {
-	// If manually configured in the editor, use those (matched 1:1 with AvailablePieceTypes)
-	if (PieceTypeInfos.Num() > 0 && PieceTypeInfos.Num() == AvailablePieceTypes.Num())
-	{
-		return PieceTypeInfos;
-	}
-
-	// Auto-generate from AvailablePieceTypes with default subtitles
+	// Always build from AvailablePieceTypes, overlaying any editor-configured
+	// PieceTypeInfos.  This ensures auto-registered piece types (like DoorFrame)
+	// always appear even if the editor array hasn't been updated yet.
 	TArray<FString> Names = GetPieceTypeNames();
 	TArray<FPieceTypeInfo> Infos;
 
