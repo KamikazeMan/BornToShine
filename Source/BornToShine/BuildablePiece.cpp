@@ -929,9 +929,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: align post bounding box edges with plate faces ---
-				// The L-shaped post isn't symmetric, so we use Origin + Extent
-				// to find the actual outward-facing edge in each direction.
+				// --- Flush: align post outer faces with plate outer faces ---
+				// Use CandidateLocation (corner position) for the ToCenter vector
+				// so both Y (perpendicular) and X (along-wall) components are strong.
+				// Using plate center would make DotX ≈ 0 and X flush would never fire.
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
 				for (ABuildablePiece* P : NearbyPieces)
@@ -945,7 +946,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				if (RimCount > 0)
 				{
 					FrameCenter /= RimCount;
-					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
+					// Vector from the CORNER POST to frame center — strong signal
+					// in both perpendicular (Y) and along-wall (X) directions.
+					FVector ToCenter = FrameCenter - CandidateLocation;
 					ToCenter.Z = 0.0f;
 
 					// Read both mesh bounds (with Origin for asymmetric shapes)
@@ -973,21 +976,27 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						FVector PlateRight   = CandidateRotation.RotateVector(FVector::RightVector);
 						FVector PlateForward = CandidateRotation.RotateVector(FVector::ForwardVector);
 
+						UE_LOG(LogTemp, Log,
+							TEXT("CornerPost flush: FrameCenter=(%.1f,%.1f) PostPos=(%.1f,%.1f) ToCenter=(%.1f,%.1f) PlateRight=(%.2f,%.2f) PlateForward=(%.2f,%.2f)"),
+							FrameCenter.X, FrameCenter.Y,
+							CandidateLocation.X, CandidateLocation.Y,
+							ToCenter.X, ToCenter.Y,
+							PlateRight.X, PlateRight.Y,
+							PlateForward.X, PlateForward.Y);
+
 						// --- Y flush: perpendicular to this plate ---
 						float DotY = FVector::DotProduct(ToCenter, PlateRight);
 						if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
 						{
 							float OutSign = -FMath::Sign(DotY); // away from center
-							// Plate's outward edge (symmetric plate → Origin.Y ≈ 0)
 							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
-							// Post's outward edge (L-shape → Origin.Y may be non-zero)
 							float PostEdge  = PostBnds.Origin.Y  + OutSign * PostBnds.BoxExtent.Y;
 							float ShiftY = PlateEdge - PostEdge;
 							CandidateLocation += PlateRight * ShiftY;
 
 							UE_LOG(LogTemp, Log,
-								TEXT("CornerPost flushY: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, BndsOriginY=%.2f)"),
-								PlateEdge, PostEdge, ShiftY, OutSign, PostBnds.Origin.Y);
+								TEXT("CornerPost flushY: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, DotY=%.2f)"),
+								PlateEdge, PostEdge, ShiftY, OutSign, DotY);
 						}
 
 						// --- X flush: along plate length (for adjacent wall) ---
@@ -995,16 +1004,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (FMath::Abs(DotX) > KINDA_SMALL_NUMBER)
 						{
 							float OutSign = -FMath::Sign(DotX);
-							// Adjacent plate has same width as this plate
 							float PlateEdge = PlateBnds.Origin.Y + OutSign * PlateBnds.BoxExtent.Y;
-							// Post's outward edge in the X direction
 							float PostEdge  = PostBnds.Origin.X  + OutSign * PostBnds.BoxExtent.X;
 							float ShiftX = PlateEdge - PostEdge;
 							CandidateLocation += PlateForward * ShiftX;
 
 							UE_LOG(LogTemp, Log,
-								TEXT("CornerPost flushX: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, BndsOriginX=%.2f)"),
-								PlateEdge, PostEdge, ShiftX, OutSign, PostBnds.Origin.X);
+								TEXT("CornerPost flushX: PlateEdge=%.2f PostEdge=%.2f → shift=%.2f (OutSign=%.0f, DotX=%.2f)"),
+								PlateEdge, PostEdge, ShiftX, OutSign, DotX);
 						}
 					}
 				}
