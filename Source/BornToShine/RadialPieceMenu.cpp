@@ -1,4 +1,4 @@
-// Born To Shine - Radial Piece Selection Menu (Rust/Fortnite quality)
+// Born To Shine - Radial Piece Selection Menu (Sci-fi holographic style)
 
 #include "RadialPieceMenu.h"
 #include "Rendering/DrawElements.h"
@@ -14,7 +14,7 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	PrevHighlightedIndex = -1;
 	NumSegments = 0;
 
-	// --- Geometry: DOUBLED from original (was 240/90) ---
+	// --- Geometry ---
 	OuterRadius    = 480.0f;
 	InnerRadius    = 200.0f;
 	CenterHubRadius = 170.0f;
@@ -23,35 +23,36 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	// Animation
 	FadeAlpha = 0.0f;
 	FadeSpeed = 8.0f;
+	GlowPulseTime = 0.0f;
 
-	// Icons — large and prominent
+	// Icons
 	SegmentIconSize = 104.0f;
 	CenterIconSize  = 96.0f;
 
-	// --- Color palette: shipped-game quality ---
-	// Background: dark gray, solid enough to kill any bleed-through
-	BgOverlayColor           = FLinearColor(0.02f, 0.02f, 0.03f, 0.88f);
-	// Unselected segments: subtle dark
-	SegmentFillColor         = FLinearColor(0.08f, 0.08f, 0.09f, 0.85f);
-	// Selected/hovered: warm wood tone
-	SegmentHoverFillColor    = FLinearColor(0.65f, 0.42f, 0.14f, 0.92f);
+	// --- Color palette: sci-fi holographic blueprint ---
+	// Background: dark navy/charcoal, 75% opacity
+	BgOverlayColor           = FLinearColor(0.01f, 0.02f, 0.05f, 0.75f);
+	// Unselected segments: dark blue-gray
+	SegmentFillColor         = FLinearColor(0.06f, 0.08f, 0.14f, 0.80f);
+	// Selected/hovered: bright turquoise/cyan
+	SegmentHoverFillColor    = FLinearColor(0.00f, 0.75f, 0.85f, 0.90f);
 	// Glow behind hovered segment
-	SegmentHoverGlowColor    = FLinearColor(0.80f, 0.55f, 0.18f, 0.30f);
+	SegmentHoverGlowColor    = FLinearColor(0.00f, 0.90f, 1.00f, 0.30f);
 	// Unavailable: very dark
-	SegmentUnavailableColor  = FLinearColor(0.04f, 0.04f, 0.04f, 0.75f);
-	// Thin dividers
-	DividerColor             = FLinearColor(0.25f, 0.22f, 0.18f, 0.30f);
-	// Gold/bronze border accent
-	BorderAccentColor        = FLinearColor(0.72f, 0.55f, 0.22f, 0.50f);
-	// Center hub
-	CenterFillColor          = FLinearColor(0.03f, 0.03f, 0.04f, 0.95f);
-	CenterBorderColor        = FLinearColor(0.60f, 0.45f, 0.18f, 0.60f);
-	// Text: white
+	SegmentUnavailableColor  = FLinearColor(0.03f, 0.04f, 0.06f, 0.70f);
+	// Thin dividers: faint cyan
+	DividerColor             = FLinearColor(0.10f, 0.30f, 0.40f, 0.25f);
+	// Border accent: turquoise/cyan
+	BorderAccentColor        = FLinearColor(0.00f, 0.70f, 0.80f, 0.55f);
+	// Center hub: deep dark
+	CenterFillColor          = FLinearColor(0.01f, 0.02f, 0.04f, 0.95f);
+	CenterBorderColor        = FLinearColor(0.00f, 0.60f, 0.70f, 0.55f);
+	// Text: clean white
 	TextWhite                = FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	TextDimmed               = FLinearColor(0.70f, 0.68f, 0.65f, 1.0f);
-	TextUnavailable          = FLinearColor(0.30f, 0.28f, 0.25f, 1.0f);
-	// Subtitle: lighter gray
-	SubtitleColor            = FLinearColor(0.55f, 0.52f, 0.48f, 1.0f);
+	TextDimmed               = FLinearColor(0.55f, 0.65f, 0.75f, 1.0f);
+	TextUnavailable          = FLinearColor(0.20f, 0.25f, 0.30f, 1.0f);
+	// Subtitle: cool gray-blue
+	SubtitleColor            = FLinearColor(0.40f, 0.55f, 0.65f, 1.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 	HighlightedIndex = CurrentIndex;
 	PrevHighlightedIndex = CurrentIndex;
 	FadeAlpha = 0.0f;
+	GlowPulseTime = 0.0f;
 
 	// Reset per-segment hover scales
 	SegmentHoverScales.Init(0.0f, NumSegments);
@@ -72,7 +74,7 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 		SegmentHoverScales[CurrentIndex] = 1.0f;
 	}
 
-	// Build icon brush cache — load all textures now
+	// Build icon brush cache
 	IconBrushes.Empty();
 	IconBrushes.SetNum(NumSegments);
 	for (int32 i = 0; i < NumSegments; i++)
@@ -118,7 +120,7 @@ FLinearColor URadialPieceMenu::Faded(FLinearColor Color) const
 }
 
 // ---------------------------------------------------------------------------
-// Tick: mouse tracking, fade animation, hover interpolation
+// Tick: mouse tracking, fade animation, hover interpolation, pulse timer
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
@@ -127,6 +129,9 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 	// Fade in
 	FadeAlpha = FMath::FInterpTo(FadeAlpha, 1.0f, InDeltaTime, FadeSpeed);
+
+	// Breathing glow pulse (accumulate time)
+	GlowPulseTime += InDeltaTime;
 
 	// Mouse tracking
 	APlayerController* PC = GetOwningPlayer();
@@ -148,7 +153,6 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 	if (Dist >= DeadZone)
 	{
-		// Angle: 0 = top, clockwise
 		float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(DX, -DY));
 		if (AngleDeg < 0.0f) AngleDeg += 360.0f;
 
@@ -176,7 +180,7 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 }
 
 // ---------------------------------------------------------------------------
-// Paint: full production-quality rendering
+// Paint: sci-fi holographic blueprint rendering
 // ---------------------------------------------------------------------------
 int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
 	const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
@@ -188,20 +192,21 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FVector2D Center = LocalSize / 2.0f;
 	float SegAngle = 360.0f / NumSegments;
 
-	// Solid white brush — the CoreStyle "default" brush is a checkerboard
 	static const FSlateColorBrush SolidBrush(FLinearColor::White);
 
 	TSharedRef<FSlateFontMeasure> FontMeasure =
 		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 
-	// Fonts — clean modern style
 	FSlateFontInfo SegNameFont = FCoreStyle::GetDefaultFontStyle("Bold", 13);
 	FSlateFontInfo SegSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", 11);
 	FSlateFontInfo CenterNameFont = FCoreStyle::GetDefaultFontStyle("Bold", 22);
 	FSlateFontInfo CenterSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", 14);
 
+	// Breathing pulse (slow sine wave, 0.85–1.0 range)
+	float Pulse = 0.85f + 0.15f * (0.5f + 0.5f * FMath::Sin(GlowPulseTime * 2.2f));
+
 	// =====================================================================
-	// LAYER 1: Full-screen dark semi-transparent overlay (frost effect)
+	// LAYER 1: Dark navy overlay
 	// =====================================================================
 	FSlateDrawElement::MakeBox(
 		OutDrawElements, LayerId,
@@ -211,7 +216,8 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 2: Multi-ring hover bloom (soft ember glow with falloff)
+	// LAYER 2: UE5-style turquoise bloom on hovered segment
+	// Bright cyan core → soft bloom feathering outward, with pulse
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
@@ -221,14 +227,13 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		float StartDeg = i * SegAngle - 90.0f;
 		float EndDeg = (i + 1) * SegAngle - 90.0f;
 
-		// Three concentric bloom rings: wide/dim → tight/bright
-		// Each bleeds past segment edges angularly for premium feel
-		const FLinearColor GlowBase(0.85f, 0.58f, 0.18f, 1.0f);
+		// Turquoise/cyan glow base with pulse modulation
+		const FLinearColor GlowCore(0.00f, 0.90f, 1.00f, 1.0f);
 		struct FBloomRing { float OutPad; float InPad; float AngPad; float Alpha; };
 		const FBloomRing Rings[] = {
-			{ 3.0f, 3.0f, 1.5f, 0.08f },  // Soft feather just past border
-			{ 1.0f, 1.0f, 0.8f, 0.16f },  // At border edge
-			{ 0.0f, 0.0f, 0.3f, 0.26f },  // Fully contained in ring
+			{ 3.0f, 3.0f, 1.5f, 0.06f },  // Outer feather
+			{ 1.0f, 1.0f, 0.8f, 0.14f },  // Mid bloom
+			{ 0.0f, 0.0f, 0.3f, 0.28f },  // Core glow
 		};
 
 		for (const FBloomRing& Ring : Rings)
@@ -238,8 +243,8 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			float BleedStart = StartDeg - Ring.AngPad * HoverT;
 			float BleedEnd   = EndDeg   + Ring.AngPad * HoverT;
 
-			FLinearColor GlowCol = GlowBase;
-			GlowCol.A = Ring.Alpha * HoverT * FadeAlpha;
+			FLinearColor GlowCol = GlowCore;
+			GlowCol.A = Ring.Alpha * HoverT * FadeAlpha * Pulse;
 			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
 				GlowInR, GlowOutR, BleedStart, BleedEnd, GlowCol);
 		}
@@ -247,7 +252,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 3: Segment fills — radial gradient on hover (brightens inside→out)
+	// LAYER 3: Segment fills — radial gradient on hover
 	// =====================================================================
 	for (int32 i = 0; i < NumSegments; i++)
 	{
@@ -266,7 +271,6 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		else if (HoverT < 0.01f)
 		{
-			// Unhovered: flat fill
 			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
 				InnerRadius, EffOutR, StartDeg, EndDeg, Faded(SegmentFillColor));
 		}
@@ -279,8 +283,8 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			float R2 = InnerRadius + Depth * 2.0f;
 			float R3 = EffOutR;
 
-			FLinearColor C0 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.50f);
-			FLinearColor C1 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.75f);
+			FLinearColor C0 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.40f);
+			FLinearColor C1 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 0.65f);
 			FLinearColor C2 = FMath::Lerp(SegmentFillColor, SegmentHoverFillColor, HoverT * 1.00f);
 
 			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
@@ -315,37 +319,84 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 5a: Gold glow bloom behind border rings
+	// LAYER 5a: 3D metallic outer ring — beveled chrome appearance
+	// Multiple concentric bands simulate depth: highlight → body → shadow
 	// =====================================================================
 	{
-		// Soft amber glow bloom behind outer border
-		FLinearColor OuterGlow(0.80f, 0.55f, 0.18f, 0.10f);
+		// Outer highlight edge (bright, simulates light catch on bevel)
+		FLinearColor HighlightEdge(0.45f, 0.55f, 0.60f, 0.65f * Pulse);
 		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			OuterRadius, -90.0f, 270.0f, Faded(OuterGlow), 16.0f);
+			OuterRadius + 4.0f, -90.0f, 270.0f, Faded(HighlightEdge), 1.5f);
 
-		// Soft amber glow bloom behind inner border
-		FLinearColor InnerGlow(0.80f, 0.55f, 0.18f, 0.08f);
+		// Upper bevel face (lighter metallic)
+		FLinearColor BevelLight(0.28f, 0.35f, 0.40f, 0.70f);
 		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			InnerRadius, -90.0f, 270.0f, Faded(InnerGlow), 12.0f);
+			OuterRadius + 2.5f, -90.0f, 270.0f, Faded(BevelLight), 2.0f);
+
+		// Main ring body (mid gray metallic)
+		FLinearColor RingBody(0.15f, 0.20f, 0.25f, 0.85f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius, -90.0f, 270.0f, Faded(RingBody), 5.0f);
+
+		// Lower bevel face (darker, inner shadow)
+		FLinearColor BevelDark(0.06f, 0.08f, 0.10f, 0.80f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius - 2.5f, -90.0f, 270.0f, Faded(BevelDark), 2.0f);
+
+		// Inner shadow edge (darkest, simulates depth)
+		FLinearColor ShadowEdge(0.02f, 0.03f, 0.05f, 0.70f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius - 4.0f, -90.0f, 270.0f, Faded(ShadowEdge), 1.5f);
 	}
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 5b: Thick gold/bronze accent borders (contain segment highlight)
+	// LAYER 5b: Turquoise energy glow on outer ring (UE5-style emission)
+	// Wide soft bloom behind, then sharp bright accent line
 	// =====================================================================
-	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		OuterRadius, -90.0f, 270.0f, Faded(BorderAccentColor), 5.0f);
-	// Inner ring — slightly thinner, softer
-	FLinearColor InnerBorderCol(BorderAccentColor.R, BorderAccentColor.G, BorderAccentColor.B, BorderAccentColor.A * 0.7f);
-	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		InnerRadius, -90.0f, 270.0f, Faded(InnerBorderCol), 3.0f);
+	{
+		// Wide soft bloom (energy haze)
+		FLinearColor WideBloom(0.00f, 0.70f, 0.85f, 0.06f * Pulse);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius, -90.0f, 270.0f, Faded(WideBloom), 20.0f);
+
+		// Medium bloom
+		FLinearColor MedBloom(0.00f, 0.75f, 0.90f, 0.10f * Pulse);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius, -90.0f, 270.0f, Faded(MedBloom), 10.0f);
+
+		// Bright cyan accent line (the "energy" core on the ring)
+		FLinearColor AccentLine(0.00f, 0.85f, 0.95f, 0.60f * Pulse);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			OuterRadius, -90.0f, 270.0f, Faded(AccentLine), 2.0f);
+	}
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 6: Icons per segment — LARGE and centered (main visual)
+	// LAYER 5c: Inner ring border — subtle metallic + cyan accent
 	// =====================================================================
 	{
-		// Icon centered in the segment arc (content group centroid)
+		// Metallic body
+		FLinearColor InnerRingBody(0.12f, 0.16f, 0.20f, 0.70f);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			InnerRadius, -90.0f, 270.0f, Faded(InnerRingBody), 3.0f);
+
+		// Soft cyan glow on inner ring
+		FLinearColor InnerGlow(0.00f, 0.65f, 0.80f, 0.08f * Pulse);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			InnerRadius, -90.0f, 270.0f, Faded(InnerGlow), 10.0f);
+
+		// Thin cyan accent
+		FLinearColor InnerAccent(0.00f, 0.70f, 0.85f, 0.40f * Pulse);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			InnerRadius, -90.0f, 270.0f, Faded(InnerAccent), 1.5f);
+	}
+	LayerId++;
+
+	// =====================================================================
+	// LAYER 6: Icons per segment
+	// =====================================================================
+	{
 		float IconR = InnerRadius + (OuterRadius - InnerRadius) * 0.65f;
 
 		for (int32 i = 0; i < NumSegments; i++)
@@ -358,7 +409,6 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 
 			if (IconBrushes.IsValidIndex(i) && IconBrushes[i].GetResourceObject())
 			{
-				// Icons scale up 15% on hover
 				float ScaledSize = SegmentIconSize * (1.0f + 0.15f * HoverT);
 
 				FVector2D TexSize(ScaledSize, ScaledSize);
@@ -366,9 +416,15 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 
 				FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
 
-				FLinearColor IconTint = bAvailable
-					? FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha)
-					: FLinearColor(0.25f, 0.25f, 0.25f, FadeAlpha * 0.5f);
+				// Icons tint slightly cyan on hover
+				FLinearColor IconTint;
+				if (!bAvailable)
+					IconTint = FLinearColor(0.20f, 0.25f, 0.30f, FadeAlpha * 0.5f);
+				else
+					IconTint = FMath::Lerp(
+						FLinearColor(0.85f, 0.90f, 0.95f, FadeAlpha),
+						FLinearColor(0.70f, 1.00f, 1.00f, FadeAlpha),
+						HoverT);
 
 				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
 					IconGeo.ToPaintGeometry(), &IconBrushes[i],
@@ -379,7 +435,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 7: Piece name text per segment (small, below icon)
+	// LAYER 7: Piece name text per segment
 	// =====================================================================
 	{
 		float NameR = InnerRadius + (OuterRadius - InnerRadius) * 0.35f;
@@ -413,7 +469,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 8: Size subtitle per segment (below name, even smaller)
+	// LAYER 8: Size subtitle per segment
 	// =====================================================================
 	{
 		float SubR = InnerRadius + (OuterRadius - InnerRadius) * 0.23f;
@@ -436,7 +492,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 			if (!bAvailable)
 				Tint = TextUnavailable;
 			else
-				Tint = FMath::Lerp(SubtitleColor, FLinearColor(0.75f, 0.70f, 0.62f, 1.0f), HoverT);
+				Tint = FMath::Lerp(SubtitleColor, FLinearColor(0.50f, 0.80f, 0.85f, 1.0f), HoverT);
 			Tint.A *= FadeAlpha;
 
 			FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
@@ -447,23 +503,29 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 9: Center hub — dark fill + glow bloom + border ring
+	// LAYER 9: Center hub — dark fill + turquoise glow ring
 	// =====================================================================
 	DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry, Center,
 		CenterHubRadius, Faded(CenterFillColor));
 
-	// Warm glow bloom behind center border ring
-	FLinearColor HubGlow(0.70f, 0.50f, 0.18f, 0.12f);
+	// Soft turquoise glow bloom behind center border ring
+	FLinearColor HubGlow(0.00f, 0.65f, 0.80f, 0.10f * Pulse);
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		CenterHubRadius, -90.0f, 270.0f, Faded(HubGlow), 14.0f);
+		CenterHubRadius, -90.0f, 270.0f, Faded(HubGlow), 16.0f);
 
-	// Gold accent ring — thicker to match outer borders
+	// Medium glow layer
+	FLinearColor HubGlowMed(0.00f, 0.70f, 0.85f, 0.16f * Pulse);
 	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		CenterHubRadius, -90.0f, 270.0f, Faded(CenterBorderColor), 3.0f);
+		CenterHubRadius, -90.0f, 270.0f, Faded(HubGlowMed), 8.0f);
+
+	// Cyan accent ring
+	FLinearColor HubAccent(0.00f, 0.75f, 0.88f, 0.50f * Pulse);
+	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+		CenterHubRadius, -90.0f, 270.0f, Faded(HubAccent), 2.0f);
 	LayerId++;
 
 	// =====================================================================
-	// LAYER 10: Center hub content — large icon + piece name + subtitle
+	// LAYER 10: Center hub content — icon + piece name + subtitle
 	// =====================================================================
 	{
 		bool bHasSelection = (HighlightedIndex >= 0 && SegmentInfos.IsValidIndex(HighlightedIndex));
@@ -472,26 +534,29 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			const FPieceTypeInfo& Info = SegmentInfos[HighlightedIndex];
 
-			// Large icon in center (clean on dark background, no glow disc)
+			// Large icon in center (clean on dark background)
 			if (IconBrushes.IsValidIndex(HighlightedIndex) && IconBrushes[HighlightedIndex].GetResourceObject())
 			{
 				FVector2D TexSize(CenterIconSize, CenterIconSize);
 				FVector2D TexPos = Center - FVector2D(CenterIconSize / 2.0f, CenterIconSize / 2.0f + 24.0f);
 
 				FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
+
+				// Slight cyan tint on center icon
+				FLinearColor CenterIconTint(0.80f, 0.95f, 1.00f, FadeAlpha);
 				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
 					IconGeo.ToPaintGeometry(), &IconBrushes[HighlightedIndex],
-					ESlateDrawEffect::None, Faded(TextWhite));
+					ESlateDrawEffect::None, CenterIconTint);
 			}
 
-			// Piece name below icon
+			// Piece name
 			FVector2D NameSize = FontMeasure->Measure(Info.DisplayName, CenterNameFont);
 			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, CenterIconSize / 2.0f - 14.0f);
 			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
 			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
 				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(TextWhite));
 
-			// Size subtitle below name
+			// Subtitle
 			if (!Info.Subtitle.IsEmpty())
 			{
 				FVector2D SubSize = FontMeasure->Measure(Info.Subtitle, CenterSubFont);
@@ -503,7 +568,6 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		}
 		else
 		{
-			// No selection: "Select Piece" prompt
 			FString Prompt = TEXT("Select Piece");
 			FSlateFontInfo PromptFont = FCoreStyle::GetDefaultFontStyle("Regular", 16);
 			FVector2D PromptSize = FontMeasure->Measure(Prompt, PromptFont);
@@ -530,10 +594,9 @@ void URadialPieceMenu::DrawFilledArc(FSlateWindowElementList& OutDrawElements, i
 	float Span = OutR - InR;
 	if (Span < 1.0f) return;
 
-	// More rings for larger arcs = smoother fill
 	int32 NumRings = FMath::Max(16, FMath::CeilToInt(Span / 3.5f));
 	float RingSpacing = Span / (float)NumRings;
-	float LineWidth = RingSpacing * 1.95f; // Slight overlap to prevent gaps
+	float LineWidth = RingSpacing * 1.95f;
 
 	FPaintGeometry PG = Geo.ToPaintGeometry();
 
@@ -581,7 +644,7 @@ void URadialPieceMenu::DrawArcOutline(FSlateWindowElementList& OutDrawElements, 
 }
 
 // ---------------------------------------------------------------------------
-// DrawCircleFill: solid filled circle using filled arc from 0 to full
+// DrawCircleFill: solid filled circle
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 	const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const

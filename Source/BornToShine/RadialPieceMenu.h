@@ -1,4 +1,4 @@
-// Born To Shine - Radial Piece Selection Menu (Rust/Fortnite quality)
+// Born To Shine - Radial Piece Selection Menu (Sci-fi holographic style)
 
 #pragma once
 
@@ -12,16 +12,15 @@
  * Production-quality radial wheel menu for selecting construction piece types.
  * Hold Tab to open, move mouse to highlight segment, release to select.
  *
- * Visual design (Rust / Satisfactory reference):
- *   - Dark frosted semi-transparent backdrop (70% opacity)
- *   - Large prominent icons per segment (64x64+)
+ * Visual design (sci-fi holographic blueprint):
+ *   - Dark navy/charcoal backdrop (75% opacity)
+ *   - Large prominent icons per segment
  *   - Piece name + size subtitle under each icon
- *   - Selected segment: warm wood-tone highlight with soft glow
- *   - Center hub: large icon + name of hovered piece
- *   - Thin gold/bronze accent border, clean thin dividers
- *   - Smooth fade-in, per-segment hover interpolation
+ *   - Selected segment: bright turquoise/cyan highlight with UE5-style glow
+ *   - Center hub: dark with soft turquoise glow ring
+ *   - 3D metallic beveled outer ring with turquoise accents
+ *   - Smooth fade-in, per-segment hover interpolation, breathing glow pulse
  *   - Unavailable segments dimmed out
- *   - No ruler/tick marks on outer ring
  *
  * All rendering in C++ NativePaint — no Blueprint widgets.
  */
@@ -67,6 +66,7 @@ private:
 	// --- Animation ---
 	float FadeAlpha;
 	float FadeSpeed;
+	mutable float GlowPulseTime;             // Accumulated time for breathing glow
 	mutable TArray<float> SegmentHoverScales; // Per-segment 0→1 hover interpolation
 
 	// --- Icon brush cache ---
