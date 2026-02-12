@@ -3,6 +3,7 @@
 #include "BuildablePiece.h"
 #include "RimBoard.h"
 #include "CornerPost.h"
+#include "BottomPlate.h"
 #include "SocketManager.h"
 #include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
@@ -900,19 +901,35 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
-			// Corner post flush offset: shift inward along BOTH plate axes
-			// so both stud faces of the L-shaped assembly are flush with
-			// their respective bottom plate outer faces.
+			// Corner post Z correction + flush alignment.
+			// The CornerSeat socket sits at BoardHeight/2, but a flat 2x4 plate
+			// is only BoardWidth thick.  Read the plate mesh's actual top Z so
+			// the post sits on the real visual surface, then push OUTWARD so
+			// the post's outer stud face is flush with the plate's outer face.
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
 			{
-				float InwardOffset = 2.54f; // Default 1"
-				if (const ACornerPost* CP = Cast<const ACornerPost>(this))
+				// --- Z correction: land on the plate's real top surface ---
+				if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
 				{
-					InwardOffset = CP->FlushInwardOffset;
+					UStaticMeshComponent* PlateMesh = Plate->GetMeshComponent();
+					if (PlateMesh && PlateMesh->GetStaticMesh())
+					{
+						FBoxSphereBounds PB = PlateMesh->GetStaticMesh()->GetBounds();
+						float PlateRelZ = PlateMesh->GetRelativeLocation().Z;
+						float PlateActualTopZ = (PB.Origin.Z + PB.BoxExtent.Z) + PlateRelZ;
+						float SocketTopZ = Plate->BoardHeight / 2.0f;
+						float ZFix = PlateActualTopZ - SocketTopZ;
+						CandidateLocation.Z += ZFix;
+
+						UE_LOG(LogTemp, Log,
+							TEXT("CornerPost Z-fix: PlateTopMesh=%.2f SocketTop=%.2f → correction=%.2f"),
+							PlateActualTopZ, SocketTopZ, ZFix);
+					}
 				}
 
+				// --- Flush: push outward so post face aligns with plate face ---
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
 				for (ABuildablePiece* P : NearbyPieces)
@@ -929,22 +946,42 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector ToCenter = FrameCenter - TargetPiece->GetActorLocation();
 					ToCenter.Z = 0.0f;
 
-					FVector PlateRight   = CandidateRotation.RotateVector(FVector::RightVector);
-					FVector PlateForward = CandidateRotation.RotateVector(FVector::ForwardVector);
+					// Plate Y half-width (perpendicular to plate length)
+					float PlateHalfY = 0.0f;
+					if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
+					{
+						if (UStaticMeshComponent* PM = Plate->GetMeshComponent())
+						{
+							if (PM->GetStaticMesh())
+							{
+								PlateHalfY = PM->GetStaticMesh()->GetBounds().BoxExtent.Y;
+							}
+						}
+					}
 
-					// Y offset — perpendicular to plate length
+					// Post Y half-width (same axis after rotation alignment)
+					float PostHalfY = 0.0f;
+					if (MeshComponent && MeshComponent->GetStaticMesh())
+					{
+						PostHalfY = MeshComponent->GetStaticMesh()->GetBounds().BoxExtent.Y;
+					}
+
+					// Outward offset = plate half-width − post half-width
+					// Positive → post is narrower, push outward to flush
+					// Negative → post is wider, push inward to flush
+					float FlushOffset = PlateHalfY - PostHalfY;
+
+					FVector PlateRight = CandidateRotation.RotateVector(FVector::RightVector);
 					float DotY = FVector::DotProduct(ToCenter, PlateRight);
 					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
 					{
-						CandidateLocation += PlateRight * FMath::Sign(DotY) * InwardOffset;
+						// Sign(DotY) points inward → negate for outward
+						CandidateLocation -= PlateRight * FMath::Sign(DotY) * FlushOffset;
 					}
 
-					// X offset — along plate length (perpendicular stud face)
-					float DotX = FVector::DotProduct(ToCenter, PlateForward);
-					if (FMath::Abs(DotX) > KINDA_SMALL_NUMBER)
-					{
-						CandidateLocation += PlateForward * FMath::Sign(DotX) * InwardOffset;
-					}
+					UE_LOG(LogTemp, Log,
+						TEXT("CornerPost flush: PlateHalfY=%.2f PostHalfY=%.2f → offset=%.2f (outward)"),
+						PlateHalfY, PostHalfY, FlushOffset);
 				}
 			}
 
