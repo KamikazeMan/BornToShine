@@ -80,7 +80,34 @@ void UBuildingComponent::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added DoorFrame to AvailablePieceTypes"));
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: %d piece types available"), AvailablePieceTypes.Num());
+	// Also scan PieceTypeInfos for any piece types configured in the editor
+	// that still aren't in AvailablePieceTypes (handles the case where the user
+	// added a PieceTypeInfos entry but forgot to add the BP to AvailablePieceTypes).
+	for (const FPieceTypeInfo& EditorInfo : PieceTypeInfos)
+	{
+		if (EditorInfo.PieceType == EPieceType::None) continue;
+		if (HasPieceType(EditorInfo.PieceType)) continue;
+
+		TSubclassOf<ABuildablePiece> AutoClass = nullptr;
+		switch (EditorInfo.PieceType)
+		{
+		case EPieceType::DoorFrame:   AutoClass = ADoorFrame::StaticClass(); break;
+		case EPieceType::WallStud:    AutoClass = AWallStud::StaticClass(); break;
+		case EPieceType::WallPlate:   AutoClass = ABottomPlate::StaticClass(); break;
+		case EPieceType::Plywood:     AutoClass = APlywoodSheet::StaticClass(); break;
+		default: break;
+		}
+
+		if (AutoClass)
+		{
+			AvailablePieceTypes.Add(AutoClass);
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added class for PieceType %d from PieceTypeInfos"),
+				(int32)EditorInfo.PieceType);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: %d piece types available, %d PieceTypeInfos configured"),
+		AvailablePieceTypes.Num(), PieceTypeInfos.Num());
 }
 
 void UBuildingComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -740,19 +767,21 @@ TArray<FString> UBuildingComponent::GetPieceTypeNames() const
 
 TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 {
-	// Always build from AvailablePieceTypes, overlaying any editor-configured
-	// PieceTypeInfos.  This ensures auto-registered piece types (like DoorFrame)
-	// always appear even if the editor array hasn't been updated yet.
+	// Build from the larger of AvailablePieceTypes / PieceTypeInfos so entries
+	// from EITHER array always appear.  Auto-generate defaults, then overlay
+	// any editor-configured PieceTypeInfos on top.
 	TArray<FString> Names = GetPieceTypeNames();
 	TArray<FPieceTypeInfo> Infos;
 
-	for (int32 i = 0; i < AvailablePieceTypes.Num(); i++)
+	int32 Count = FMath::Max(AvailablePieceTypes.Num(), PieceTypeInfos.Num());
+
+	for (int32 i = 0; i < Count; i++)
 	{
 		FPieceTypeInfo Info;
 		Info.DisplayName = Names.IsValidIndex(i) ? Names[i] : TEXT("?");
 		Info.bAvailable = true;
 
-		if (AvailablePieceTypes[i])
+		if (AvailablePieceTypes.IsValidIndex(i) && AvailablePieceTypes[i])
 		{
 			ABuildablePiece* CDO = AvailablePieceTypes[i]->GetDefaultObject<ABuildablePiece>();
 			if (CDO)
@@ -773,16 +802,18 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				default: break;
 				}
 			}
+		}
 
-			// Use editor-configured info if it exists at this index (partial config)
-			if (PieceTypeInfos.IsValidIndex(i))
-			{
-				const FPieceTypeInfo& EditorInfo = PieceTypeInfos[i];
-				if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
-				if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
-				if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
-				Info.bAvailable = EditorInfo.bAvailable;
-			}
+		// Overlay editor-configured info if it exists at this index
+		if (PieceTypeInfos.IsValidIndex(i))
+		{
+			const FPieceTypeInfo& EditorInfo = PieceTypeInfos[i];
+			if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
+			if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
+			if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
+			Info.bAvailable = EditorInfo.bAvailable;
+			if (Info.PieceType == EPieceType::None && EditorInfo.PieceType != EPieceType::None)
+				Info.PieceType = EditorInfo.PieceType;
 		}
 
 		Infos.Add(Info);
