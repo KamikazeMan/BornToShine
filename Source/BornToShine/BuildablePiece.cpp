@@ -935,8 +935,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Corner post Z correction + flush alignment.
 			// Z: read the plate mesh's actual top surface so the post lands
 			// on the real visual top (not the socket approximation).
-			// XY: offset inward by half a stud width from the plate end so the
-			// post's outer face is flush with the plate end.
+			// XY: offset 1.905cm toward the frame center on BOTH world axes
+			// (corner post sits where two plates meet, needs flush on both).
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
@@ -960,27 +960,45 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: offset inward by half a stud width from plate end ---
-				// The corner post origin is at the center of the first stud.
-				// Shift 1.905cm (half of 3.81cm stud width) toward the plate center
-				// so the stud's outer face is flush with the plate end — same offset
-				// a regular stud has when sitting on a plate.
+				// --- Flush: offset inward by half a stud width on BOTH axes ---
+				// The corner post sits where two perpendicular plates meet, so it
+				// must shift 1.905cm toward the frame center on X AND on Y.
+				// This keeps the stud's outer face flush with each plate end.
 				{
 					const float HalfStudWidth = 3.81f / 2.0f; // 1.905cm
 
-					FVector PlateForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
-					FVector SeatToPlateCenter = TargetPiece->GetActorLocation() - SnapLoc;
-					SeatToPlateCenter.Z = 0.0f;
-
-					float DotAlong = FVector::DotProduct(SeatToPlateCenter, PlateForward);
-					if (FMath::Abs(DotAlong) > KINDA_SMALL_NUMBER)
+					FVector FrameCenterFlush = FVector::ZeroVector;
+					int32 RimCountFlush = 0;
+					for (ABuildablePiece* P : NearbyPieces)
 					{
-						CandidateLocation += PlateForward * FMath::Sign(DotAlong) * HalfStudWidth;
+						if (P && P->GetPieceType() == EPieceType::RimBoard)
+						{
+							FrameCenterFlush += P->GetActorLocation();
+							RimCountFlush++;
+						}
 					}
+					if (RimCountFlush > 0)
+					{
+						FrameCenterFlush /= RimCountFlush;
+						FVector ToCenter = FrameCenterFlush - CandidateLocation;
+						ToCenter.Z = 0.0f;
 
-					UE_LOG(LogTemp, Log,
-						TEXT("CornerPost flush: shifted %.2fcm along plate toward center (DotAlong=%.2f)"),
-						HalfStudWidth, DotAlong);
+						// Shift 1.905cm toward center on each world axis independently
+						if (FMath::Abs(ToCenter.X) > KINDA_SMALL_NUMBER)
+						{
+							CandidateLocation.X += FMath::Sign(ToCenter.X) * HalfStudWidth;
+						}
+						if (FMath::Abs(ToCenter.Y) > KINDA_SMALL_NUMBER)
+						{
+							CandidateLocation.Y += FMath::Sign(ToCenter.Y) * HalfStudWidth;
+						}
+
+						UE_LOG(LogTemp, Log,
+							TEXT("CornerPost flush: shifted %.2fcm on X (sign=%.0f) and Y (sign=%.0f) toward center (%.1f,%.1f)"),
+							HalfStudWidth,
+							FMath::Sign(ToCenter.X), FMath::Sign(ToCenter.Y),
+							FrameCenterFlush.X, FrameCenterFlush.Y);
+					}
 				}
 			}
 
