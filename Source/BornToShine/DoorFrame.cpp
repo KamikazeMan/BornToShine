@@ -148,22 +148,29 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	FVector DoorLoc = GetActorLocation();
 	FRotator DoorRot = GetActorRotation();
 
-	// Door frame's local axes
-	FVector DoorRight = DoorRot.RotateVector(FVector::RightVector);
-	FVector DoorForward = DoorRot.RotateVector(FVector::ForwardVector);
+	// Door frame's local axes:
+	//   ForwardVector (X) = along the wall = along the door opening width
+	//   RightVector   (Y) = through the wall = door depth
+	FVector DoorAlongWall = DoorRot.RotateVector(FVector::ForwardVector);
+	FVector DoorThroughWall = DoorRot.RotateVector(FVector::RightVector);
 
-	// Half-width of the door frame mesh (distance from center to outer king stud face)
+	// Half-width of the door frame opening (along the wall)
 	float HalfWidth = RoughOpeningWidth / 2.0f;
-	// Depth tolerance — studs are roughly in-line with the door frame on the wall
+	// Depth tolerance — studs sit roughly in-line through the wall
 	const float DepthTolerance = 15.0f; // cm
 
 	int32 DeletedStuds = 0;
 	int32 DeletedPlates = 0;
 
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: AutoDelete check — Loc=(%.1f,%.1f,%.1f) Yaw=%.1f HalfWidth=%.1f"),
+		DoorLoc.X, DoorLoc.Y, DoorLoc.Z, DoorRot.Yaw, HalfWidth);
+
 	// --- Delete overlapping wall studs ---
 	{
 		TArray<ABuildablePiece*> Studs =
 			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
+
+		UE_LOG(LogTemp, Log, TEXT("DoorFrame: Checking %d wall studs for overlap"), Studs.Num());
 
 		for (ABuildablePiece* Piece : Studs)
 		{
@@ -172,13 +179,13 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 			FVector Delta = Piece->GetActorLocation() - DoorLoc;
 			Delta.Z = 0.0f; // Ignore height — studs and door are on the same wall
 
-			float AlongWidth = FMath::Abs(FVector::DotProduct(Delta, DoorRight));
-			float AlongDepth = FMath::Abs(FVector::DotProduct(Delta, DoorForward));
+			float AlongWall = FMath::Abs(FVector::DotProduct(Delta, DoorAlongWall));
+			float ThroughWall = FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall));
 
-			if (AlongWidth < HalfWidth && AlongDepth < DepthTolerance)
+			if (AlongWall < HalfWidth && ThroughWall < DepthTolerance)
 			{
-				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting WallStud %s (width=%.1f, depth=%.1f)"),
-					*Piece->GetName(), AlongWidth, AlongDepth);
+				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting WallStud %s (alongWall=%.1f, throughWall=%.1f)"),
+					*Piece->GetName(), AlongWall, ThroughWall);
 
 				AConstructionPhaseManager::Instance->UnregisterPiece(Piece);
 				Piece->Destroy();
@@ -202,13 +209,13 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 			FVector Delta = Plate->GetActorLocation() - DoorLoc;
 			Delta.Z = 0.0f;
 
-			float AlongWidth = FMath::Abs(FVector::DotProduct(Delta, DoorRight));
-			float AlongDepth = FMath::Abs(FVector::DotProduct(Delta, DoorForward));
+			float AlongWall = FMath::Abs(FVector::DotProduct(Delta, DoorAlongWall));
+			float ThroughWall = FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall));
 
-			if (AlongWidth < HalfWidth && AlongDepth < DepthTolerance)
+			if (AlongWall < HalfWidth && ThroughWall < DepthTolerance)
 			{
-				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting BottomPlate %s (width=%.1f, depth=%.1f)"),
-					*Plate->GetName(), AlongWidth, AlongDepth);
+				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting BottomPlate %s (alongWall=%.1f, throughWall=%.1f)"),
+					*Plate->GetName(), AlongWall, ThroughWall);
 
 				AConstructionPhaseManager::Instance->UnregisterPiece(Plate);
 				Plate->Destroy();

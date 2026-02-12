@@ -993,9 +993,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
-			// Door frame Z correction — same pattern as corner post.
-			// The Wall_Bottom_Plate socket sits at the plate center, but the
-			// door frame must rest on the plate's real visual top surface.
+			// Door frame Z correction.
+			// The door frame sits on the PLYWOOD, not on top of the plate,
+			// because the plate section under the door gets removed.
+			// First align to plate top (same as corner post), then drop 1.5" (3.81cm).
 			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
@@ -1012,9 +1013,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						float ZFix = PlateActualTopZ - SocketTopZ;
 						CandidateLocation.Z += ZFix;
 
+						// Drop 1.5" to sit on plywood (plate gets removed under door)
+						const float PlateThickness = 3.81f; // 1.5 inches
+						CandidateLocation.Z -= PlateThickness;
+
 						UE_LOG(LogTemp, Log,
-							TEXT("DoorFrame Z-fix: PlateTopMesh=%.2f SocketTop=%.2f → correction=%.2f"),
-							PlateActualTopZ, SocketTopZ, ZFix);
+							TEXT("DoorFrame Z-fix: PlateTopZ=%.2f SocketTop=%.2f ZFix=%.2f -1.5\"=%.2f → FinalZ=%.2f"),
+							PlateActualTopZ, SocketTopZ, ZFix, PlateThickness, CandidateLocation.Z);
 					}
 				}
 			}
