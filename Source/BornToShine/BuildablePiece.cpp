@@ -935,9 +935,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Corner post Z correction + flush alignment.
 			// Z: read the plate mesh's actual top surface so the post lands
 			// on the real visual top (not the socket approximation).
-			// XY: compute world-space half-extents from the rotated post mesh,
-			// then shift inward by (postHalfExtent − plateHalfWidth) per axis
-			// so the post's outer faces align with the plate's outer faces.
+			// XY: shift 1.905cm along the plate toward its center so the
+			// first stud's end face is flush with the plate end.  No
+			// perpendicular shift — the stud centers on the plate width
+			// naturally, same as a regular wall stud.
 			if (Socket.SocketType == EConstructionSocketType::CornerPost_Bottom &&
 				TgtSocketType == EConstructionSocketType::CornerPost_Seat &&
 				TargetPiece)
@@ -961,102 +962,27 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
-				// --- Flush: align post outer faces with plate outer faces ---
-				// The L-shaped corner post is asymmetric — different extents on
-				// the post's local X vs Y.  After rotation the post axes map to
-				// world axes.  For each world axis the required inward shift is:
-				//   PostHalfExtent_on_that_axis − PlateHalfWidth (1.905cm)
-				// so the post's outer face lands where the plate's outer face is.
+				// --- Flush: 1.905cm along plate toward plate center ---
+				// The corner seat socket is at the plate end. The corner post
+				// origin is at the center of the first stud (half a stud width
+				// from its face). Shifting 1.905cm toward the plate center
+				// puts the stud face flush with the plate end.
 				{
-					const float PlateHalfWidth = 3.81f / 2.0f; // 1.905cm
+					const float HalfStudWidth = 3.81f / 2.0f; // 1.905cm
 
-					// Read post mesh bounds (local, pre-rotation)
-					float PostLocalHalfX = 0.0f, PostLocalHalfY = 0.0f;
-					float PostOriginX = 0.0f, PostOriginY = 0.0f;
-					if (MeshComponent && MeshComponent->GetStaticMesh())
+					FVector PlateForward = TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+					FVector SeatToPlateCenter = TargetPiece->GetActorLocation() - SnapLoc;
+					SeatToPlateCenter.Z = 0.0f;
+
+					float DotAlong = FVector::DotProduct(SeatToPlateCenter, PlateForward);
+					if (FMath::Abs(DotAlong) > KINDA_SMALL_NUMBER)
 					{
-						FBoxSphereBounds PB = MeshComponent->GetStaticMesh()->GetBounds();
-						PostLocalHalfX = PB.BoxExtent.X;
-						PostLocalHalfY = PB.BoxExtent.Y;
-						PostOriginX = PB.Origin.X;
-						PostOriginY = PB.Origin.Y;
+						CandidateLocation += PlateForward * FMath::Sign(DotAlong) * HalfStudWidth;
 					}
 
-					// Read plate mesh bounds for reference logging
-					float PlateLocalHalfX = 0.0f, PlateLocalHalfY = 0.0f;
-					if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
-					{
-						if (UStaticMeshComponent* PM = Plate->GetMeshComponent())
-						{
-							if (PM->GetStaticMesh())
-							{
-								FBoxSphereBounds PlateBnds = PM->GetStaticMesh()->GetBounds();
-								PlateLocalHalfX = PlateBnds.BoxExtent.X;
-								PlateLocalHalfY = PlateBnds.BoxExtent.Y;
-							}
-						}
-					}
-
-					UE_LOG(LogTemp, Warning,
-						TEXT("CornerPost BOUNDS: PostLocal Origin=(%.2f,%.2f) HalfExt=(%.2f,%.2f)  "
-						     "PlateLocal HalfExt=(%.2f,%.2f)  PostYaw=%.1f"),
-						PostOriginX, PostOriginY,
-						PostLocalHalfX, PostLocalHalfY,
-						PlateLocalHalfX, PlateLocalHalfY,
-						CandidateRotation.Yaw);
-
-					// Transform post local bounds into world-axis extents
-					// by rotating the post's local bounding box corners through
-					// the candidate yaw rotation and taking the new AABB half-extents.
-					FVector LocalCorners[4] = {
-						FVector(PostOriginX + PostLocalHalfX, PostOriginY + PostLocalHalfY, 0),
-						FVector(PostOriginX + PostLocalHalfX, PostOriginY - PostLocalHalfY, 0),
-						FVector(PostOriginX - PostLocalHalfX, PostOriginY + PostLocalHalfY, 0),
-						FVector(PostOriginX - PostLocalHalfX, PostOriginY - PostLocalHalfY, 0),
-					};
-
-					float WorldMaxX = 0.0f, WorldMaxY = 0.0f;
-					for (const FVector& C : LocalCorners)
-					{
-						FVector Rotated = CandidateRotation.RotateVector(C);
-						WorldMaxX = FMath::Max(WorldMaxX, FMath::Abs(Rotated.X));
-						WorldMaxY = FMath::Max(WorldMaxY, FMath::Abs(Rotated.Y));
-					}
-
-					// Per-axis inward shift = world half-extent − plate half-width
-					float ShiftX = WorldMaxX - PlateHalfWidth;
-					float ShiftY = WorldMaxY - PlateHalfWidth;
-
-					UE_LOG(LogTemp, Warning,
-						TEXT("CornerPost FLUSH: WorldHalfExt=(%.2f,%.2f) PlateHalfW=%.2f → ShiftX=%.2f ShiftY=%.2f"),
-						WorldMaxX, WorldMaxY, PlateHalfWidth, ShiftX, ShiftY);
-
-					// Compute frame center for inward direction
-					FVector FrameCenterFlush = FVector::ZeroVector;
-					int32 RimCountFlush = 0;
-					for (ABuildablePiece* P : NearbyPieces)
-					{
-						if (P && P->GetPieceType() == EPieceType::RimBoard)
-						{
-							FrameCenterFlush += P->GetActorLocation();
-							RimCountFlush++;
-						}
-					}
-					if (RimCountFlush > 0)
-					{
-						FrameCenterFlush /= RimCountFlush;
-						FVector ToCenter = FrameCenterFlush - CandidateLocation;
-						ToCenter.Z = 0.0f;
-
-						if (FMath::Abs(ToCenter.X) > KINDA_SMALL_NUMBER && ShiftX > KINDA_SMALL_NUMBER)
-						{
-							CandidateLocation.X += FMath::Sign(ToCenter.X) * ShiftX;
-						}
-						if (FMath::Abs(ToCenter.Y) > KINDA_SMALL_NUMBER && ShiftY > KINDA_SMALL_NUMBER)
-						{
-							CandidateLocation.Y += FMath::Sign(ToCenter.Y) * ShiftY;
-						}
-					}
+					UE_LOG(LogTemp, Log,
+						TEXT("CornerPost flush: shifted %.2fcm along plate (DotAlong=%.2f, PlateYaw=%.1f)"),
+						HalfStudWidth, DotAlong, TargetPiece->GetActorRotation().Yaw);
 				}
 			}
 
