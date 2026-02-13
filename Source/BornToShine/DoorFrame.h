@@ -45,6 +45,11 @@ public:
 
 	float GetFrameHeightCm() const { return FrameHeight; }
 
+	/** Reference king stud height from the door frame mesh.
+	 *  All vertical framing pieces (studs, corner posts) scale to match this. */
+	static float KingStudHeight;
+	static float GetKingStudHeight() { return KingStudHeight; }
+
 	/** Mark overlap deletion as already done (used during save/load to prevent
 	    re-splitting remnant plates that were already restored). */
 	void SetHasAutoDeleted(bool bValue) { bHasAutoDeleted = bValue; }
@@ -66,6 +71,9 @@ private:
 	void CreateBottomSocket();
 	void CreateTopSocket();
 	void AdjustSocketsToMeshBounds();
+
+	/** After setting KingStudHeight, rescale any existing WallStuds/CornerPosts. */
+	void ScaleExistingVerticalsToKingStudHeight();
 
 	/**
 	 * Called once after the door frame is placed (exits preview mode).
