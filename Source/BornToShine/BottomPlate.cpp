@@ -203,6 +203,32 @@ void ABottomPlate::SetBoardLengthFeet(int32 LengthInFeet)
 	}
 }
 
+void ABottomPlate::SetBoardLengthCm(float LengthCm)
+{
+	const float MinCm = MinLengthFeet * 30.48f;
+	const float MaxCm = MaxLengthFeet * 30.48f;
+	LengthCm = FMath::Clamp(LengthCm, MinCm, MaxCm);
+
+	BoardLength = LengthCm;
+	CurrentLengthFeet = FMath::RoundToInt(LengthCm / 30.48f);
+	if (CurrentLengthFeet < MinLengthFeet) CurrentLengthFeet = MinLengthFeet;
+	bMeshExtended = false;
+
+	if (MeshComponent)
+	{
+		MeshComponent->SetRelativeScale3D(FVector(
+			BoardLength / 100.0f,
+			BoardWidth / 100.0f,
+			BoardHeight / 100.0f
+		));
+	}
+
+	RegenerateSockets();
+
+	UE_LOG(LogTemp, Log, TEXT("BottomPlate: Length set to %.1f cm (~%d ft)"),
+		BoardLength, CurrentLengthFeet);
+}
+
 int32 ABottomPlate::GetBoardLengthFeet() const
 {
 	return CurrentLengthFeet;

@@ -53,6 +53,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void SetBoardLengthFeet(int32 LengthInFeet);
 
+	// Set length in centimetres (for arbitrary cuts like door frame splits)
+	void SetBoardLengthCm(float LengthCm);
+
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	int32 GetBoardLengthFeet() const;
 

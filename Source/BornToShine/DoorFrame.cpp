@@ -150,8 +150,9 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 
 // ---------------------------------------------------------------------------
 // AutoDeleteOverlappingPieces
-// Removes wall studs and bottom plate sections that overlap the door frame.
-// Uses XY projection along the door frame's local axes (Z-independent).
+// 1. Deletes wall studs that fall inside the door opening.
+// 2. Splits the bottom plate under the door: removes the original and
+//    spawns two shorter remnant plates on each side of the opening.
 // ---------------------------------------------------------------------------
 void ADoorFrame::AutoDeleteOverlappingPieces()
 {
@@ -160,24 +161,19 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	FVector DoorLoc = GetActorLocation();
 	FRotator DoorRot = GetActorRotation();
 
-	// Door frame's local axes:
-	//   ForwardVector (X) = along the wall = along the door opening width
-	//   RightVector   (Y) = through the wall = door depth
+	// Door frame's local axes (matches plate axes since we take plate yaw)
 	FVector DoorAlongWall = DoorRot.RotateVector(FVector::ForwardVector);
 	FVector DoorThroughWall = DoorRot.RotateVector(FVector::RightVector);
 
-	// Half-width of the door frame opening (along the wall)
 	float HalfWidth = RoughOpeningWidth / 2.0f;
-	// Depth tolerance — studs sit roughly in-line through the wall
 	const float DepthTolerance = 15.0f; // cm
 
 	int32 DeletedStuds = 0;
-	int32 DeletedPlates = 0;
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: AutoDelete check — Loc=(%.1f,%.1f,%.1f) Yaw=%.1f HalfWidth=%.1f"),
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: AutoDelete — Loc=(%.1f,%.1f,%.1f) Yaw=%.1f HalfWidth=%.1f"),
 		DoorLoc.X, DoorLoc.Y, DoorLoc.Z, DoorRot.Yaw, HalfWidth);
 
-	// --- Delete overlapping wall studs ---
+	// --- 1. Delete overlapping wall studs ---
 	{
 		TArray<ABuildablePiece*> Studs =
 			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
@@ -189,36 +185,6 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 			if (!Piece || Piece == this) continue;
 
 			FVector Delta = Piece->GetActorLocation() - DoorLoc;
-			Delta.Z = 0.0f; // Ignore height — studs and door are on the same wall
-
-			float AlongWall = FMath::Abs(FVector::DotProduct(Delta, DoorAlongWall));
-			float ThroughWall = FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall));
-
-			if (AlongWall < HalfWidth && ThroughWall < DepthTolerance)
-			{
-				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting WallStud %s (alongWall=%.1f, throughWall=%.1f)"),
-					*Piece->GetName(), AlongWall, ThroughWall);
-
-				AConstructionPhaseManager::Instance->UnregisterPiece(Piece);
-				Piece->Destroy();
-				DeletedStuds++;
-			}
-		}
-	}
-
-	// --- Delete bottom plate section under the door opening ---
-	{
-		TArray<ABuildablePiece*> Nearby =
-			AConstructionPhaseManager::Instance->GetNearbyPieces(DoorLoc, 500.0f);
-
-		for (ABuildablePiece* P : Nearby)
-		{
-			if (!P || P == this) continue;
-
-			ABottomPlate* Plate = Cast<ABottomPlate>(P);
-			if (!Plate) continue;
-
-			FVector Delta = Plate->GetActorLocation() - DoorLoc;
 			Delta.Z = 0.0f;
 
 			float AlongWall = FMath::Abs(FVector::DotProduct(Delta, DoorAlongWall));
@@ -226,16 +192,116 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 
 			if (AlongWall < HalfWidth && ThroughWall < DepthTolerance)
 			{
-				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleting BottomPlate %s (alongWall=%.1f, throughWall=%.1f)"),
-					*Plate->GetName(), AlongWall, ThroughWall);
-
-				AConstructionPhaseManager::Instance->UnregisterPiece(Plate);
-				Plate->Destroy();
-				DeletedPlates++;
+				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Deleting WallStud %s (along=%.1f, through=%.1f)"),
+					*Piece->GetName(), AlongWall, ThroughWall);
+				AConstructionPhaseManager::Instance->UnregisterPiece(Piece);
+				Piece->Destroy();
+				DeletedStuds++;
 			}
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Auto-deleted %d studs and %d plates (HalfWidth=%.1f)"),
-		DeletedStuds, DeletedPlates, HalfWidth);
+	// --- 2. Split the bottom plate under the door opening ---
+	// Find the plate we snapped to
+	ABottomPlate* OrigPlate = Cast<ABottomPlate>(SnappedToPiece);
+
+	// Fallback: search nearby if snap reference isn't a plate
+	if (!OrigPlate)
+	{
+		TArray<ABuildablePiece*> Nearby =
+			AConstructionPhaseManager::Instance->GetNearbyPieces(DoorLoc, 500.0f);
+		for (ABuildablePiece* P : Nearby)
+		{
+			ABottomPlate* Plate = Cast<ABottomPlate>(P);
+			if (!Plate) continue;
+			FVector Delta = Plate->GetActorLocation() - DoorLoc;
+			Delta.Z = 0.0f;
+			if (FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall)) < DepthTolerance)
+			{
+				OrigPlate = Plate;
+				break;
+			}
+		}
+	}
+
+	if (!OrigPlate)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DoorFrame: No bottom plate found to split"));
+		return;
+	}
+
+	// --- Capture original plate properties ---
+	FVector  PlatePos    = OrigPlate->GetActorLocation();
+	FRotator PlateRot    = OrigPlate->GetActorRotation();
+	float    PlateLength = OrigPlate->BoardLength;        // cm
+	float    PlateHalfLen = PlateLength / 2.0f;
+	TSubclassOf<ABottomPlate> PlateClass = OrigPlate->GetClass();
+
+	// Plate forward axis (along its length)
+	FVector PlateForward = PlateRot.RotateVector(FVector::ForwardVector);
+
+	// Project door centre onto plate axis (signed offset from plate centre)
+	FVector DeltaDP = DoorLoc - PlatePos;
+	DeltaDP.Z = 0.0f;
+	float DoorCentreOnPlate = FVector::DotProduct(DeltaDP, PlateForward);
+
+	// Remnant lengths on each side of the door opening
+	float LeftLength  = PlateHalfLen + DoorCentreOnPlate - HalfWidth;
+	float RightLength = PlateHalfLen - DoorCentreOnPlate - HalfWidth;
+
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Plate split — PlateLen=%.1f DoorOffset=%.1f  Left=%.1f  Right=%.1f"),
+		PlateLength, DoorCentreOnPlate, LeftLength, RightLength);
+
+	// Minimum remnant: 1 ft (30.48 cm).  Shorter pieces would be clamped up
+	// by SetBoardLengthCm and overlap the door frame, so skip them.
+	const float MinRemnant = 30.48f;
+
+	// --- Destroy original plate ---
+	AConstructionPhaseManager::Instance->UnregisterPiece(OrigPlate);
+	SnappedToPiece = nullptr; // clear dangling reference
+	OrigPlate->Destroy();
+
+	// --- Spawn left remnant ---
+	if (LeftLength >= MinRemnant)
+	{
+		// Centre of left remnant in plate-local X
+		float LeftCentre = -PlateHalfLen + LeftLength / 2.0f;
+		FVector LeftPos = PlatePos + PlateForward * LeftCentre;
+		LeftPos.Z = PlatePos.Z;
+
+		ABottomPlate* LeftPlate = GetWorld()->SpawnActor<ABottomPlate>(
+			PlateClass, LeftPos, PlateRot);
+		if (LeftPlate)
+		{
+			LeftPlate->SetBoardLengthCm(LeftLength);
+			LeftPlate->SetPreviewMode(false);
+			AConstructionPhaseManager::Instance->RegisterPlacedPiece(LeftPlate);
+			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Spawned LEFT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
+				LeftLength, LeftPos.X, LeftPos.Y, LeftPos.Z);
+		}
+	}
+
+	// --- Spawn right remnant ---
+	if (RightLength >= MinRemnant)
+	{
+		float RightCentre = PlateHalfLen - RightLength / 2.0f;
+		FVector RightPos = PlatePos + PlateForward * RightCentre;
+		RightPos.Z = PlatePos.Z;
+
+		ABottomPlate* RightPlate = GetWorld()->SpawnActor<ABottomPlate>(
+			PlateClass, RightPos, PlateRot);
+		if (RightPlate)
+		{
+			RightPlate->SetBoardLengthCm(RightLength);
+			RightPlate->SetPreviewMode(false);
+			AConstructionPhaseManager::Instance->RegisterPlacedPiece(RightPlate);
+			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Spawned RIGHT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
+				RightLength, RightPos.X, RightPos.Y, RightPos.Z);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Split complete — deleted %d studs, split plate into %s remnants"),
+		DeletedStuds,
+		(LeftLength >= MinRemnant && RightLength >= MinRemnant) ? TEXT("2") :
+		(LeftLength >= MinRemnant || RightLength >= MinRemnant) ? TEXT("1") : TEXT("0"));
 }
