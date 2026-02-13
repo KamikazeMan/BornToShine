@@ -181,18 +181,17 @@ void ABottomPlate::SetBoardLengthFeet(int32 LengthInFeet)
 
 	if (LengthInFeet != CurrentLengthFeet)
 	{
+		float OldLength = BoardLength;
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f;
 		bMeshExtended = false; // Scale reset — allow re-extension
 
-		// Update mesh scale
-		if (MeshComponent)
+		// Scale only X (length axis) proportionally — preserves Y/Z from BP mesh
+		if (MeshComponent && OldLength > 0.0f)
 		{
-			MeshComponent->SetRelativeScale3D(FVector(
-				BoardLength / 100.0f,
-				BoardWidth / 100.0f,
-				BoardHeight / 100.0f
-			));
+			FVector S = MeshComponent->GetRelativeScale3D();
+			float Ratio = BoardLength / OldLength;
+			MeshComponent->SetRelativeScale3D(FVector(S.X * Ratio, S.Y, S.Z));
 		}
 
 		// Regenerate sockets with new length
@@ -209,18 +208,18 @@ void ABottomPlate::SetBoardLengthCm(float LengthCm)
 	const float MaxCm = MaxLengthFeet * 30.48f;
 	LengthCm = FMath::Clamp(LengthCm, MinCm, MaxCm);
 
+	float OldLength = BoardLength;
 	BoardLength = LengthCm;
 	CurrentLengthFeet = FMath::RoundToInt(LengthCm / 30.48f);
 	if (CurrentLengthFeet < MinLengthFeet) CurrentLengthFeet = MinLengthFeet;
 	bMeshExtended = false;
 
-	if (MeshComponent)
+	// Scale only X (length axis) proportionally — preserves Y/Z from BP mesh
+	if (MeshComponent && OldLength > 0.0f)
 	{
-		MeshComponent->SetRelativeScale3D(FVector(
-			BoardLength / 100.0f,
-			BoardWidth / 100.0f,
-			BoardHeight / 100.0f
-		));
+		FVector S = MeshComponent->GetRelativeScale3D();
+		float Ratio = BoardLength / OldLength;
+		MeshComponent->SetRelativeScale3D(FVector(S.X * Ratio, S.Y, S.Z));
 	}
 
 	RegenerateSockets();
