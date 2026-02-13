@@ -12,7 +12,8 @@ ADoorFrame::ADoorFrame()
 
 	// Default dimensions — overridden by actual mesh bounds in BeginPlay
 	FrameHeight = 235.27f;       // 92-5/8" (standard 8ft wall stud height)
-	RoughOpeningWidth = 91.44f;  // 36" standard door
+	RoughOpeningWidth = 91.44f;  // 36" rough opening (gap between trimmers)
+	FrameOverallWidth = 91.44f;  // Full mesh footprint (king studs + trimmers + opening)
 
 	// SceneRoot decouples mesh scale from actor transform
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
@@ -36,8 +37,8 @@ void ADoorFrame::BeginPlay()
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, Sockets: %d"),
-		FrameHeight, RoughOpeningWidth, Sockets.Num());
+	UE_LOG(LogTemp, Log, TEXT("DoorFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, FrameOverall=%.1fcm, Sockets: %d"),
+		FrameHeight, RoughOpeningWidth, FrameOverallWidth, Sockets.Num());
 }
 
 // ---------------------------------------------------------------------------
@@ -93,11 +94,12 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 	{
 		FrameHeight = ActualHeight;
 
-		// Update rough opening width from mesh X extent
+		// Full mesh extent drives stud overlap deletion (covers king studs + trimmers)
+		// RoughOpeningWidth stays at the configured value (36" default) for the plate cut
 		float MeshHalfX = Bounds.BoxExtent.X;
 		if (MeshHalfX > 1.0f)
 		{
-			RoughOpeningWidth = MeshHalfX * 2.0f;
+			FrameOverallWidth = MeshHalfX * 2.0f;
 		}
 
 		for (FConstructionSocket& Socket : Sockets)
@@ -109,8 +111,8 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 		}
 
 		UE_LOG(LogTemp, Log,
-			TEXT("DoorFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, width=%.2fcm"),
-			MeshBottomZ, MeshTopZ, ActualHeight, RoughOpeningWidth);
+			TEXT("DoorFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, FrameOverall=%.2fcm, RoughOpening=%.2fcm"),
+			MeshBottomZ, MeshTopZ, ActualHeight, FrameOverallWidth, RoughOpeningWidth);
 	}
 }
 
@@ -156,6 +158,10 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 // ---------------------------------------------------------------------------
 void ADoorFrame::AutoDeleteOverlappingPieces()
 {
+	// Guard: run only once (TryPlace and SetPreviewMode both call this)
+	if (bHasAutoDeleted) return;
+	bHasAutoDeleted = true;
+
 	if (!AConstructionPhaseManager::Instance) return;
 
 	FVector DoorLoc = GetActorLocation();
@@ -165,15 +171,18 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	FVector DoorAlongWall = DoorRot.RotateVector(FVector::ForwardVector);
 	FVector DoorThroughWall = DoorRot.RotateVector(FVector::RightVector);
 
-	float HalfWidth = RoughOpeningWidth / 2.0f;
+	// Full frame footprint for stud deletion (king studs + trimmers + opening)
+	float StudHalfWidth = FrameOverallWidth / 2.0f;
+	// Rough opening only for plate cut (the gap the door occupies in the floor)
+	float PlateHalfCut = RoughOpeningWidth / 2.0f;
 	const float DepthTolerance = 15.0f; // cm
 
 	int32 DeletedStuds = 0;
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: AutoDelete — Loc=(%.1f,%.1f,%.1f) Yaw=%.1f HalfWidth=%.1f"),
-		DoorLoc.X, DoorLoc.Y, DoorLoc.Z, DoorRot.Yaw, HalfWidth);
+	UE_LOG(LogTemp, Warning, TEXT("DoorFrame: AutoDelete — Loc=(%.1f,%.1f,%.1f) Yaw=%.1f StudHalfW=%.1f PlateHalfCut=%.1f"),
+		DoorLoc.X, DoorLoc.Y, DoorLoc.Z, DoorRot.Yaw, StudHalfWidth, PlateHalfCut);
 
-	// --- 1. Delete overlapping wall studs ---
+	// --- 1. Delete overlapping wall studs (uses full frame width) ---
 	{
 		TArray<ABuildablePiece*> Studs =
 			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
@@ -190,7 +199,7 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 			float AlongWall = FMath::Abs(FVector::DotProduct(Delta, DoorAlongWall));
 			float ThroughWall = FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall));
 
-			if (AlongWall < HalfWidth && ThroughWall < DepthTolerance)
+			if (AlongWall < StudHalfWidth && ThroughWall < DepthTolerance)
 			{
 				UE_LOG(LogTemp, Log, TEXT("DoorFrame: Deleting WallStud %s (along=%.1f, through=%.1f)"),
 					*Piece->GetName(), AlongWall, ThroughWall);
@@ -204,6 +213,10 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	// --- 2. Split the bottom plate under the door opening ---
 	// Find the plate we snapped to
 	ABottomPlate* OrigPlate = Cast<ABottomPlate>(SnappedToPiece);
+
+	UE_LOG(LogTemp, Warning, TEXT("DoorFrame: SnappedToPiece=%s  Cast=%s"),
+		SnappedToPiece ? *SnappedToPiece->GetName() : TEXT("null"),
+		OrigPlate ? *OrigPlate->GetName() : TEXT("null"));
 
 	// Fallback: search nearby if snap reference isn't a plate
 	if (!OrigPlate)
@@ -219,6 +232,7 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 			if (FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall)) < DepthTolerance)
 			{
 				OrigPlate = Plate;
+				UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Fallback found plate %s"), *Plate->GetName());
 				break;
 			}
 		}
@@ -230,12 +244,12 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		return;
 	}
 
-	// --- Capture original plate properties ---
+	// --- Capture original plate properties BEFORE destroying ---
 	FVector  PlatePos    = OrigPlate->GetActorLocation();
 	FRotator PlateRot    = OrigPlate->GetActorRotation();
 	float    PlateLength = OrigPlate->BoardLength;        // cm
 	float    PlateHalfLen = PlateLength / 2.0f;
-	TSubclassOf<ABottomPlate> PlateClass = OrigPlate->GetClass();
+	UClass*  PlateClass  = OrigPlate->GetClass();
 
 	// Plate forward axis (along its length)
 	FVector PlateForward = PlateRot.RotateVector(FVector::ForwardVector);
@@ -245,12 +259,12 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	DeltaDP.Z = 0.0f;
 	float DoorCentreOnPlate = FVector::DotProduct(DeltaDP, PlateForward);
 
-	// Remnant lengths on each side of the door opening
-	float LeftLength  = PlateHalfLen + DoorCentreOnPlate - HalfWidth;
-	float RightLength = PlateHalfLen - DoorCentreOnPlate - HalfWidth;
+	// Remnant lengths on each side of the opening (uses RoughOpeningWidth, NOT full frame)
+	float LeftLength  = PlateHalfLen + DoorCentreOnPlate - PlateHalfCut;
+	float RightLength = PlateHalfLen - DoorCentreOnPlate - PlateHalfCut;
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Plate split — PlateLen=%.1f DoorOffset=%.1f  Left=%.1f  Right=%.1f"),
-		PlateLength, DoorCentreOnPlate, LeftLength, RightLength);
+	UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Plate split — PlateLen=%.1f DoorOffset=%.1f PlateHalfCut=%.1f → Left=%.1f  Right=%.1f"),
+		PlateLength, DoorCentreOnPlate, PlateHalfCut, LeftLength, RightLength);
 
 	// Minimum remnant: 1 ft (30.48 cm).  Shorter pieces would be clamped up
 	// by SetBoardLengthCm and overlap the door frame, so skip them.
@@ -261,6 +275,10 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	SnappedToPiece = nullptr; // clear dangling reference
 	OrigPlate->Destroy();
 
+	// Force AlwaysSpawn so pending-destroy collision doesn't block the spawn
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
 	// --- Spawn left remnant ---
 	if (LeftLength >= MinRemnant)
 	{
@@ -270,15 +288,24 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		LeftPos.Z = PlatePos.Z;
 
 		ABottomPlate* LeftPlate = GetWorld()->SpawnActor<ABottomPlate>(
-			PlateClass, LeftPos, PlateRot);
+			PlateClass, LeftPos, PlateRot, SpawnParams);
 		if (LeftPlate)
 		{
 			LeftPlate->SetBoardLengthCm(LeftLength);
 			LeftPlate->SetPreviewMode(false);
 			AConstructionPhaseManager::Instance->RegisterPlacedPiece(LeftPlate);
-			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Spawned LEFT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
+			UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Spawned LEFT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
 				LeftLength, LeftPos.X, LeftPos.Y, LeftPos.Z);
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("DoorFrame: FAILED to spawn LEFT remnant plate! Class=%s Pos=(%.1f,%.1f,%.1f)"),
+				PlateClass ? *PlateClass->GetName() : TEXT("null"), LeftPos.X, LeftPos.Y, LeftPos.Z);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DoorFrame: LEFT remnant too short (%.1f < %.1f), skipping"), LeftLength, MinRemnant);
 	}
 
 	// --- Spawn right remnant ---
@@ -289,18 +316,27 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		RightPos.Z = PlatePos.Z;
 
 		ABottomPlate* RightPlate = GetWorld()->SpawnActor<ABottomPlate>(
-			PlateClass, RightPos, PlateRot);
+			PlateClass, RightPos, PlateRot, SpawnParams);
 		if (RightPlate)
 		{
 			RightPlate->SetBoardLengthCm(RightLength);
 			RightPlate->SetPreviewMode(false);
 			AConstructionPhaseManager::Instance->RegisterPlacedPiece(RightPlate);
-			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Spawned RIGHT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
+			UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Spawned RIGHT remnant plate (%.1f cm) at (%.1f,%.1f,%.1f)"),
 				RightLength, RightPos.X, RightPos.Y, RightPos.Z);
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("DoorFrame: FAILED to spawn RIGHT remnant plate! Class=%s Pos=(%.1f,%.1f,%.1f)"),
+				PlateClass ? *PlateClass->GetName() : TEXT("null"), RightPos.X, RightPos.Y, RightPos.Z);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DoorFrame: RIGHT remnant too short (%.1f < %.1f), skipping"), RightLength, MinRemnant);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("DoorFrame: Split complete — deleted %d studs, split plate into %s remnants"),
+	UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Split complete — deleted %d studs, split plate into %s remnants"),
 		DeletedStuds,
 		(LeftLength >= MinRemnant && RightLength >= MinRemnant) ? TEXT("2") :
 		(LeftLength >= MinRemnant || RightLength >= MinRemnant) ? TEXT("1") : TEXT("0"));

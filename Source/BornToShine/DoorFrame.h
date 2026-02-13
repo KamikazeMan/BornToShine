@@ -35,9 +35,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float FrameHeight;
 
-	/** Rough opening width of the door (used for overlap detection). */
+	/** Rough opening width (gap between trimmers, used for plate cut). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float RoughOpeningWidth;
+
+	/** Overall frame width including king studs (used for stud overlap deletion). */
+	UPROPERTY(VisibleAnywhere, Category = "Construction|Dimensions")
+	float FrameOverallWidth;
 
 	float GetFrameHeightCm() const { return FrameHeight; }
 
@@ -65,6 +69,9 @@ private:
 	 * section under the door opening.
 	 */
 	void AutoDeleteOverlappingPieces();
+
+	/** Prevents AutoDeleteOverlappingPieces from running more than once. */
+	bool bHasAutoDeleted = false;
 
 	/** Override: hook into placement to trigger auto-delete. */
 	virtual void SetPreviewMode(bool bIsPreview) override;
