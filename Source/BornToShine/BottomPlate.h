@@ -89,4 +89,7 @@ private:
 
 	// Guard against double-extending mesh (e.g. on save/load)
 	bool bMeshExtended = false;
+
+public:
+	bool IsMeshExtended() const { return bMeshExtended; }
 };

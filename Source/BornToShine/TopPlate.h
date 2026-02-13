@@ -75,4 +75,7 @@ private:
 	static constexpr int32 MaxLengthFeet = 16;
 
 	bool bMeshExtended = false;
+
+public:
+	bool IsMeshExtended() const { return bMeshExtended; }
 };

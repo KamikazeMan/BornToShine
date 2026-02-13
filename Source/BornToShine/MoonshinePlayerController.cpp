@@ -8,6 +8,8 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
+#include "TopPlate.h"
+#include "DoubleTopPlate.h"
 #include "SocketManager.h"
 #include "RectangleBuilder.h"
 #include "MoonshineCharacter.h"
@@ -385,7 +387,7 @@ void AMoonshinePlayerController::QuickSave()
 	TArray<TSharedPtr<FJsonValue>> PiecesArray;
 
 	// Walk every piece type and serialize each placed piece
-	for (uint8 t = 0; t <= (uint8)EPieceType::DoorFrame; t++)
+	for (uint8 t = 0; t <= (uint8)EPieceType::DoubleTopPlate; t++)
 	{
 		TArray<ABuildablePiece*> Pieces =
 			AConstructionPhaseManager::Instance->GetPiecesOfType((EPieceType)t);
@@ -418,10 +420,21 @@ void AMoonshinePlayerController::QuickSave()
 			{
 				Obj->SetNumberField(TEXT("lengthFeet"), Rim->GetBoardLengthFeet());
 				Obj->SetBoolField(TEXT("isOutside"),    Rim->bIsOutsideBoard);
+				Obj->SetBoolField(TEXT("isExtended"),   Rim->IsMeshExtended());
 			}
 			else if (ABottomPlate* Plate = Cast<ABottomPlate>(Piece))
 			{
 				Obj->SetNumberField(TEXT("lengthFeet"), Plate->GetBoardLengthFeet());
+				Obj->SetBoolField(TEXT("isExtended"),   Plate->IsMeshExtended());
+			}
+			else if (ATopPlate* TPlate = Cast<ATopPlate>(Piece))
+			{
+				Obj->SetNumberField(TEXT("lengthFeet"), TPlate->GetBoardLengthFeet());
+				Obj->SetBoolField(TEXT("isExtended"),   TPlate->IsMeshExtended());
+			}
+			else if (ADoubleTopPlate* DblPlate = Cast<ADoubleTopPlate>(Piece))
+			{
+				Obj->SetNumberField(TEXT("lengthFeet"), DblPlate->GetBoardLengthFeet());
 			}
 
 			PiecesArray.Add(MakeShared<FJsonValueObject>(Obj));
@@ -477,7 +490,7 @@ void AMoonshinePlayerController::QuickLoad()
 	// ---- Destroy all existing placed pieces ----
 	if (AConstructionPhaseManager::Instance)
 	{
-		for (uint8 t = 0; t <= (uint8)EPieceType::DoorFrame; t++)
+		for (uint8 t = 0; t <= (uint8)EPieceType::DoubleTopPlate; t++)
 		{
 			// GetPiecesOfType returns a copy, safe to iterate while destroying
 			TArray<ABuildablePiece*> Pieces =
@@ -545,8 +558,10 @@ void AMoonshinePlayerController::QuickLoad()
 				{
 					Rim->SetBoardLengthFeet(Len);
 				}
-				// Extend mesh for flush corners (rim boards only, not joists)
-				if (PType == EPieceType::RimBoard)
+				// Only extend if the piece was extended when saved (rim boards only).
+				// Default true for backward compat with old saves missing the field.
+				bool bRimExtended = !Obj->HasField(TEXT("isExtended")) || Obj->GetBoolField(TEXT("isExtended"));
+				if (PType == EPieceType::RimBoard && bRimExtended)
 				{
 					Rim->ExtendMeshForFlushCorners();
 				}
@@ -561,7 +576,41 @@ void AMoonshinePlayerController::QuickLoad()
 				{
 					Plate->SetBoardLengthFeet(Len);
 				}
-				Plate->ExtendMeshForFlushCorners();
+				// Only extend if the piece was extended when saved.
+				// Default true for backward compat with old saves missing the field.
+				bool bPlateExtended = !Obj->HasField(TEXT("isExtended")) || Obj->GetBoolField(TEXT("isExtended"));
+				if (bPlateExtended)
+				{
+					Plate->ExtendMeshForFlushCorners();
+				}
+			}
+		}
+		else if (PType == EPieceType::TopPlate)
+		{
+			if (ATopPlate* TPlate = Cast<ATopPlate>(Piece))
+			{
+				int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
+				if (Len > 0 && Len != TPlate->GetBoardLengthFeet())
+				{
+					TPlate->SetBoardLengthFeet(Len);
+				}
+				// Default true for backward compat with old saves missing the field.
+				bool bTPlateExtended = !Obj->HasField(TEXT("isExtended")) || Obj->GetBoolField(TEXT("isExtended"));
+				if (bTPlateExtended)
+				{
+					TPlate->ExtendMeshForFlushCorners();
+				}
+			}
+		}
+		else if (PType == EPieceType::DoubleTopPlate)
+		{
+			if (ADoubleTopPlate* DblPlate = Cast<ADoubleTopPlate>(Piece))
+			{
+				int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
+				if (Len > 0 && Len != DblPlate->GetBoardLengthFeet())
+				{
+					DblPlate->SetBoardLengthFeet(Len);
+				}
 			}
 		}
 		// CornerPost and all other types: no mesh extension, load at (1,1,1)
