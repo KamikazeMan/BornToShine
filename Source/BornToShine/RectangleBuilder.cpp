@@ -1178,6 +1178,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
     const float PlateHeight = 8.89f;              // 3.5" plate height
     const float PlateHalfHeight = PlateHeight / 2.0f; // 4.445cm
+    const float StudTopBump = 3.81f;              // 1.5" — stud mesh extends this far above its top socket
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
@@ -1232,7 +1233,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
         ABottomPlate* BotPlate = PlacedBottomPlates[i];
         if (!BotPlate) continue;
 
-        float TopPlateZ = StudTopZPerWall[i] + PlateHalfHeight;
+        // Plate bottom sits on stud top surface + 1.5" bump for mesh overshoot
+        float TopPlateZ = StudTopZPerWall[i] + StudTopBump + PlateHalfHeight;
         FVector Pos(BotPlate->GetActorLocation().X, BotPlate->GetActorLocation().Y, TopPlateZ);
 
         float BaseLengthCm = BotPlate->GetBoardLengthFeet() * 30.48f;
@@ -1249,10 +1251,10 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         FirstTopPlatePositions.Add(Pos);
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  StudTopZ=%.2f  PlateZ=%.2f"),
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  StudTopZ=%.2f + bump=%.2f  PlateZ=%.2f"),
             i, Pos.X, Pos.Y, Pos.Z,
             Sug.Rotation.Yaw, BaseLengthCm,
-            StudTopZPerWall[i], TopPlateZ);
+            StudTopZPerWall[i], StudTopBump, TopPlateZ);
     }
 
     // ---------------------------------------------------------------

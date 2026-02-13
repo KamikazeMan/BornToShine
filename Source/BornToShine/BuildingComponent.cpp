@@ -345,7 +345,16 @@ void UBuildingComponent::UpdatePreviewPosition()
 			ATopPlate* PreviewTopPlate = Cast<ATopPlate>(CurrentPreviewPiece);
 			if (PreviewTopPlate)
 			{
-				PreviewTopPlate->SetBoardLengthCm(TopPlateSug.LengthCm);
+				// Only resize if length actually changed (avoids resetting bMeshExtended every frame)
+				if (!FMath::IsNearlyEqual(TopPlateSug.LengthCm, PreviewTopPlate->GetEffectiveLength(), 0.1f))
+				{
+					PreviewTopPlate->SetBoardLengthCm(TopPlateSug.LengthCm);
+				}
+				// Extend mesh for flush corners on first plates (idempotent when already extended)
+				if (!TopPlateSug.bIsDoubleTopPlate)
+				{
+					PreviewTopPlate->ExtendMeshForFlushCorners();
+				}
 			}
 
 			CurrentPreviewPiece->SetActorLocation(TopPlateSug.Position);
