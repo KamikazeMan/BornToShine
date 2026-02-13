@@ -227,7 +227,7 @@ bool ATopPlate::TryPlace()
 	// Extend mesh for flush corners after snap placement
 	ExtendMeshForFlushCorners();
 
-	// --- Diagnostic logging using actual mesh bounds ---
+	// --- Comprehensive diagnostic logging ---
 	FVector PlatePos = GetActorLocation();
 	FRotator PlateRot = GetActorRotation();
 
@@ -237,16 +237,33 @@ bool ATopPlate::TryPlace()
 	{
 		if (S.SocketType == EConstructionSocketType::TopPlate_Bottom)
 		{
-			// Socket LocalPosition.Z is the mesh-adjusted bottom
 			PlateBotZ = PlatePos.Z + S.LocalPosition.Z;
 			break;
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL pos=(%.1f, %.1f, %.1f) rot=(%.1f, %.1f, %.1f) meshBottom=%.2f BoardHeight=%.2f len=%dft (%.1fcm)"),
-		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z,
-		PlateRot.Pitch, PlateRot.Yaw, PlateRot.Roll,
-		PlateBotZ, BoardHeight, CurrentLengthFeet, BoardLength);
+	// Log snap target details
+	FString TargetName = SnappedToPiece ? SnappedToPiece->GetName() : TEXT("null");
+	FString TargetType = SnappedToPiece ? UEnum::GetValueAsString(SnappedToPiece->GetPieceType()) : TEXT("None");
+	FVector TargetPos = SnappedToPiece ? SnappedToPiece->GetActorLocation() : FVector::ZeroVector;
+	FRotator TargetRot = SnappedToPiece ? SnappedToPiece->GetActorRotation() : FRotator::ZeroRotator;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("=== TOP PLATE PLACED === [%s] pos=(%.1f, %.1f, %.1f) yaw=%.1f meshBottom=%.2f len=%dft"),
+		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z, PlateRot.Yaw, PlateBotZ, CurrentLengthFeet);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("  SnapTarget: %s (%s) socket=%s pos=(%.1f, %.1f, %.1f) yaw=%.1f"),
+		*TargetName, *TargetType, *SnappedToSocketName.ToString(),
+		TargetPos.X, TargetPos.Y, TargetPos.Z, TargetRot.Yaw);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("  SnapCandidate: src=%s tgt=%s prio=%d dist=%.1f corner=%d inline=%d"),
+		*CurrentSnapCandidate.SourceSocketName.ToString(),
+		*CurrentSnapCandidate.TargetSocketName.ToString(),
+		CurrentSnapCandidate.Priority, CurrentSnapCandidate.Distance,
+		CurrentSnapCandidate.bIsCornerSnap ? 1 : 0,
+		CurrentSnapCandidate.bIsInlineSnap ? 1 : 0);
 
 	return true;
 }
