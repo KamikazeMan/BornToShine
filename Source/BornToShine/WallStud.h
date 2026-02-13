@@ -75,6 +75,11 @@ private:
 	void CreateBottomSocket();
 	void CreateTopSocket();
 
+	// After sockets are created with default StudHeight, re-align them
+	// to the actual mesh bounds so the StudTop socket matches the real
+	// mesh top regardless of Rhino export pivot.
+	void AdjustSocketsToMeshBounds();
+
 	// Regenerate sockets when height changes
 	void RegenerateSockets();
 

@@ -41,6 +41,10 @@ void AWallStud::BeginPlay()
 		MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
 	}
 
+	// Re-align sockets to the actual mesh extents so the StudTop socket
+	// matches the real mesh top regardless of Rhino export pivot position.
+	AdjustSocketsToMeshBounds();
+
 	UE_LOG(LogTemp, Log, TEXT("WallStud: BeginPlay - Height=%.1fcm (%.2f in), Total sockets: %d"),
 		StudHeight, GetStudHeightInches(), Sockets.Num());
 }
@@ -139,4 +143,50 @@ void AWallStud::UpdateMeshScale()
 {
 	// No-op: the user's 2x4 mesh is already correctly proportioned.
 	// Mesh stays at (1,1,1). Socket positions handle all geometry.
+}
+
+void AWallStud::AdjustSocketsToMeshBounds()
+{
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
+
+	// Mesh bottom/top in actor-local space (accounts for any BP mesh offset)
+	float MeshBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float MeshTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float ActualHeight = MeshTopZ - MeshBottomZ;
+
+	if (ActualHeight < 1.0f)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("WallStud: Mesh height too small (%.2f cm) — skipping socket adjustment"),
+			ActualHeight);
+		return;
+	}
+
+	float OldBottomZ = -StudHeight / 2.0f;
+	float OldTopZ    =  StudHeight / 2.0f;
+
+	// Update StudHeight to reflect the real mesh
+	StudHeight = ActualHeight;
+
+	for (FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketName == FName("StudBottom"))
+		{
+			Socket.LocalPosition.Z = MeshBottomZ;
+		}
+		else if (Socket.SocketName == FName("StudTop"))
+		{
+			Socket.LocalPosition.Z = MeshTopZ;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("WallStud: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, MeshRelZ=%.2f → "
+		     "StudBottom Z: %.2f→%.2f, StudTop Z: %.2f→%.2f"),
+		Bounds.Origin.Z - Bounds.BoxExtent.Z, Bounds.Origin.Z + Bounds.BoxExtent.Z,
+		ActualHeight, MeshRelLoc.Z,
+		OldBottomZ, MeshBottomZ, OldTopZ, MeshTopZ);
 }
