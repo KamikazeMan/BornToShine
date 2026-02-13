@@ -1178,7 +1178,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
     const float PlateHeight = 8.89f;              // 3.5" plate height
     const float PlateHalfHeight = PlateHeight / 2.0f; // 4.445cm
-    const float StudTopBump = 3.81f;              // 1.5" — stud mesh extends this far above its top socket
+    const float StudTopBump = 7.62f;              // 3.0" — accounts for stud/corner post mesh extending above geometric top
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------

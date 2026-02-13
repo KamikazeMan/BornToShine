@@ -216,7 +216,9 @@ void ATopPlate::ExtendMeshForFlushCorners()
 	if (bMeshExtended) return;
 
 	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	float Ratio = (BoardLength + BoardWidth) / BoardLength;
+	// Extend by BoardWidth (1.5") + 0.75" extra = 2.25" total for flush corners
+	float ExtensionCm = BoardWidth + 1.905f; // 3.81 + 1.905 = 5.715cm
+	float Ratio = (BoardLength + ExtensionCm) / BoardLength;
 
 	MeshComponent->SetRelativeScale3D(FVector(
 		CurrentScale3D.X * Ratio,
@@ -226,6 +228,6 @@ void ATopPlate::ExtendMeshForFlushCorners()
 
 	bMeshExtended = true;
 
-	UE_LOG(LogTemp, Log, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f"),
-		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio);
+	UE_LOG(LogTemp, Log, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f (ext=%.2fcm)"),
+		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio, ExtensionCm);
 }
