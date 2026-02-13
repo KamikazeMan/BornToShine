@@ -8,6 +8,7 @@
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "BottomPlate.h"
+#include "DoorFrame.h"
 #include "TopPlate.h"
 #include "DoubleTopPlate.h"
 #include "SocketManager.h"
@@ -425,6 +426,7 @@ void AMoonshinePlayerController::QuickSave()
 			else if (ABottomPlate* Plate = Cast<ABottomPlate>(Piece))
 			{
 				Obj->SetNumberField(TEXT("lengthFeet"), Plate->GetBoardLengthFeet());
+				Obj->SetNumberField(TEXT("lengthCm"),   Plate->BoardLength); // exact cm for door-cut plates
 				Obj->SetBoolField(TEXT("isExtended"),   Plate->IsMeshExtended());
 			}
 			else if (ATopPlate* TPlate = Cast<ATopPlate>(Piece))
@@ -571,10 +573,23 @@ void AMoonshinePlayerController::QuickLoad()
 		{
 			if (ABottomPlate* Plate = Cast<ABottomPlate>(Piece))
 			{
-				int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
-				if (Len > 0 && Len != Plate->GetBoardLengthFeet())
+				// Prefer exact cm length (preserves door-cut precision);
+				// fall back to integer feet for older saves.
+				if (Obj->HasField(TEXT("lengthCm")))
 				{
-					Plate->SetBoardLengthFeet(Len);
+					float LenCm = Obj->GetNumberField(TEXT("lengthCm"));
+					if (LenCm > 0.0f)
+					{
+						Plate->SetBoardLengthCm(LenCm);
+					}
+				}
+				else
+				{
+					int32 Len = (int32)Obj->GetNumberField(TEXT("lengthFeet"));
+					if (Len > 0 && Len != Plate->GetBoardLengthFeet())
+					{
+						Plate->SetBoardLengthFeet(Len);
+					}
 				}
 				// Only extend if the piece was extended when saved.
 				// Default true for backward compat with old saves missing the field.
@@ -614,6 +629,16 @@ void AMoonshinePlayerController::QuickLoad()
 			}
 		}
 		// CornerPost and all other types: no mesh extension, load at (1,1,1)
+
+		// Door frames: mark overlap deletion as already done so SetPreviewMode
+		// doesn't re-split the remnant plates that were already restored above.
+		if (PType == EPieceType::DoorFrame)
+		{
+			if (ADoorFrame* Door = Cast<ADoorFrame>(Piece))
+			{
+				Door->SetHasAutoDeleted(true);
+			}
+		}
 
 		// Take out of preview mode (makes it solid + visible)
 		Piece->SetPreviewMode(false);

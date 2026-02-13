@@ -6,6 +6,7 @@
 #include "BottomPlate.h"
 #include "WallStud.h"
 #include "TopPlate.h"
+#include "CornerPost.h"
 #include "PlywoodSheet.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
@@ -1178,22 +1179,21 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
     const float PlateHeight = 8.89f;              // 3.5" plate height
     const float PlateHalfHeight = PlateHeight / 2.0f; // 4.445cm
-    const float StudTopBump = 7.62f;              // 3.0" — accounts for stud/corner post mesh extending above geometric top
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
-    // For each bottom plate (wall), find the stud top Z from actual
-    // stud suggestion positions — NOT derived from the bottom plate.
-    // Stud top Z = stud actor Z + studHeight / 2.
+    // For each bottom plate (wall), find the highest piece top Z from
+    // stud suggestions AND placed corner posts. The top plate sits on
+    // top of whichever is tallest.
     // ---------------------------------------------------------------
-    TArray<float> StudTopZPerWall;
-    StudTopZPerWall.SetNum(PlacedBottomPlates.Num());
+    TArray<float> WallTopZPerWall;
+    WallTopZPerWall.SetNum(PlacedBottomPlates.Num());
 
     for (int32 i = 0; i < PlacedBottomPlates.Num(); i++)
     {
         ABottomPlate* BotPlate = PlacedBottomPlates[i];
-        float BestStudTopZ = 0.0f;
-        bool bFoundStud = false;
+        float BestTopZ = 0.0f;
+        bool bFoundPiece = false;
 
         // Scan stud suggestions to find ones belonging to this plate
         for (const FStudSuggestion& Stud : StudSuggestions)
@@ -1201,30 +1201,58 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
             if (Stud.SourcePlate == BotPlate && Stud.bIsValid)
             {
                 float StudTopZ = Stud.Position.Z + Stud.StudHeightCm / 2.0f;
-                if (!bFoundStud || StudTopZ > BestStudTopZ)
+                if (!bFoundPiece || StudTopZ > BestTopZ)
                 {
-                    BestStudTopZ = StudTopZ;
-                    bFoundStud = true;
+                    BestTopZ = StudTopZ;
+                    bFoundPiece = true;
                 }
             }
         }
 
-        if (!bFoundStud && BotPlate)
+        // Also scan placed corner posts — they define the true wall top
+        if (AConstructionPhaseManager::Instance)
         {
-            // Fallback: derive from bottom plate if no studs found
-            BestStudTopZ = BotPlate->GetActorLocation().Z + PlateHalfHeight + 235.27f;
-            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - No studs found, fallback StudTopZ=%.2f"), i, BestStudTopZ);
+            TArray<ABuildablePiece*> CornerPosts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
+            for (ABuildablePiece* BP : CornerPosts)
+            {
+                ACornerPost* Post = Cast<ACornerPost>(BP);
+                if (!Post) continue;
+
+                // Use the PostTop socket world Z — it's adjusted to real mesh bounds
+                for (const FConstructionSocket& Socket : Post->GetAllSockets())
+                {
+                    if (Socket.SocketName == FName("PostTop"))
+                    {
+                        float PostTopWorldZ = Post->GetActorLocation().Z + Socket.LocalPosition.Z;
+                        if (!bFoundPiece || PostTopWorldZ > BestTopZ)
+                        {
+                            BestTopZ = PostTopWorldZ;
+                            bFoundPiece = true;
+                            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - CornerPost [%s] PostTopZ=%.2f (ActorZ=%.2f + SocketZ=%.2f)"),
+                                i, *Post->GetName(), PostTopWorldZ, Post->GetActorLocation().Z, Socket.LocalPosition.Z);
+                        }
+                        break;
+                    }
+                }
+            }
         }
 
-        StudTopZPerWall[i] = BestStudTopZ;
+        if (!bFoundPiece && BotPlate)
+        {
+            // Fallback: derive from bottom plate if no studs or corner posts found
+            BestTopZ = BotPlate->GetActorLocation().Z + PlateHalfHeight + 235.27f;
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - No studs/posts found, fallback TopZ=%.2f"), i, BestTopZ);
+        }
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d StudTopZ=%.2f (stud center + halfHeight)"),
-            i, BestStudTopZ);
+        WallTopZPerWall[i] = BestTopZ;
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d WallTopZ=%.2f (max of studs + corner posts)"),
+            i, BestTopZ);
     }
 
     // ---------------------------------------------------------------
     // Phase 1: First top plates (suggestions 0..N-1)
-    // Sit ON TOP of the studs: plate center Z = studTopZ + plateHalfHeight
+    // Sit ON TOP of the studs/corner posts: center Z = wallTopZ + plateHalfHeight
     // ---------------------------------------------------------------
     TArray<FVector> FirstTopPlatePositions; // cache for double plate calculation
 
@@ -1233,8 +1261,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
         ABottomPlate* BotPlate = PlacedBottomPlates[i];
         if (!BotPlate) continue;
 
-        // Plate bottom sits on stud top surface + 1.5" bump for mesh overshoot
-        float TopPlateZ = StudTopZPerWall[i] + StudTopBump + PlateHalfHeight;
+        // Plate center sits at wallTopZ + half plate height (plate bottom rests on stud/post top)
+        float TopPlateZ = WallTopZPerWall[i] + PlateHalfHeight;
         FVector Pos(BotPlate->GetActorLocation().X, BotPlate->GetActorLocation().Y, TopPlateZ);
 
         float BaseLengthCm = BotPlate->GetBoardLengthFeet() * 30.48f;
@@ -1251,10 +1279,10 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         FirstTopPlatePositions.Add(Pos);
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  StudTopZ=%.2f + bump=%.2f  PlateZ=%.2f"),
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  WallTopZ=%.2f  PlateZ=%.2f"),
             i, Pos.X, Pos.Y, Pos.Z,
             Sug.Rotation.Yaw, BaseLengthCm,
-            StudTopZPerWall[i], StudTopBump, TopPlateZ);
+            WallTopZPerWall[i], TopPlateZ);
     }
 
     // ---------------------------------------------------------------
