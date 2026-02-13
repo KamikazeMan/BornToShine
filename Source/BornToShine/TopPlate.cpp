@@ -1,6 +1,9 @@
 // Born To Shine - Top Plate Implementation
 
 #include "TopPlate.h"
+#include "CornerPost.h"
+#include "WallStud.h"
+#include "ConstructionPhaseManager.h"
 #include "Components/StaticMeshComponent.h"
 
 ATopPlate::ATopPlate()
@@ -216,6 +219,70 @@ bool ATopPlate::TryPlace()
 
 	// Extend mesh for flush corners after successful snap placement
 	ExtendMeshForFlushCorners();
+
+	// --- Diagnostic Z logging ---
+	float PlateZ = GetActorLocation().Z;
+	float PlateBotZ = PlateZ - BoardHeight / 2.0f;
+	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: PLACED at Z=%.2f (bottom=%.2f)"),
+		*GetName(), PlateZ, PlateBotZ);
+
+	if (AConstructionPhaseManager::Instance)
+	{
+		// Log corner post mesh top Z (world)
+		TArray<ABuildablePiece*> Posts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
+		for (ABuildablePiece* BP : Posts)
+		{
+			ACornerPost* Post = Cast<ACornerPost>(BP);
+			if (!Post) continue;
+			UStaticMeshComponent* Mesh = Post->GetMeshComponent();
+			if (Mesh)
+			{
+				FBoxSphereBounds WB = Mesh->CalcBounds(Mesh->GetComponentTransform());
+				float MeshTopWorld = WB.Origin.Z + WB.BoxExtent.Z;
+				// Also get PostTop socket world Z
+				float PostTopSocketZ = 0.0f;
+				for (const FConstructionSocket& S : Post->GetAllSockets())
+				{
+					if (S.SocketName == FName("PostTop"))
+					{
+						PostTopSocketZ = Post->GetActorLocation().Z + S.LocalPosition.Z;
+						break;
+					}
+				}
+				UE_LOG(LogTemp, Warning, TEXT("  CornerPost [%s]: MeshTopWorld=%.2f  PostTopSocketWorld=%.2f  ActorZ=%.2f"),
+					*Post->GetName(), MeshTopWorld, PostTopSocketZ, Post->GetActorLocation().Z);
+				break; // one is enough
+			}
+		}
+
+		// Log stud StudTop socket Z (world)
+		TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
+		for (ABuildablePiece* BP : Studs)
+		{
+			AWallStud* Stud = Cast<AWallStud>(BP);
+			if (!Stud) continue;
+			float StudTopSocketZ = 0.0f;
+			for (const FConstructionSocket& S : Stud->GetAllSockets())
+			{
+				if (S.SocketName == FName("StudTop"))
+				{
+					StudTopSocketZ = Stud->GetActorLocation().Z + S.LocalPosition.Z;
+					break;
+				}
+			}
+			UStaticMeshComponent* Mesh = Stud->GetMeshComponent();
+			float StudMeshTopWorld = 0.0f;
+			if (Mesh)
+			{
+				FBoxSphereBounds WB = Mesh->CalcBounds(Mesh->GetComponentTransform());
+				StudMeshTopWorld = WB.Origin.Z + WB.BoxExtent.Z;
+			}
+			UE_LOG(LogTemp, Warning, TEXT("  WallStud [%s]: StudTopSocketWorld=%.2f  MeshTopWorld=%.2f  ActorZ=%.2f"),
+				*Stud->GetName(), StudTopSocketZ, StudMeshTopWorld, Stud->GetActorLocation().Z);
+			break; // one is enough
+		}
+	}
+
 	return true;
 }
 
@@ -225,9 +292,8 @@ void ATopPlate::ExtendMeshForFlushCorners()
 	if (bMeshExtended) return;
 
 	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	// Extend by 3.5" per end (BoardHeight) to cover perpendicular framing at corners
-	float ExtensionCm = 2.0f * BoardHeight; // 2 * 8.89 = 17.78cm (3.5" per end)
-	float Ratio = (BoardLength + ExtensionCm) / BoardLength;
+	// Same formula as BottomPlate: extend by BoardWidth total (HalfWidth per end)
+	float Ratio = (BoardLength + BoardWidth) / BoardLength;
 
 	MeshComponent->SetRelativeScale3D(FVector(
 		CurrentScale3D.X * Ratio,
@@ -237,6 +303,6 @@ void ATopPlate::ExtendMeshForFlushCorners()
 
 	bMeshExtended = true;
 
-	UE_LOG(LogTemp, Log, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f (ext=%.2fcm)"),
-		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio, ExtensionCm);
+	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f (ext=%.2fcm, %.2fcm/end)"),
+		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio, BoardWidth, BoardWidth / 2.0f);
 }
