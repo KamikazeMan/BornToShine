@@ -216,8 +216,8 @@ void ATopPlate::ExtendMeshForFlushCorners()
 	if (bMeshExtended) return;
 
 	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
-	// Extend by BoardWidth (1.5") + 0.75" extra = 2.25" total for flush corners
-	float ExtensionCm = BoardWidth + 1.905f; // 3.81 + 1.905 = 5.715cm
+	// Extend by 3.5" per end (BoardHeight) to cover perpendicular framing at corners
+	float ExtensionCm = 2.0f * BoardHeight; // 2 * 8.89 = 17.78cm (3.5" per end)
 	float Ratio = (BoardLength + ExtensionCm) / BoardLength;
 
 	MeshComponent->SetRelativeScale3D(FVector(

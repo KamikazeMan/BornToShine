@@ -1182,72 +1182,69 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
-    // For each bottom plate (wall), find the highest piece top Z from
-    // stud suggestions AND placed corner posts. The top plate sits on
-    // top of whichever is tallest.
+    // For each wall, find the highest visual mesh top Z from placed
+    // wall studs and corner posts. Using actual mesh bounds is the only
+    // reliable way — geometric calculations don't match Rhino mesh extents.
     // ---------------------------------------------------------------
+    float GlobalMeshTopZ = 0.0f;
+    bool bFoundAnyPiece = false;
+
+    if (AConstructionPhaseManager::Instance)
+    {
+        // Scan placed wall studs
+        TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
+        for (ABuildablePiece* Piece : Studs)
+        {
+            if (!Piece || !Piece->GetMeshComponent()) continue;
+            UStaticMeshComponent* Mesh = Piece->GetMeshComponent();
+            FBoxSphereBounds WBounds = Mesh->CalcBounds(Mesh->GetComponentTransform());
+            float MeshTopZ = WBounds.Origin.Z + WBounds.BoxExtent.Z;
+            if (!bFoundAnyPiece || MeshTopZ > GlobalMeshTopZ)
+            {
+                GlobalMeshTopZ = MeshTopZ;
+                bFoundAnyPiece = true;
+            }
+        }
+
+        // Scan placed corner posts
+        TArray<ABuildablePiece*> CornerPosts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
+        for (ABuildablePiece* Piece : CornerPosts)
+        {
+            if (!Piece || !Piece->GetMeshComponent()) continue;
+            UStaticMeshComponent* Mesh = Piece->GetMeshComponent();
+            FBoxSphereBounds WBounds = Mesh->CalcBounds(Mesh->GetComponentTransform());
+            float MeshTopZ = WBounds.Origin.Z + WBounds.BoxExtent.Z;
+            if (!bFoundAnyPiece || MeshTopZ > GlobalMeshTopZ)
+            {
+                GlobalMeshTopZ = MeshTopZ;
+                bFoundAnyPiece = true;
+            }
+        }
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: MeshBounds scan — GlobalMeshTopZ=%.2f from %d studs + %d corner posts"),
+            GlobalMeshTopZ, Studs.Num(), CornerPosts.Num());
+    }
+
     TArray<float> WallTopZPerWall;
     WallTopZPerWall.SetNum(PlacedBottomPlates.Num());
 
     for (int32 i = 0; i < PlacedBottomPlates.Num(); i++)
     {
         ABottomPlate* BotPlate = PlacedBottomPlates[i];
-        float BestTopZ = 0.0f;
-        bool bFoundPiece = false;
 
-        // Scan stud suggestions to find ones belonging to this plate
-        for (const FStudSuggestion& Stud : StudSuggestions)
+        if (bFoundAnyPiece)
         {
-            if (Stud.SourcePlate == BotPlate && Stud.bIsValid)
-            {
-                float StudTopZ = Stud.Position.Z + Stud.StudHeightCm / 2.0f;
-                if (!bFoundPiece || StudTopZ > BestTopZ)
-                {
-                    BestTopZ = StudTopZ;
-                    bFoundPiece = true;
-                }
-            }
+            WallTopZPerWall[i] = GlobalMeshTopZ;
+        }
+        else if (BotPlate)
+        {
+            // Fallback: derive from bottom plate geometry if no placed pieces found
+            WallTopZPerWall[i] = BotPlate->GetActorLocation().Z + PlateHalfHeight + 235.27f;
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - No placed studs/posts, fallback TopZ=%.2f"), i, WallTopZPerWall[i]);
         }
 
-        // Also scan placed corner posts — they define the true wall top
-        if (AConstructionPhaseManager::Instance)
-        {
-            TArray<ABuildablePiece*> CornerPosts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
-            for (ABuildablePiece* BP : CornerPosts)
-            {
-                ACornerPost* Post = Cast<ACornerPost>(BP);
-                if (!Post) continue;
-
-                // Use the PostTop socket world Z — it's adjusted to real mesh bounds
-                for (const FConstructionSocket& Socket : Post->GetAllSockets())
-                {
-                    if (Socket.SocketName == FName("PostTop"))
-                    {
-                        float PostTopWorldZ = Post->GetActorLocation().Z + Socket.LocalPosition.Z;
-                        if (!bFoundPiece || PostTopWorldZ > BestTopZ)
-                        {
-                            BestTopZ = PostTopWorldZ;
-                            bFoundPiece = true;
-                            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - CornerPost [%s] PostTopZ=%.2f (ActorZ=%.2f + SocketZ=%.2f)"),
-                                i, *Post->GetName(), PostTopWorldZ, Post->GetActorLocation().Z, Socket.LocalPosition.Z);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!bFoundPiece && BotPlate)
-        {
-            // Fallback: derive from bottom plate if no studs or corner posts found
-            BestTopZ = BotPlate->GetActorLocation().Z + PlateHalfHeight + 235.27f;
-            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - No studs/posts found, fallback TopZ=%.2f"), i, BestTopZ);
-        }
-
-        WallTopZPerWall[i] = BestTopZ;
-
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d WallTopZ=%.2f (max of studs + corner posts)"),
-            i, BestTopZ);
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d WallTopZ=%.2f (from mesh bounds)"),
+            i, WallTopZPerWall[i]);
     }
 
     // ---------------------------------------------------------------
