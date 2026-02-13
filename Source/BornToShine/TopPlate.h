@@ -73,6 +73,11 @@ private:
 	void CreateTopFaceSockets();
 	void RegenerateSockets();
 
+	// After sockets are created with default BoardHeight, re-align them
+	// to the actual mesh bounds so the bottom/top sockets match the real
+	// mesh surfaces regardless of Rhino export pivot.
+	void AdjustSocketsToMeshBounds();
+
 	int32 CurrentLengthFeet;
 	static constexpr int32 MinLengthFeet = 1;
 	static constexpr int32 MaxLengthFeet = 16;

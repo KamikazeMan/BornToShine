@@ -31,8 +31,12 @@ void ATopPlate::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UE_LOG(LogTemp, Log, TEXT("TopPlate: BeginPlay - %d ft (%.1f cm), Total sockets: %d"),
-		CurrentLengthFeet, BoardLength, Sockets.Num());
+	// Re-align sockets to the actual mesh extents so the bottom/top
+	// sockets match the real mesh surfaces regardless of Rhino export pivot.
+	AdjustSocketsToMeshBounds();
+
+	UE_LOG(LogTemp, Log, TEXT("TopPlate: BeginPlay - %d ft (%.1f cm), BoardHeight=%.2f, Total sockets: %d"),
+		CurrentLengthFeet, BoardLength, BoardHeight, Sockets.Num());
 }
 
 void ATopPlate::InitializeSockets()
@@ -210,6 +214,9 @@ void ATopPlate::RegenerateSockets()
 	CreateEndSockets();
 	CreateTopFaceSockets();
 
+	// Re-align to actual mesh bounds (same as BeginPlay path)
+	AdjustSocketsToMeshBounds();
+
 	UE_LOG(LogTemp, Log, TEXT("TopPlate: Regenerated %d sockets for %d ft plate"), Sockets.Num(), CurrentLengthFeet);
 }
 
@@ -220,16 +227,76 @@ bool ATopPlate::TryPlace()
 	// Extend mesh for flush corners after snap placement
 	ExtendMeshForFlushCorners();
 
-	// --- Diagnostic logging ---
+	// --- Diagnostic logging using actual mesh bounds ---
 	FVector PlatePos = GetActorLocation();
 	FRotator PlateRot = GetActorRotation();
+
+	// Use the actual bottom socket Z (adjusted to mesh bounds) for accurate reporting
 	float PlateBotZ = PlatePos.Z - BoardHeight / 2.0f;
-	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL pos=(%.1f, %.1f, %.1f) rot=(%.1f, %.1f, %.1f) bottom=%.2f len=%dft (%.1fcm)"),
+	for (const FConstructionSocket& S : Sockets)
+	{
+		if (S.SocketType == EConstructionSocketType::TopPlate_Bottom)
+		{
+			// Socket LocalPosition.Z is the mesh-adjusted bottom
+			PlateBotZ = PlatePos.Z + S.LocalPosition.Z;
+			break;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL pos=(%.1f, %.1f, %.1f) rot=(%.1f, %.1f, %.1f) meshBottom=%.2f BoardHeight=%.2f len=%dft (%.1fcm)"),
 		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z,
 		PlateRot.Pitch, PlateRot.Yaw, PlateRot.Roll,
-		PlateBotZ, CurrentLengthFeet, BoardLength);
+		PlateBotZ, BoardHeight, CurrentLengthFeet, BoardLength);
 
 	return true;
+}
+
+void ATopPlate::AdjustSocketsToMeshBounds()
+{
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
+
+	// Mesh bottom/top in actor-local space (accounts for any BP mesh offset)
+	float MeshBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float MeshTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) + MeshRelLoc.Z;
+	float MeshCenterZ = (MeshBottomZ + MeshTopZ) / 2.0f;
+	float ActualHeight = MeshTopZ - MeshBottomZ;
+
+	if (ActualHeight < 0.1f)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("TopPlate: Mesh height too small (%.2f cm) — skipping socket adjustment"),
+			ActualHeight);
+		return;
+	}
+
+	float OldHeight = BoardHeight;
+
+	// Update BoardHeight to reflect the real mesh vertical extent
+	BoardHeight = ActualHeight;
+
+	// Adjust all sockets to match the real mesh surfaces
+	for (FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom)
+		{
+			Socket.LocalPosition.Z = MeshBottomZ;
+		}
+		else if (Socket.SocketType == EConstructionSocketType::TopPlate_End)
+		{
+			Socket.LocalPosition.Z = MeshCenterZ;
+		}
+		else if (Socket.SocketType == EConstructionSocketType::TopPlate_Top)
+		{
+			Socket.LocalPosition.Z = MeshTopZ;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("TopPlate: AdjustSockets — MeshZ=[%.2f, %.2f] height=%.2fcm (was %.2fcm) center=%.2f MeshRelZ=%.2f"),
+		MeshBottomZ, MeshTopZ, ActualHeight, OldHeight, MeshCenterZ, MeshRelLoc.Z);
 }
 
 void ATopPlate::ExtendMeshForFlushCorners()

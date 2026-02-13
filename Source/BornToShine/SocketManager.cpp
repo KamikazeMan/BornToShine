@@ -330,6 +330,7 @@ bool ASocketManager::FindBestSnapPoint(
 			// Skip occupied sockets UNLESS:
 			// - Source is plywood/bottom plate targeting framing top faces
 			// - Target is Wall_Bottom_Plate (continuous surface, multiple pieces sit on it)
+			// - Source is TopPlate targeting stud/post/door frame tops (plate spans multiple studs)
 			if (TargetSocket.bIsOccupied)
 			{
 				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
@@ -338,7 +339,13 @@ bool ASocketManager::FindBestSnapPoint(
 				bool bFramingTarget = (TargetSocket.SocketType == EConstructionSocketType::RimBoard_Top_Face ||
 				                       TargetSocket.SocketType == EConstructionSocketType::Joist_Top_Face);
 				bool bWallPlateTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Bottom_Plate);
-				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) && !bWallPlateTarget)
+				bool bTopPlateSource = (SourceSocket.SocketType == EConstructionSocketType::TopPlate_Bottom);
+				bool bStudPostTopTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Top ||
+				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
+				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
+				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
+				    !bWallPlateTarget &&
+				    !(bTopPlateSource && bStudPostTopTarget))
 				{
 					continue;
 				}

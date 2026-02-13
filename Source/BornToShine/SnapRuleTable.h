@@ -158,4 +158,5 @@ private:
 	void AddJoistRules();
 	void AddPlywoodRules();
 	void AddBottomPlateRules();
+	void AddTopPlateRules();
 };

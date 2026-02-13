@@ -689,6 +689,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Top plate snaps to wall stud/corner post/door frame tops.
+			// Plate matches the target's yaw (runs along the wall), forced flat.
+			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom &&
+				(TgtSocketType == EConstructionSocketType::Wall_Stud_Top ||
+				 TgtSocketType == EConstructionSocketType::CornerPost_Top ||
+				 TgtSocketType == EConstructionSocketType::DoorFrame_Top) &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Special handling for corner post-to-plate snaps
 			// Orient the inside corner of the L-shaped post toward the building center.
 			// Calculate frame center from rim boards, then set yaw so the L's concave
@@ -734,6 +747,49 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Special handling for bottom plate end-to-end snaps (corners/inline)
 			if (Socket.SocketType == EConstructionSocketType::BottomPlate_End &&
 				TgtSocketType == EConstructionSocketType::BottomPlate_End &&
+				TargetPiece)
+			{
+				FRotator TargetRotation = TargetPiece->GetActorRotation();
+
+				FString SourceSocketStr = Socket.SocketName.ToString();
+				FString TargetSocketStr = TargetSocketName.ToString();
+				bool bSourceIsRight = SourceSocketStr.Contains(TEXT("Right"));
+				bool bTargetIsRight = TargetSocketStr.Contains(TEXT("Right"));
+				bool bOppositeEnds = (bSourceIsRight != bTargetIsRight);
+
+				if (bOppositeEnds)
+				{
+					// INLINE: Right->Left or Left->Right
+					CandidateRotation.Yaw = TargetRotation.Yaw;
+					bCandidateIsInline = true;
+				}
+				else
+				{
+					// CORNER: Left->Left or Right->Right
+					FVector TargetRight = TargetRotation.RotateVector(FVector::RightVector);
+					FVector PlayerLookDir = FVector::ZeroVector;
+					if (UWorld* World = GetWorld())
+					{
+						APlayerController* PC = World->GetFirstPlayerController();
+						if (PC)
+						{
+							FVector CamLoc;
+							FRotator CamRot;
+							PC->GetPlayerViewPoint(CamLoc, CamRot);
+							PlayerLookDir = CamRot.Vector();
+						}
+					}
+					float DotResult = FVector::DotProduct(PlayerLookDir, TargetRight);
+					float RotationSign = (DotResult > 0) ? 90.0f : -90.0f;
+					CandidateRotation.Yaw = TargetRotation.Yaw + RotationSign;
+					bCandidateIsCorner = true;
+				}
+			}
+
+			// Special handling for top plate end-to-end snaps (corners/inline)
+			// Same pattern as bottom plate
+			if (Socket.SocketType == EConstructionSocketType::TopPlate_End &&
+				TgtSocketType == EConstructionSocketType::TopPlate_End &&
 				TargetPiece)
 			{
 				FRotator TargetRotation = TargetPiece->GetActorRotation();
@@ -1127,8 +1183,10 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	FVector FinalLocation = Candidate.SnapLocation;
 	FRotator FinalRotation = Candidate.SnapRotation;
 
-	// Force plywood, wall plates, and wall studs vertical — only yaw varies
-	if (PieceType == EPieceType::Plywood || PieceType == EPieceType::WallPlate || PieceType == EPieceType::WallStud)
+	// Force flat/vertical — only yaw varies
+	if (PieceType == EPieceType::Plywood || PieceType == EPieceType::WallPlate ||
+		PieceType == EPieceType::WallStud || PieceType == EPieceType::TopPlate ||
+		PieceType == EPieceType::DoubleTopPlate)
 	{
 		FinalRotation.Pitch = 0.0f;
 		FinalRotation.Roll = 0.0f;
@@ -1282,6 +1340,29 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::DoorFrame_Bottom))
 	{
 		return 750;
+	}
+
+	// Top plate bottom to wall stud/corner post/door frame tops
+	if (SocketA == EConstructionSocketType::TopPlate_Bottom &&
+		(SocketB == EConstructionSocketType::Wall_Stud_Top ||
+		 SocketB == EConstructionSocketType::CornerPost_Top ||
+		 SocketB == EConstructionSocketType::DoorFrame_Top))
+	{
+		return 800;
+	}
+	if ((SocketA == EConstructionSocketType::Wall_Stud_Top ||
+		 SocketA == EConstructionSocketType::CornerPost_Top ||
+		 SocketA == EConstructionSocketType::DoorFrame_Top) &&
+		SocketB == EConstructionSocketType::TopPlate_Bottom)
+	{
+		return 800;
+	}
+
+	// Top plate end-to-end (corner/inline connections)
+	if (SocketA == EConstructionSocketType::TopPlate_End &&
+		SocketB == EConstructionSocketType::TopPlate_End)
+	{
+		return 900;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)
