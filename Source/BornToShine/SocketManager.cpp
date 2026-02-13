@@ -503,12 +503,13 @@ float ASocketManager::CalculateSnapScore(
 
 void ASocketManager::CreateTopPlateRules()
 {
-	// TopPlate bottom sockets snap to wall stud top and corner post top
+	// TopPlate bottom sockets snap to wall stud top, corner post top, and other top plate top faces
 	FSocketCompatibilityRule TopPlateBottomRule;
 	TopPlateBottomRule.SourceSocketType = EConstructionSocketType::TopPlate_Bottom;
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Top);
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::CornerPost_Top);
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoorFrame_Top);
+	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
 	TopPlateBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
 	TopPlateBottomRule.SnapDistance = 250.0f;
 	TopPlateBottomRule.bCheckAlignment = false;
@@ -568,10 +569,11 @@ void ASocketManager::CreateDoubleTopPlateRules()
 	DblBottomRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(DblBottomRule);
 
-	// Reverse: TopPlate top face accepts DoubleTopPlate bottom
+	// Reverse: TopPlate top face accepts DoubleTopPlate bottom and TopPlate bottom (stacking)
 	FSocketCompatibilityRule TopFaceRule;
 	TopFaceRule.SourceSocketType = EConstructionSocketType::TopPlate_Top;
 	TopFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_Bottom);
+	TopFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Bottom);
 	TopFaceRule.RequiredPhase = EConstructionPhase::WallFrame;
 	TopFaceRule.SnapDistance = 50.0f;
 	TopFaceRule.bCheckAlignment = false;

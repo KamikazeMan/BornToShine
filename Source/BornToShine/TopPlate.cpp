@@ -217,69 +217,17 @@ bool ATopPlate::TryPlace()
 {
 	if (!Super::TryPlace()) return false;
 
-	// --- After snap placement, bump plate Z to sit on top of the TALLEST ---
-	// The plate may have snapped to a stud top (277.40) but corner posts
-	// are taller (279.15). The plate bottom must be at the highest of the two.
-	if (AConstructionPhaseManager::Instance)
-	{
-		float PlateBottomZ = GetActorLocation().Z - BoardHeight / 2.0f;
-		float HighestTopZ = PlateBottomZ;
-
-		// Check corner post top socket Z (world)
-		TArray<ABuildablePiece*> Posts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
-		for (ABuildablePiece* BP : Posts)
-		{
-			ACornerPost* Post = Cast<ACornerPost>(BP);
-			if (!Post) continue;
-			for (const FConstructionSocket& S : Post->GetAllSockets())
-			{
-				if (S.SocketName == FName("PostTop"))
-				{
-					float PostTopZ = Post->GetActorLocation().Z + S.LocalPosition.Z;
-					if (PostTopZ > HighestTopZ)
-						HighestTopZ = PostTopZ;
-					break;
-				}
-			}
-		}
-
-		// Check wall stud top socket Z (world)
-		TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
-		for (ABuildablePiece* BP : Studs)
-		{
-			AWallStud* Stud = Cast<AWallStud>(BP);
-			if (!Stud) continue;
-			for (const FConstructionSocket& S : Stud->GetAllSockets())
-			{
-				if (S.SocketName == FName("StudTop"))
-				{
-					float StudTopZ = Stud->GetActorLocation().Z + S.LocalPosition.Z;
-					if (StudTopZ > HighestTopZ)
-						HighestTopZ = StudTopZ;
-					break;
-				}
-			}
-		}
-
-		if (HighestTopZ > PlateBottomZ + 0.01f)
-		{
-			FVector Loc = GetActorLocation();
-			float OldZ = Loc.Z;
-			Loc.Z = HighestTopZ + BoardHeight / 2.0f;
-			SetActorLocation(Loc);
-			UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: Z bumped from %.2f to %.2f (bottom now at %.2f, was %.2f)"),
-				*GetName(), OldZ, Loc.Z, HighestTopZ, PlateBottomZ);
-		}
-	}
-
-	// Extend mesh for flush corners after Z adjustment
+	// Extend mesh for flush corners after snap placement
 	ExtendMeshForFlushCorners();
 
-	// --- Diagnostic Z logging ---
-	float PlateZ = GetActorLocation().Z;
-	float PlateBotZ = PlateZ - BoardHeight / 2.0f;
-	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL Z=%.2f (bottom=%.2f)"),
-		*GetName(), PlateZ, PlateBotZ);
+	// --- Diagnostic logging ---
+	FVector PlatePos = GetActorLocation();
+	FRotator PlateRot = GetActorRotation();
+	float PlateBotZ = PlatePos.Z - BoardHeight / 2.0f;
+	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL pos=(%.1f, %.1f, %.1f) rot=(%.1f, %.1f, %.1f) bottom=%.2f len=%dft (%.1fcm)"),
+		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z,
+		PlateRot.Pitch, PlateRot.Yaw, PlateRot.Roll,
+		PlateBotZ, CurrentLengthFeet, BoardLength);
 
 	return true;
 }
