@@ -217,71 +217,69 @@ bool ATopPlate::TryPlace()
 {
 	if (!Super::TryPlace()) return false;
 
-	// Extend mesh for flush corners after successful snap placement
-	ExtendMeshForFlushCorners();
-
-	// --- Diagnostic Z logging ---
-	float PlateZ = GetActorLocation().Z;
-	float PlateBotZ = PlateZ - BoardHeight / 2.0f;
-	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: PLACED at Z=%.2f (bottom=%.2f)"),
-		*GetName(), PlateZ, PlateBotZ);
-
+	// --- After snap placement, bump plate Z to sit on top of the TALLEST ---
+	// The plate may have snapped to a stud top (277.40) but corner posts
+	// are taller (279.15). The plate bottom must be at the highest of the two.
 	if (AConstructionPhaseManager::Instance)
 	{
-		// Log corner post mesh top Z (world)
+		float PlateBottomZ = GetActorLocation().Z - BoardHeight / 2.0f;
+		float HighestTopZ = PlateBottomZ;
+
+		// Check corner post top socket Z (world)
 		TArray<ABuildablePiece*> Posts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
 		for (ABuildablePiece* BP : Posts)
 		{
 			ACornerPost* Post = Cast<ACornerPost>(BP);
 			if (!Post) continue;
-			UStaticMeshComponent* Mesh = Post->GetMeshComponent();
-			if (Mesh)
+			for (const FConstructionSocket& S : Post->GetAllSockets())
 			{
-				FBoxSphereBounds WB = Mesh->CalcBounds(Mesh->GetComponentTransform());
-				float MeshTopWorld = WB.Origin.Z + WB.BoxExtent.Z;
-				// Also get PostTop socket world Z
-				float PostTopSocketZ = 0.0f;
-				for (const FConstructionSocket& S : Post->GetAllSockets())
+				if (S.SocketName == FName("PostTop"))
 				{
-					if (S.SocketName == FName("PostTop"))
-					{
-						PostTopSocketZ = Post->GetActorLocation().Z + S.LocalPosition.Z;
-						break;
-					}
+					float PostTopZ = Post->GetActorLocation().Z + S.LocalPosition.Z;
+					if (PostTopZ > HighestTopZ)
+						HighestTopZ = PostTopZ;
+					break;
 				}
-				UE_LOG(LogTemp, Warning, TEXT("  CornerPost [%s]: MeshTopWorld=%.2f  PostTopSocketWorld=%.2f  ActorZ=%.2f"),
-					*Post->GetName(), MeshTopWorld, PostTopSocketZ, Post->GetActorLocation().Z);
-				break; // one is enough
 			}
 		}
 
-		// Log stud StudTop socket Z (world)
+		// Check wall stud top socket Z (world)
 		TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
 		for (ABuildablePiece* BP : Studs)
 		{
 			AWallStud* Stud = Cast<AWallStud>(BP);
 			if (!Stud) continue;
-			float StudTopSocketZ = 0.0f;
 			for (const FConstructionSocket& S : Stud->GetAllSockets())
 			{
 				if (S.SocketName == FName("StudTop"))
 				{
-					StudTopSocketZ = Stud->GetActorLocation().Z + S.LocalPosition.Z;
+					float StudTopZ = Stud->GetActorLocation().Z + S.LocalPosition.Z;
+					if (StudTopZ > HighestTopZ)
+						HighestTopZ = StudTopZ;
 					break;
 				}
 			}
-			UStaticMeshComponent* Mesh = Stud->GetMeshComponent();
-			float StudMeshTopWorld = 0.0f;
-			if (Mesh)
-			{
-				FBoxSphereBounds WB = Mesh->CalcBounds(Mesh->GetComponentTransform());
-				StudMeshTopWorld = WB.Origin.Z + WB.BoxExtent.Z;
-			}
-			UE_LOG(LogTemp, Warning, TEXT("  WallStud [%s]: StudTopSocketWorld=%.2f  MeshTopWorld=%.2f  ActorZ=%.2f"),
-				*Stud->GetName(), StudTopSocketZ, StudMeshTopWorld, Stud->GetActorLocation().Z);
-			break; // one is enough
+		}
+
+		if (HighestTopZ > PlateBottomZ + 0.01f)
+		{
+			FVector Loc = GetActorLocation();
+			float OldZ = Loc.Z;
+			Loc.Z = HighestTopZ + BoardHeight / 2.0f;
+			SetActorLocation(Loc);
+			UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: Z bumped from %.2f to %.2f (bottom now at %.2f, was %.2f)"),
+				*GetName(), OldZ, Loc.Z, HighestTopZ, PlateBottomZ);
 		}
 	}
+
+	// Extend mesh for flush corners after Z adjustment
+	ExtendMeshForFlushCorners();
+
+	// --- Diagnostic Z logging ---
+	float PlateZ = GetActorLocation().Z;
+	float PlateBotZ = PlateZ - BoardHeight / 2.0f;
+	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: FINAL Z=%.2f (bottom=%.2f)"),
+		*GetName(), PlateZ, PlateBotZ);
 
 	return true;
 }
@@ -300,6 +298,23 @@ void ATopPlate::ExtendMeshForFlushCorners()
 		CurrentScale3D.Y,
 		CurrentScale3D.Z
 	));
+
+	// Re-center the mesh after scaling. If the mesh asset origin isn't at the
+	// geometric center, scaling shifts the visual center. Compensate so the
+	// extension is symmetric on both ends (flush at all 4 corners, not just 2).
+	if (MeshComponent->GetStaticMesh())
+	{
+		FBoxSphereBounds AssetBounds = MeshComponent->GetStaticMesh()->GetBounds();
+		float CenterShift = AssetBounds.Origin.X * (Ratio - 1.0f) * CurrentScale3D.X;
+		if (FMath::Abs(CenterShift) > 0.001f)
+		{
+			FVector RelLoc = MeshComponent->GetRelativeLocation();
+			RelLoc.X -= CenterShift;
+			MeshComponent->SetRelativeLocation(RelLoc);
+			UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: Re-centered mesh X by %.3f (asset origin X=%.2f)"),
+				*GetName(), -CenterShift, AssetBounds.Origin.X);
+		}
+	}
 
 	bMeshExtended = true;
 
