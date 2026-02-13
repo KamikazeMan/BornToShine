@@ -1080,6 +1080,53 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
+			// Top plate Z correction when snapping to corner post top.
+			// Corner post meshes are taller than wall studs, but all 4 top
+			// plates must sit at the same Z height.  Use the nearest wall
+			// stud's top socket Z as the authoritative reference.
+			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom &&
+				TgtSocketType == EConstructionSocketType::CornerPost_Top)
+			{
+				float BestStudTopZ = 0.0f;
+				bool bFoundStud = false;
+				float BestStudDistSq = FLT_MAX;
+
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::WallStud)
+					{
+						for (const FConstructionSocket& StudSocket : P->GetAllSockets())
+						{
+							if (StudSocket.SocketType == EConstructionSocketType::Wall_Stud_Top)
+							{
+								FVector StudTopWorld = P->GetActorTransform().TransformPosition(StudSocket.LocalPosition);
+								float Dx = StudTopWorld.X - SnapLoc.X;
+								float Dy = StudTopWorld.Y - SnapLoc.Y;
+								float DistSq = Dx * Dx + Dy * Dy;
+								if (DistSq < BestStudDistSq)
+								{
+									BestStudDistSq = DistSq;
+									BestStudTopZ = StudTopWorld.Z;
+									bFoundStud = true;
+								}
+								break; // Only one top socket per stud
+							}
+						}
+					}
+				}
+
+				if (bFoundStud)
+				{
+					float OldZ = CandidateLocation.Z;
+					// Replace the corner post top Z with the wall stud top Z
+					CandidateLocation.Z = BestStudTopZ - SocketWorldOffset.Z;
+
+					UE_LOG(LogTemp, Warning,
+						TEXT("TopPlate Z-fix: CornerPost snap Z=%.2f → StudTop ref Z=%.2f (delta=%.2f)"),
+						OldZ, CandidateLocation.Z, CandidateLocation.Z - OldZ);
+				}
+			}
+
 			// Plywood XY alignment: apply pre-computed slot position
 			// (computed once before the loop using frame centroid as origin)
 			if (bHavePlywoodSlot &&
