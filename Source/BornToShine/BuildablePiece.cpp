@@ -1360,26 +1360,27 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 	}
 
 	// Top plate bottom to wall stud/corner post/door frame tops
+	// HIGHEST priority for top plates — each plate sits on its wall's studs
 	if (SocketA == EConstructionSocketType::TopPlate_Bottom &&
 		(SocketB == EConstructionSocketType::Wall_Stud_Top ||
 		 SocketB == EConstructionSocketType::CornerPost_Top ||
 		 SocketB == EConstructionSocketType::DoorFrame_Top))
 	{
-		return 800;
+		return 950;
 	}
 	if ((SocketA == EConstructionSocketType::Wall_Stud_Top ||
 		 SocketA == EConstructionSocketType::CornerPost_Top ||
 		 SocketA == EConstructionSocketType::DoorFrame_Top) &&
 		SocketB == EConstructionSocketType::TopPlate_Bottom)
 	{
-		return 800;
+		return 950;
 	}
 
-	// Top plate end-to-end (corner/inline connections)
+	// Top plate end-to-end (corner/inline connections) — secondary to stud snaps
 	if (SocketA == EConstructionSocketType::TopPlate_End &&
 		SocketB == EConstructionSocketType::TopPlate_End)
 	{
-		return 900;
+		return 700;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)
