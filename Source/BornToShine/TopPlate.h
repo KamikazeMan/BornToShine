@@ -57,6 +57,9 @@ public:
 
 	virtual void ScalePiece(float ScaleDelta) override;
 
+	/** Override: extend mesh for flush corners after snap placement. */
+	virtual bool TryPlace() override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;

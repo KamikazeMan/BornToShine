@@ -101,8 +101,12 @@ void ACornerPost::AdjustSocketsToMeshBounds()
 	float OldBottomZ = -PostHeight / 2.0f;
 	float OldTopZ    =  PostHeight / 2.0f;
 
-	// Update PostHeight to reflect the real mesh
-	PostHeight = ActualHeight;
+	// The corner post mesh (243.84cm / 8ft) is taller than the structural
+	// stud height (235.27cm / 92-5/8"). Only adjust PostBottom to real mesh
+	// bottom so the snap to the plate seat is correct. Keep PostTop at the
+	// structural stud height above the real bottom — NOT at the mesh top —
+	// so the top plate sits at the same level as wall stud tops.
+	float StructuralTopZ = MeshBottomZ + PostHeight;
 
 	for (FConstructionSocket& Socket : Sockets)
 	{
@@ -112,16 +116,16 @@ void ACornerPost::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketName == FName("PostTop"))
 		{
-			Socket.LocalPosition.Z = MeshTopZ;
+			Socket.LocalPosition.Z = StructuralTopZ;
 		}
 	}
 
-	UE_LOG(LogTemp, Log,
+	UE_LOG(LogTemp, Warning,
 		TEXT("CornerPost: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, MeshRelZ=%.2f → "
-		     "PostBottom Z: %.2f→%.2f, PostTop Z: %.2f→%.2f"),
+		     "PostBottom Z: %.2f→%.2f, PostTop Z: %.2f→%.2f (structural, not mesh top %.2f)"),
 		Bounds.Origin.Z - Bounds.BoxExtent.Z, Bounds.Origin.Z + Bounds.BoxExtent.Z,
 		ActualHeight, MeshRelLoc.Z,
-		OldBottomZ, MeshBottomZ, OldTopZ, MeshTopZ);
+		OldBottomZ, MeshBottomZ, OldTopZ, StructuralTopZ, MeshTopZ);
 }
 
 void ACornerPost::ScalePiece(float ScaleDelta)

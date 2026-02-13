@@ -210,6 +210,15 @@ void ATopPlate::RegenerateSockets()
 	UE_LOG(LogTemp, Log, TEXT("TopPlate: Regenerated %d sockets for %d ft plate"), Sockets.Num(), CurrentLengthFeet);
 }
 
+bool ATopPlate::TryPlace()
+{
+	if (!Super::TryPlace()) return false;
+
+	// Extend mesh for flush corners after successful snap placement
+	ExtendMeshForFlushCorners();
+	return true;
+}
+
 void ATopPlate::ExtendMeshForFlushCorners()
 {
 	if (!MeshComponent) return;
