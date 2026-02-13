@@ -63,9 +63,6 @@ public:
 	// Override scale to disable scroll wheel scaling
 	virtual void ScalePiece(float ScaleDelta) override;
 
-	/** Scale this stud's mesh Z to match a target height (door frame reference). */
-	void ScaleToReferenceHeight(float TargetHeightCm);
-
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;

@@ -3,12 +3,8 @@
 #include "DoorFrame.h"
 #include "ConstructionPhaseManager.h"
 #include "WallStud.h"
-#include "CornerPost.h"
 #include "BottomPlate.h"
 #include "Components/StaticMeshComponent.h"
-#include "EngineUtils.h"
-
-float ADoorFrame::KingStudHeight = 0.0f;
 
 ADoorFrame::ADoorFrame()
 {
@@ -40,9 +36,6 @@ void ADoorFrame::BeginPlay()
 
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
-
-	// Rescale any existing wall studs / corner posts to match this door frame height
-	ScaleExistingVerticalsToKingStudHeight();
 
 	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === DoorFrame king stud height: %.2fcm (%.2f in)"),
 		FrameHeight, FrameHeight / 2.54f);
@@ -104,9 +97,6 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 	{
 		FrameHeight = ActualHeight;
 
-		// Set the global reference height — all vertical framing scales to this
-		KingStudHeight = FrameHeight;
-
 		// Full mesh extent drives stud overlap deletion (covers king studs + trimmers)
 		// RoughOpeningWidth stays at the configured value (36" default) for the plate cut
 		float MeshHalfX = Bounds.BoxExtent.X;
@@ -135,32 +125,6 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 void ADoorFrame::ScalePiece(float ScaleDelta)
 {
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
-}
-
-// ---------------------------------------------------------------------------
-// Scale existing wall studs and corner posts to match king stud height
-// ---------------------------------------------------------------------------
-void ADoorFrame::ScaleExistingVerticalsToKingStudHeight()
-{
-	if (KingStudHeight < 1.0f) return;
-
-	int32 ScaledStuds = 0;
-	int32 ScaledPosts = 0;
-
-	for (TActorIterator<AWallStud> It(GetWorld()); It; ++It)
-	{
-		It->ScaleToReferenceHeight(KingStudHeight);
-		ScaledStuds++;
-	}
-
-	for (TActorIterator<ACornerPost> It(GetWorld()); It; ++It)
-	{
-		It->ScaleToReferenceHeight(KingStudHeight);
-		ScaledPosts++;
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Rescaled %d wall studs and %d corner posts to king stud height %.2fcm"),
-		ScaledStuds, ScaledPosts, KingStudHeight);
 }
 
 // ---------------------------------------------------------------------------
