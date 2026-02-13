@@ -31,6 +31,8 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateWallStudRules();
 	CreateCornerPostRules();
 	CreateDoorFrameRules();
+	CreateTopPlateRules();
+	CreateDoubleTopPlateRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -497,4 +499,94 @@ float ASocketManager::CalculateSnapScore(
 	float AlignmentScore = 100.0f / (AngleDiff + 1.0f);
 
 	return DistanceScore + AlignmentScore;
+}
+
+void ASocketManager::CreateTopPlateRules()
+{
+	// TopPlate bottom sockets snap to wall stud top and corner post top
+	FSocketCompatibilityRule TopPlateBottomRule;
+	TopPlateBottomRule.SourceSocketType = EConstructionSocketType::TopPlate_Bottom;
+	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Top);
+	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::CornerPost_Top);
+	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoorFrame_Top);
+	TopPlateBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	TopPlateBottomRule.SnapDistance = 250.0f;
+	TopPlateBottomRule.bCheckAlignment = false;
+	TopPlateBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(TopPlateBottomRule);
+
+	// Reverse: stud/post tops accept TopPlate bottom
+	FSocketCompatibilityRule StudTopRule;
+	StudTopRule.SourceSocketType = EConstructionSocketType::Wall_Stud_Top;
+	StudTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Bottom);
+	StudTopRule.RequiredPhase = EConstructionPhase::WallFrame;
+	StudTopRule.SnapDistance = 250.0f;
+	StudTopRule.bCheckAlignment = false;
+	StudTopRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(StudTopRule);
+
+	FSocketCompatibilityRule PostTopRule;
+	PostTopRule.SourceSocketType = EConstructionSocketType::CornerPost_Top;
+	PostTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Bottom);
+	PostTopRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PostTopRule.SnapDistance = 250.0f;
+	PostTopRule.bCheckAlignment = false;
+	PostTopRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PostTopRule);
+
+	FSocketCompatibilityRule DoorTopRule;
+	DoorTopRule.SourceSocketType = EConstructionSocketType::DoorFrame_Top;
+	DoorTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Bottom);
+	DoorTopRule.RequiredPhase = EConstructionPhase::WallFrame;
+	DoorTopRule.SnapDistance = 250.0f;
+	DoorTopRule.bCheckAlignment = false;
+	DoorTopRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(DoorTopRule);
+
+	// Top plate end-to-end (corners)
+	FSocketCompatibilityRule TopPlateEndRule;
+	TopPlateEndRule.SourceSocketType = EConstructionSocketType::TopPlate_End;
+	TopPlateEndRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_End);
+	TopPlateEndRule.RequiredPhase = EConstructionPhase::WallFrame;
+	TopPlateEndRule.SnapDistance = 60.0f;
+	TopPlateEndRule.bCheckAlignment = true;
+	TopPlateEndRule.MaxAlignmentAngle = 95.0f;
+	CompatibilityRules.Add(TopPlateEndRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added top plate compatibility rules"));
+}
+
+void ASocketManager::CreateDoubleTopPlateRules()
+{
+	// DoubleTopPlate bottom sockets snap to TopPlate top face
+	FSocketCompatibilityRule DblBottomRule;
+	DblBottomRule.SourceSocketType = EConstructionSocketType::DoubleTopPlate_Bottom;
+	DblBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
+	DblBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	DblBottomRule.SnapDistance = 50.0f;
+	DblBottomRule.bCheckAlignment = false;
+	DblBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(DblBottomRule);
+
+	// Reverse: TopPlate top face accepts DoubleTopPlate bottom
+	FSocketCompatibilityRule TopFaceRule;
+	TopFaceRule.SourceSocketType = EConstructionSocketType::TopPlate_Top;
+	TopFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_Bottom);
+	TopFaceRule.RequiredPhase = EConstructionPhase::WallFrame;
+	TopFaceRule.SnapDistance = 50.0f;
+	TopFaceRule.bCheckAlignment = false;
+	TopFaceRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(TopFaceRule);
+
+	// DoubleTopPlate end-to-end
+	FSocketCompatibilityRule DblEndRule;
+	DblEndRule.SourceSocketType = EConstructionSocketType::DoubleTopPlate_End;
+	DblEndRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_End);
+	DblEndRule.RequiredPhase = EConstructionPhase::WallFrame;
+	DblEndRule.SnapDistance = 60.0f;
+	DblEndRule.bCheckAlignment = true;
+	DblEndRule.MaxAlignmentAngle = 95.0f;
+	CompatibilityRules.Add(DblEndRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added double top plate compatibility rules"));
 }

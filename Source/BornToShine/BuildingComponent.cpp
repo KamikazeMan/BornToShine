@@ -7,6 +7,8 @@
 #include "PlywoodSheet.h"
 #include "BottomPlate.h"
 #include "WallStud.h"
+#include "TopPlate.h"
+#include "DoubleTopPlate.h"
 #include "DoorFrame.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
@@ -79,6 +81,16 @@ void UBuildingComponent::BeginPlay()
 		AvailablePieceTypes.Add(ADoorFrame::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added DoorFrame to AvailablePieceTypes"));
 	}
+	if (!HasPieceType(EPieceType::TopPlate))
+	{
+		AvailablePieceTypes.Add(ATopPlate::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added TopPlate to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::DoubleTopPlate))
+	{
+		AvailablePieceTypes.Add(ADoubleTopPlate::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added DoubleTopPlate to AvailablePieceTypes"));
+	}
 
 	// Also scan PieceTypeInfos for any piece types configured in the editor
 	// that still aren't in AvailablePieceTypes (handles the case where the user
@@ -91,10 +103,12 @@ void UBuildingComponent::BeginPlay()
 		TSubclassOf<ABuildablePiece> AutoClass = nullptr;
 		switch (EditorInfo.PieceType)
 		{
-		case EPieceType::DoorFrame:   AutoClass = ADoorFrame::StaticClass(); break;
-		case EPieceType::WallStud:    AutoClass = AWallStud::StaticClass(); break;
-		case EPieceType::WallPlate:   AutoClass = ABottomPlate::StaticClass(); break;
-		case EPieceType::Plywood:     AutoClass = APlywoodSheet::StaticClass(); break;
+		case EPieceType::DoorFrame:       AutoClass = ADoorFrame::StaticClass(); break;
+		case EPieceType::WallStud:        AutoClass = AWallStud::StaticClass(); break;
+		case EPieceType::WallPlate:       AutoClass = ABottomPlate::StaticClass(); break;
+		case EPieceType::Plywood:         AutoClass = APlywoodSheet::StaticClass(); break;
+		case EPieceType::TopPlate:        AutoClass = ATopPlate::StaticClass(); break;
+		case EPieceType::DoubleTopPlate:  AutoClass = ADoubleTopPlate::StaticClass(); break;
 		default: break;
 		}
 
@@ -325,6 +339,51 @@ void UBuildingComponent::UpdatePreviewPosition()
 		}
 	}
 
+	// TOP PLATE SUGGESTION OVERRIDE: When placing a top plate and the RectangleBuilder
+	// has top plate suggestions (from completed stud layout), position the preview
+	// at the next top plate location above the studs.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasTopPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::TopPlate)
+	{
+		FTopPlateSuggestion TopPlateSug = RectangleBuilder->GetNextTopPlateSuggestion();
+		if (TopPlateSug.bIsValid)
+		{
+			ATopPlate* PreviewTopPlate = Cast<ATopPlate>(CurrentPreviewPiece);
+			if (PreviewTopPlate && TopPlateSug.LengthFeet > 0 && TopPlateSug.LengthFeet != PreviewTopPlate->GetBoardLengthFeet())
+			{
+				PreviewTopPlate->SetBoardLengthFeet(TopPlateSug.LengthFeet);
+			}
+
+			CurrentPreviewPiece->SetActorLocation(TopPlateSug.Position);
+			CurrentPreviewPiece->SetActorRotation(TopPlateSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
+			return;
+		}
+	}
+
+	// DOUBLE TOP PLATE SUGGESTION OVERRIDE: When placing a double top plate and the
+	// RectangleBuilder has suggestions, position the preview at the next location.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasDoubleTopPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::DoubleTopPlate)
+	{
+		FDoubleTopPlateSuggestion DblSug = RectangleBuilder->GetNextDoubleTopPlateSuggestion();
+		if (DblSug.bIsValid)
+		{
+			ADoubleTopPlate* PreviewDbl = Cast<ADoubleTopPlate>(CurrentPreviewPiece);
+			if (PreviewDbl)
+			{
+				PreviewDbl->SetBoardLengthCm(DblSug.LengthCm);
+			}
+
+			CurrentPreviewPiece->SetActorLocation(DblSug.Position);
+			CurrentPreviewPiece->SetActorRotation(DblSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
 	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
 	// detection. Position the preview exactly where the suggestion says.
@@ -488,6 +547,46 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 	}
 
+	// TOP PLATE SUGGESTION PATH: When top plate suggestions exist and we're placing a top plate,
+	// bypass TryPlace and use the calculated position above the studs.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasTopPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::TopPlate)
+	{
+		ATopPlate* TopPlateActor = Cast<ATopPlate>(CurrentPreviewPiece);
+		if (TopPlateActor && RectangleBuilder->ApplyTopPlateSuggestion(TopPlateActor))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Top plate placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
+	// DOUBLE TOP PLATE SUGGESTION PATH: When double top plate suggestions exist,
+	// bypass TryPlace and use the calculated position stacked on the first top plate.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasDoubleTopPlateSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::DoubleTopPlate)
+	{
+		ADoubleTopPlate* DblPlate = Cast<ADoubleTopPlate>(CurrentPreviewPiece);
+		if (DblPlate && RectangleBuilder->ApplyDoubleTopPlateSuggestion(DblPlate))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Double top plate placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER PATH: When a suggestion is active, bypass TryPlace entirely.
 	// Place the board exactly where the RectangleBuilder calculated, with correct length.
 	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
@@ -644,6 +743,40 @@ void UBuildingComponent::CyclePieceType()
 			UE_LOG(LogTemp, Log, TEXT("Wall Stud selected: No stud layout available (place all bottom plates first)"));
 		}
 	}
+
+	// Show top plate info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::TopPlate)
+	{
+		if (RectangleBuilder && RectangleBuilder->HasTopPlateSuggestions())
+		{
+			FTopPlateSuggestion NextTP = RectangleBuilder->GetNextTopPlateSuggestion();
+			UE_LOG(LogTemp, Log, TEXT("Top Plate selected: %d/%d plates to place, %dft length"),
+				RectangleBuilder->GetPlacedTopPlateCount(),
+				RectangleBuilder->GetTopPlateSuggestions().Num(),
+				NextTP.LengthFeet);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Top Plate selected: No layout available (place all wall studs first)"));
+		}
+	}
+
+	// Show double top plate info
+	if (CurrentPreviewPiece && CurrentPreviewPiece->GetPieceType() == EPieceType::DoubleTopPlate)
+	{
+		if (RectangleBuilder && RectangleBuilder->HasDoubleTopPlateSuggestions())
+		{
+			FDoubleTopPlateSuggestion NextDbl = RectangleBuilder->GetNextDoubleTopPlateSuggestion();
+			UE_LOG(LogTemp, Log, TEXT("Double Top Plate selected: %d/%d plates to place, %.1fcm length"),
+				RectangleBuilder->GetPlacedDoubleTopPlateCount(),
+				RectangleBuilder->GetDoubleTopPlateSuggestions().Num(),
+				NextDbl.LengthCm);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Double Top Plate selected: No layout available (place all first top plates first)"));
+		}
+	}
 }
 
 void UBuildingComponent::RotatePreviewLeft()
@@ -795,8 +928,10 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::Plywood:     Info.Subtitle = TEXT("4x8"); break;
 				case EPieceType::WallPlate:   Info.Subtitle = TEXT("2x4"); break;
 				case EPieceType::WallStud:    Info.Subtitle = TEXT("92-5/8\""); break;
-				case EPieceType::CornerPost:  Info.Subtitle = TEXT("4-Stud"); break;
-				case EPieceType::DoorFrame:   Info.Subtitle = TEXT("36\""); break;
+				case EPieceType::CornerPost:      Info.Subtitle = TEXT("4-Stud"); break;
+				case EPieceType::DoorFrame:       Info.Subtitle = TEXT("36\""); break;
+				case EPieceType::TopPlate:        Info.Subtitle = TEXT("2x4"); break;
+				case EPieceType::DoubleTopPlate:  Info.Subtitle = TEXT("2x4 +3.5\""); break;
 				default: break;
 				}
 			}

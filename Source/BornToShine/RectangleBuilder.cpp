@@ -5,6 +5,8 @@
 #include "FloorJoist.h"
 #include "BottomPlate.h"
 #include "WallStud.h"
+#include "TopPlate.h"
+#include "DoubleTopPlate.h"
 #include "PlywoodSheet.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
@@ -25,6 +27,8 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     ThroughBoard3 = nullptr;
     PlacedPlateCount = 0;
     PlacedStudCount = 0;
+    PlacedTopPlateCount = 0;
+    PlacedDoubleTopPlateCount = 0;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -1148,6 +1152,218 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
         PlacedStudCount, StudSuggestions.Num(),
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
         Suggestion.Rotation.Yaw);
+
+    // After all studs are placed, calculate top plate layout
+    if (PlacedStudCount >= StudSuggestions.Num())
+    {
+        CalculateTopPlateLayout();
+    }
+
+    return true;
+}
+
+// =============================================================================
+// Top Plate Layout
+// =============================================================================
+
+void URectangleBuilderComponent::CalculateTopPlateLayout()
+{
+    TopPlateSuggestions.Empty();
+    PlacedTopPlateCount = 0;
+
+    if (PlacedBottomPlates.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateTopPlateLayout - No placed bottom plates!"));
+        return;
+    }
+
+    // Top plate dimensions (same 2x4 as bottom plate)
+    const float PlateHalfHeight = 8.89f / 2.0f;  // 4.445cm
+    const float BottomPlateHeight = 8.89f;         // 3.5"
+    const float DefaultStudHeight = 235.27f;       // 92-5/8"
+
+    for (int32 i = 0; i < PlacedBottomPlates.Num(); i++)
+    {
+        ABottomPlate* BotPlate = PlacedBottomPlates[i];
+        if (!BotPlate) continue;
+
+        // Top plate center Z = bottom plate center Z + bottom plate half height + stud height + top plate half height
+        // This puts the top plate sitting directly on top of the studs
+        float TopPlateZ = BotPlate->GetActorLocation().Z + (BottomPlateHeight / 2.0f) + DefaultStudHeight + PlateHalfHeight;
+
+        FTopPlateSuggestion Sug;
+        Sug.Position = FVector(BotPlate->GetActorLocation().X, BotPlate->GetActorLocation().Y, TopPlateZ);
+        Sug.Rotation = BotPlate->GetActorRotation();
+        Sug.LengthFeet = BotPlate->GetBoardLengthFeet();
+        Sug.SourceBottomPlate = BotPlate;
+        Sug.PlateIndex = i;
+        Sug.bIsValid = true;
+
+        TopPlateSuggestions.Add(Sug);
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate %d suggestion - Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%dft (BotPlateZ=%.1f)"),
+            i, Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
+            Sug.Rotation.Yaw, Sug.LengthFeet, BotPlate->GetActorLocation().Z);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d top plate positions (above wall studs)"),
+        TopPlateSuggestions.Num());
+}
+
+FTopPlateSuggestion URectangleBuilderComponent::GetNextTopPlateSuggestion() const
+{
+    if (PlacedTopPlateCount < TopPlateSuggestions.Num())
+    {
+        return TopPlateSuggestions[PlacedTopPlateCount];
+    }
+    return FTopPlateSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
+{
+    if (!Plate || !HasTopPlateSuggestions()) return false;
+
+    FTopPlateSuggestion Suggestion = GetNextTopPlateSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Resize to match the bottom plate below
+    if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Plate->GetBoardLengthFeet())
+    {
+        Plate->SetBoardLengthFeet(Suggestion.LengthFeet);
+    }
+
+    // Set position and rotation
+    Plate->SetActorLocation(Suggestion.Position);
+    Plate->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Plate->SetPreviewMode(false);
+    if (Plate->ShouldAutoNail())
+    {
+        Plate->NailInPlace();
+    }
+
+    // Extend mesh for flush corners (same visual fix as bottom plates)
+    Plate->ExtendMeshForFlushCorners();
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Plate);
+    }
+
+    // Track placed top plates
+    PlacedTopPlates.Add(Plate);
+    PlacedTopPlateCount++;
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed top plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %dft"),
+        PlacedTopPlateCount, TopPlateSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw, Suggestion.LengthFeet);
+
+    // After all top plates are placed, calculate double top plate layout
+    if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
+    {
+        CalculateDoubleTopPlateLayout();
+    }
+
+    return true;
+}
+
+// =============================================================================
+// Double Top Plate Layout
+// =============================================================================
+
+void URectangleBuilderComponent::CalculateDoubleTopPlateLayout()
+{
+    DoubleTopPlateSuggestions.Empty();
+    PlacedDoubleTopPlateCount = 0;
+
+    if (PlacedTopPlates.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateDoubleTopPlateLayout - No placed top plates!"));
+        return;
+    }
+
+    // Double top plate sits directly on top of the first top plate
+    const float TopPlateHeight = 8.89f;           // 3.5"
+    const float DblPlateHalfHeight = 8.89f / 2.0f; // 4.445cm
+    const float OverlapCm = 8.89f;                 // 3.5" overlap at corners
+
+    for (int32 i = 0; i < PlacedTopPlates.Num(); i++)
+    {
+        ATopPlate* FirstPlate = PlacedTopPlates[i];
+        if (!FirstPlate) continue;
+
+        // Double top plate center Z = first top plate center Z + topPlateHalfHeight + dblPlateHalfHeight
+        float DblPlateZ = FirstPlate->GetActorLocation().Z + (TopPlateHeight / 2.0f) + DblPlateHalfHeight;
+
+        // Overlap pattern: walls at index 0 and 2 overlap at BOTH ends (extend 3.5" past each end)
+        // Walls at index 1 and 3 are the same length as their first top plate (no overlap)
+        bool bHasOverlap = (i == 0 || i == 2);
+        float BaseLengthCm = FirstPlate->GetBoardLengthFeet() * 30.48f;
+        float DblPlateLengthCm = bHasOverlap ? (BaseLengthCm + 2.0f * OverlapCm) : BaseLengthCm;
+
+        FDoubleTopPlateSuggestion Sug;
+        Sug.Position = FVector(FirstPlate->GetActorLocation().X, FirstPlate->GetActorLocation().Y, DblPlateZ);
+        Sug.Rotation = FirstPlate->GetActorRotation();
+        Sug.LengthCm = DblPlateLengthCm;
+        Sug.PlateIndex = i;
+        Sug.bIsValid = true;
+
+        DoubleTopPlateSuggestions.Add(Sug);
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: DoubleTopPlate %d suggestion - Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm (overlap=%d, base=%.1fcm)"),
+            i, Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
+            Sug.Rotation.Yaw, Sug.LengthCm, bHasOverlap, BaseLengthCm);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d double top plate positions (stacked on first top plates)"),
+        DoubleTopPlateSuggestions.Num());
+}
+
+FDoubleTopPlateSuggestion URectangleBuilderComponent::GetNextDoubleTopPlateSuggestion() const
+{
+    if (PlacedDoubleTopPlateCount < DoubleTopPlateSuggestions.Num())
+    {
+        return DoubleTopPlateSuggestions[PlacedDoubleTopPlateCount];
+    }
+    return FDoubleTopPlateSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyDoubleTopPlateSuggestion(ADoubleTopPlate* Plate)
+{
+    if (!Plate || !HasDoubleTopPlateSuggestions()) return false;
+
+    FDoubleTopPlateSuggestion Suggestion = GetNextDoubleTopPlateSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Set length in cm (may not be a round number of feet due to overlap)
+    Plate->SetBoardLengthCm(Suggestion.LengthCm);
+
+    // Set position and rotation
+    Plate->SetActorLocation(Suggestion.Position);
+    Plate->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Plate->SetPreviewMode(false);
+    if (Plate->ShouldAutoNail())
+    {
+        Plate->NailInPlace();
+    }
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Plate);
+    }
+
+    PlacedDoubleTopPlateCount++;
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed double top plate %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f, %.1fcm"),
+        PlacedDoubleTopPlateCount, DoubleTopPlateSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw, Suggestion.LengthCm);
 
     return true;
 }

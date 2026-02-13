@@ -14,6 +14,8 @@ class ARimBoard;
 class AFloorJoist;
 class ABottomPlate;
 class AWallStud;
+class ATopPlate;
+class ADoubleTopPlate;
 
 /**
  * Tracks the state of rectangle construction
@@ -208,6 +210,70 @@ struct FStudSuggestion
 };
 
 /**
+ * Data for a suggested top plate placement (auto-placed above wall studs)
+ */
+USTRUCT(BlueprintType)
+struct FTopPlateSuggestion
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 LengthFeet;
+
+    // The bottom plate this top plate mirrors
+    UPROPERTY(BlueprintReadOnly)
+    ABottomPlate* SourceBottomPlate;
+
+    int32 PlateIndex;
+    bool bIsValid;
+
+    FTopPlateSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , LengthFeet(0)
+        , SourceBottomPlate(nullptr)
+        , PlateIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
+ * Data for a suggested double top plate placement (stacks on first top plate)
+ */
+USTRUCT(BlueprintType)
+struct FDoubleTopPlateSuggestion
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    // Length in cm (may include 3.5" overlap at one end)
+    UPROPERTY(BlueprintReadOnly)
+    float LengthCm;
+
+    int32 PlateIndex;
+    bool bIsValid;
+
+    FDoubleTopPlateSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , LengthCm(0.0f)
+        , PlateIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
  * Component that tracks rectangle construction progress.
  * Attach to the same actor as BuildingComponent.
  * Recognizes L-shapes from placed boards and suggests/auto-places remaining boards.
@@ -298,6 +364,40 @@ public:
 
     // How many studs have been placed in the current layout
     int32 GetPlacedStudCount() const { return PlacedStudCount; }
+
+    // --- Top Plate Layout System ---
+
+    // Does the builder have top plate suggestions ready?
+    bool HasTopPlateSuggestions() const { return TopPlateSuggestions.Num() > 0 && PlacedTopPlateCount < TopPlateSuggestions.Num(); }
+
+    // Get the next top plate suggestion (first unplaced)
+    FTopPlateSuggestion GetNextTopPlateSuggestion() const;
+
+    // Apply a top plate suggestion: sets position, rotation, length
+    bool ApplyTopPlateSuggestion(ATopPlate* Plate);
+
+    // Get all top plate suggestions
+    TArray<FTopPlateSuggestion> GetTopPlateSuggestions() const { return TopPlateSuggestions; }
+
+    // How many top plates have been placed
+    int32 GetPlacedTopPlateCount() const { return PlacedTopPlateCount; }
+
+    // --- Double Top Plate Layout System ---
+
+    // Does the builder have double top plate suggestions ready?
+    bool HasDoubleTopPlateSuggestions() const { return DoubleTopPlateSuggestions.Num() > 0 && PlacedDoubleTopPlateCount < DoubleTopPlateSuggestions.Num(); }
+
+    // Get the next double top plate suggestion (first unplaced)
+    FDoubleTopPlateSuggestion GetNextDoubleTopPlateSuggestion() const;
+
+    // Apply a double top plate suggestion: sets position, rotation, length
+    bool ApplyDoubleTopPlateSuggestion(ADoubleTopPlate* Plate);
+
+    // Get all double top plate suggestions
+    TArray<FDoubleTopPlateSuggestion> GetDoubleTopPlateSuggestions() const { return DoubleTopPlateSuggestions; }
+
+    // How many double top plates have been placed
+    int32 GetPlacedDoubleTopPlateCount() const { return PlacedDoubleTopPlateCount; }
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -402,5 +502,31 @@ private:
     // Placed bottom plates (tracked for stud layout calculation)
     UPROPERTY()
     TArray<ABottomPlate*> PlacedBottomPlates;
+
+    // --- Top Plate Layout ---
+
+    // Calculate top plate positions after all studs are placed
+    void CalculateTopPlateLayout();
+
+    // Top plate suggestions (one per bottom plate, mirrors its position at stud-top height)
+    TArray<FTopPlateSuggestion> TopPlateSuggestions;
+
+    // Number of top plates placed so far
+    int32 PlacedTopPlateCount;
+
+    // Placed top plates (tracked for double top plate layout)
+    UPROPERTY()
+    TArray<ATopPlate*> PlacedTopPlates;
+
+    // --- Double Top Plate Layout ---
+
+    // Calculate double top plate positions after all top plates are placed
+    void CalculateDoubleTopPlateLayout();
+
+    // Double top plate suggestions (one per top plate, with overlap on alternating walls)
+    TArray<FDoubleTopPlateSuggestion> DoubleTopPlateSuggestions;
+
+    // Number of double top plates placed so far
+    int32 PlacedDoubleTopPlateCount;
 
 };

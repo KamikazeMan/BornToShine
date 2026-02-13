@@ -74,6 +74,8 @@ protected:
 	void CreateWallStudRules();
 	void CreateCornerPostRules();
 	void CreateDoorFrameRules();
+	void CreateTopPlateRules();
+	void CreateDoubleTopPlateRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(
