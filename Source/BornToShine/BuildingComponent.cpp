@@ -486,6 +486,15 @@ void UBuildingComponent::PlaceCurrentPiece()
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Joist placed via suggestion (Total: %d)"), PlacedPieces.Num());
 			return;
 		}
+		else if (Joist)
+		{
+			// Overlap skip — show red flash at overlap position then respawn
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Joist skipped (overlap), respawning"));
+			return;
+		}
 	}
 
 	// PLATE SUGGESTION PATH: When plate suggestions exist and we're placing a wall plate,
@@ -503,6 +512,15 @@ void UBuildingComponent::PlaceCurrentPiece()
 			SpawnPreviewPiece();
 
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Bottom plate placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+		else if (Plate)
+		{
+			// Overlap skip — show red flash at overlap position then respawn
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Plate skipped (overlap), respawning"));
 			return;
 		}
 	}
@@ -525,6 +543,15 @@ void UBuildingComponent::PlaceCurrentPiece()
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Wall stud placed via suggestion (Total: %d)"), PlacedPieces.Num());
 			return;
 		}
+		else if (Stud)
+		{
+			// Overlap skip — show red flash at overlap position then respawn
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Stud skipped (overlap), respawning"));
+			return;
+		}
 	}
 
 	// TOP PLATE SUGGESTION PATH: When top plate suggestions exist and we're placing a top plate,
@@ -543,6 +570,15 @@ void UBuildingComponent::PlaceCurrentPiece()
 			SpawnPreviewPiece();
 
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Top plate placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+		else if (TopPlateActor)
+		{
+			// Overlap skip — show red flash at overlap position then respawn
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Top plate skipped (overlap), respawning"));
 			return;
 		}
 	}
@@ -565,6 +601,15 @@ void UBuildingComponent::PlaceCurrentPiece()
 			SpawnPreviewPiece();
 
 			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Board placed via RectangleBuilder suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+		else if (RimBoard)
+		{
+			// Overlap skip — existing board was reused, show red flash then respawn
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Rim board skipped (overlap), state advanced, respawning"));
 			return;
 		}
 	}

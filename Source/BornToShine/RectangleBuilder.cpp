@@ -511,9 +511,61 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     // Skip if existing rim board already at this position
     if (OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position))
     {
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping board suggestion — overlaps existing rim board at (%.1f, %.1f, %.1f)"),
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Board suggestion overlaps existing — reusing existing board at (%.1f, %.1f, %.1f)"),
             Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
+
+        // Find the existing board and track it so the state machine advances
+        if (AConstructionPhaseManager::Instance)
+        {
+            TArray<ABuildablePiece*> ExistingBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
+            ARimBoard* ExistingBoard = nullptr;
+            float BestDist = FLT_MAX;
+            for (ABuildablePiece* Piece : ExistingBoards)
+            {
+                if (!Piece) continue;
+                float Dist = FVector::Dist(Piece->GetActorLocation(), Suggestion.Position);
+                if (Dist < 15.0f && Dist < BestDist)
+                {
+                    ExistingBoard = Cast<ARimBoard>(Piece);
+                    BestDist = Dist;
+                }
+            }
+
+            if (ExistingBoard)
+            {
+                TrackedBoards.AddUnique(ExistingBoard);
+                UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Registered existing board [%s], TrackedBoards=%d"),
+                    *ExistingBoard->GetName(), TrackedBoards.Num());
+            }
+        }
+
         CurrentSuggestions.RemoveAt(0);
+
+        // Manually advance state (bypasses AreConnectedAtCorner socket check)
+        int32 N = TrackedBoards.Num();
+        if (N == 3)
+        {
+            CurrentState = ERectangleState::UShape;
+            FBoardSuggestion Sug4 = CalculateFourthBoardSuggestion(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2]);
+            if (Sug4.bIsValid)
+            {
+                CurrentSuggestions.Add(Sug4);
+            }
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Advanced to UShape (board 3 reused), suggesting board 4"));
+        }
+        else if (N >= 4)
+        {
+            CurrentState = ERectangleState::Complete;
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Rectangle COMPLETE (board reused). Calculating layouts."));
+            CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
+            CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
+            TrackedBoards.Empty();
+            CurrentState = ERectangleState::None;
+        }
+
+        // Position preview at overlap location for red feedback (caller will SetLifeSpan)
+        Board->SetActorLocation(Suggestion.Position);
+        Board->SetActorRotation(Suggestion.Rotation);
         return false;
     }
 
@@ -789,18 +841,29 @@ bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
     if (!Joist || !HasJoistSuggestions()) return false;
 
     // Skip suggestions that overlap with existing joists
+    FVector LastSkipPos = FVector::ZeroVector;
+    FRotator LastSkipRot = FRotator::ZeroRotator;
+    bool bAnySkipped = false;
     while (PlacedJoistCount < JoistSuggestions.Num())
     {
         FJoistSuggestion& NextSug = JoistSuggestions[PlacedJoistCount];
         if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::FloorJoist, NextSug.Position))
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping joist %d — overlaps existing joist"), PlacedJoistCount);
+            LastSkipPos = NextSug.Position;
+            LastSkipRot = NextSug.Rotation;
+            bAnySkipped = true;
             PlacedJoistCount++;
             continue;
         }
         break;
     }
-    if (PlacedJoistCount >= JoistSuggestions.Num()) return false;
+    if (PlacedJoistCount >= JoistSuggestions.Num())
+    {
+        // All remaining skipped — position piece for red feedback
+        if (bAnySkipped) { Joist->SetActorLocation(LastSkipPos); Joist->SetActorRotation(LastSkipRot); }
+        return false;
+    }
 
     FJoistSuggestion Suggestion = GetNextJoistSuggestion();
     if (!Suggestion.bIsValid) return false;
@@ -982,6 +1045,9 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
     if (!Plate || !HasPlateSuggestions()) return false;
 
     // Skip suggestions that overlap with existing bottom plates
+    FVector LastSkipPos = FVector::ZeroVector;
+    FRotator LastSkipRot = FRotator::ZeroRotator;
+    bool bAnySkipped = false;
     while (PlacedPlateCount < PlateSuggestions.Num())
     {
         FPlateSuggestion& NextSug = PlateSuggestions[PlacedPlateCount];
@@ -989,6 +1055,9 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
                 PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            LastSkipPos = NextSug.Position;
+            LastSkipRot = NextSug.Rotation;
+            bAnySkipped = true;
             PlacedPlateCount++;
             continue;
         }
@@ -997,6 +1066,7 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
     if (PlacedPlateCount >= PlateSuggestions.Num())
     {
         // All remaining plates were skipped — trigger next phase
+        if (bAnySkipped) { Plate->SetActorLocation(LastSkipPos); Plate->SetActorRotation(LastSkipRot); }
         CalculateStudLayout();
         return false;
     }
@@ -1156,6 +1226,9 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
     if (!HasStudSuggestions()) return false;
 
     // Skip suggestions that overlap with existing wall studs
+    FVector LastSkipPos = FVector::ZeroVector;
+    FRotator LastSkipRot = FRotator::ZeroRotator;
+    bool bAnySkipped = false;
     while (PlacedStudCount < StudSuggestions.Num())
     {
         FStudSuggestion& NextSug = StudSuggestions[PlacedStudCount];
@@ -1163,6 +1236,9 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping stud %d — overlaps existing stud at (%.1f, %.1f, %.1f)"),
                 PlacedStudCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            LastSkipPos = NextSug.Position;
+            LastSkipRot = NextSug.Rotation;
+            bAnySkipped = true;
             PlacedStudCount++;
             continue;
         }
@@ -1171,6 +1247,7 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
     if (PlacedStudCount >= StudSuggestions.Num())
     {
         // All remaining studs were skipped — trigger next phase
+        if (bAnySkipped) { Stud->SetActorLocation(LastSkipPos); Stud->SetActorRotation(LastSkipRot); }
         CalculateTopPlateLayout();
         return false;
     }
@@ -1395,20 +1472,30 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
     if (!Plate || !HasTopPlateSuggestions()) return false;
 
     // Skip suggestions that overlap with existing top plates
-    EPieceType CheckType = EPieceType::TopPlate; // covers both first and double top plates
+    FVector LastSkipPos = FVector::ZeroVector;
+    FRotator LastSkipRot = FRotator::ZeroRotator;
+    bool bAnySkipped = false;
     while (PlacedTopPlateCount < TopPlateSuggestions.Num())
     {
         FTopPlateSuggestion& NextSug = TopPlateSuggestions[PlacedTopPlateCount];
-        if (NextSug.bIsValid && OverlapsExistingPiece(CheckType, NextSug.Position))
+        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::TopPlate, NextSug.Position))
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
                 PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            LastSkipPos = NextSug.Position;
+            LastSkipRot = NextSug.Rotation;
+            bAnySkipped = true;
             PlacedTopPlateCount++;
             continue;
         }
         break;
     }
-    if (PlacedTopPlateCount >= TopPlateSuggestions.Num()) return false;
+    if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
+    {
+        // All remaining top plates were skipped — position for red feedback
+        if (bAnySkipped) { Plate->SetActorLocation(LastSkipPos); Plate->SetActorRotation(LastSkipRot); }
+        return false;
+    }
 
     FTopPlateSuggestion Suggestion = GetNextTopPlateSuggestion();
     if (!Suggestion.bIsValid) return false;
