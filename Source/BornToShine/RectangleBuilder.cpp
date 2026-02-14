@@ -1585,11 +1585,8 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
         Plate->NailInPlace();
     }
 
-    // Extend mesh for flush corners — first top plates only (not double)
-    if (!Suggestion.bIsDoubleTopPlate)
-    {
-        Plate->ExtendMeshForFlushCorners();
-    }
+    // Extend mesh for flush corners — both first and double top plates
+    Plate->ExtendMeshForFlushCorners();
 
     // Register with PhaseManager
     if (AConstructionPhaseManager::Instance)

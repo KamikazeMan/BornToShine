@@ -1070,7 +1070,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						// Socket.LocalPosition.Z is the door frame mesh bottom (negative).
 						// Yaw-only rotation doesn't change Z, so SocketWorldOffset.Z = Socket.LocalPosition.Z.
 						CandidateLocation.Z = PlywoodTopZ - Socket.LocalPosition.Z;
-						CandidateLocation.Z -= 3.81f; // Lower by one plate thickness (1.5")
 
 						UE_LOG(LogTemp, Log,
 							TEXT("DoorFrame Z-fix: PlywoodTopZ=%.2f SocketLocalZ=%.2f → ActorZ=%.2f"),
