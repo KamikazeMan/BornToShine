@@ -279,7 +279,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 
 			// Recalculate Z from actual plywood top surface (suggestion Z was estimated before plywood existed)
 			FVector PreviewPos = PlateSug.Position;
-			const float PlateHalfHeight = 8.89f / 2.0f;
+			const float PlateHalfHeight = 3.81f / 2.0f; // 1.5" / 2 — 2x4 lies flat
 			if (AConstructionPhaseManager::Instance)
 			{
 				TArray<ABuildablePiece*> PlywoodPieces =
@@ -290,7 +290,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 				{
 					APlywoodSheet* Ply = Cast<APlywoodSheet>(P);
 					if (!Ply) continue;
-					float TopZ = Ply->GetActorLocation().Z - Ply->SheetThickness / 2.0f;
+					float TopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
 					if (!bFoundPly || TopZ > BestPlywoodTopZ)
 					{
 						BestPlywoodTopZ = TopZ;

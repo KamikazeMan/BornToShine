@@ -1115,6 +1115,12 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
                 ABottomPlate* ExPlate = Cast<ABottomPlate>(Piece);
                 if (!ExPlate) continue;
 
+                // Only consider plates that are roughly parallel (same wall line).
+                // Perpendicular plates at corners must NOT trigger overlap.
+                FVector ExFwd = ExPlate->GetActorRotation().RotateVector(FVector::ForwardVector);
+                float AlignDot = FMath::Abs(FVector::DotProduct(SugFwd, ExFwd));
+                if (AlignDot < 0.7f) continue; // cos(45°) ≈ 0.707 — skip perpendicular plates
+
                 FVector Delta = ExPlate->GetActorLocation() - NextSug.Position;
                 Delta.Z = 0.0f;
 
