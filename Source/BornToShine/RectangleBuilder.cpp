@@ -1062,6 +1062,32 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
                 PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+
+            // Find the existing plate and add it to PlacedBottomPlates so downstream
+            // layouts (studs, top plates) still reference all 4 walls.
+            if (AConstructionPhaseManager::Instance)
+            {
+                TArray<ABuildablePiece*> ExistingPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallPlate);
+                ABottomPlate* ExistingPlate = nullptr;
+                float BestDist = FLT_MAX;
+                for (ABuildablePiece* Piece : ExistingPlates)
+                {
+                    if (!Piece) continue;
+                    float Dist = FVector::Dist(Piece->GetActorLocation(), NextSug.Position);
+                    if (Dist < 15.0f && Dist < BestDist)
+                    {
+                        ExistingPlate = Cast<ABottomPlate>(Piece);
+                        BestDist = Dist;
+                    }
+                }
+                if (ExistingPlate)
+                {
+                    PlacedBottomPlates.AddUnique(ExistingPlate);
+                    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Reusing existing plate '%s' for wall %d"),
+                        *ExistingPlate->GetName(), PlacedPlateCount);
+                }
+            }
+
             LastSkipPos = NextSug.Position;
             LastSkipRot = NextSug.Rotation;
             bAnySkipped = true;

@@ -350,11 +350,9 @@ void UBuildingComponent::UpdatePreviewPosition()
 				{
 					PreviewTopPlate->SetBoardLengthCm(TopPlateSug.LengthCm);
 				}
-				// Extend mesh for flush corners on first plates (idempotent when already extended)
-				if (!TopPlateSug.bIsDoubleTopPlate)
-				{
-					PreviewTopPlate->ExtendMeshForFlushCorners();
-				}
+				// NOTE: Do NOT call ExtendMeshForFlushCorners here in preview.
+				// Extension is applied once during ApplyTopPlateSuggestion to avoid
+				// double-extend (scale compounding from 1.0156 → 1.0315).
 			}
 
 			CurrentPreviewPiece->SetActorLocation(TopPlateSug.Position);

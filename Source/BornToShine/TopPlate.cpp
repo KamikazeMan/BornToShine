@@ -149,6 +149,8 @@ void ATopPlate::SetBoardLengthFeet(int32 LengthInFeet)
 		float OldLength = BoardLength;
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f;
+
+		// Reset extension flag — mesh is being rescaled to a new base length
 		bMeshExtended = false;
 
 		if (MeshComponent && OldLength > 0.0f)
@@ -170,6 +172,12 @@ void ATopPlate::SetBoardLengthCm(float LengthCm)
 	const float MinCm = MinLengthFeet * 30.48f;
 	const float MaxCm = MaxLengthFeet * 30.48f;
 	LengthCm = FMath::Clamp(LengthCm, MinCm, MaxCm);
+
+	// Early return if length hasn't changed — avoids resetting bMeshExtended
+	if (FMath::IsNearlyEqual(LengthCm, BoardLength, 0.01f))
+	{
+		return;
+	}
 
 	float OldLength = BoardLength;
 	BoardLength = LengthCm;
