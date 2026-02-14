@@ -1052,7 +1052,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Door frame Z correction.
 			// The door frame sits on the PLYWOOD, not on top of the plate,
 			// because the plate section under the door gets removed.
-			// First align to plate top (same as corner post), then drop 1.5" (3.81cm).
+			// Use CalcBounds to find the plate's actual mesh bottom (= plywood top)
+			// and position the door frame bottom there.
 			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
@@ -1060,22 +1061,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				if (const ABottomPlate* Plate = Cast<const ABottomPlate>(TargetPiece))
 				{
 					UStaticMeshComponent* PlateMesh = Plate->GetMeshComponent();
-					if (PlateMesh && PlateMesh->GetStaticMesh())
+					if (PlateMesh)
 					{
-						FBoxSphereBounds PB = PlateMesh->GetStaticMesh()->GetBounds();
-						float PlateRelZ = PlateMesh->GetRelativeLocation().Z;
-						float PlateActualTopZ = (PB.Origin.Z + PB.BoxExtent.Z) + PlateRelZ;
-						float SocketTopZ = Plate->BoardHeight / 2.0f;
-						float ZFix = PlateActualTopZ - SocketTopZ;
-						CandidateLocation.Z += ZFix;
+						FBoxSphereBounds PWB = PlateMesh->CalcBounds(PlateMesh->GetComponentTransform());
+						float PlywoodTopZ = PWB.Origin.Z - PWB.BoxExtent.Z; // plate mesh bottom = plywood top
 
-						// Drop 1.5" to sit on plywood (plate gets removed under door)
-						const float PlateThickness = 3.81f; // 1.5 inches
-						CandidateLocation.Z -= PlateThickness;
+						// Override Z so door frame bottom sits at plywood top.
+						// Socket.LocalPosition.Z is the door frame mesh bottom (negative).
+						// Yaw-only rotation doesn't change Z, so SocketWorldOffset.Z = Socket.LocalPosition.Z.
+						CandidateLocation.Z = PlywoodTopZ - Socket.LocalPosition.Z;
 
 						UE_LOG(LogTemp, Log,
-							TEXT("DoorFrame Z-fix: PlateTopZ=%.2f SocketTop=%.2f ZFix=%.2f -1.5\"=%.2f → FinalZ=%.2f"),
-							PlateActualTopZ, SocketTopZ, ZFix, PlateThickness, CandidateLocation.Z);
+							TEXT("DoorFrame Z-fix: PlywoodTopZ=%.2f SocketLocalZ=%.2f → ActorZ=%.2f"),
+							PlywoodTopZ, Socket.LocalPosition.Z, CandidateLocation.Z);
 					}
 				}
 			}

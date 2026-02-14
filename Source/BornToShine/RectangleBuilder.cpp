@@ -1479,7 +1479,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
     // ---------------------------------------------------------------
     // Phase 2: Double top plates (suggestions N..2N-1)
     // Sit on top of first top plates: center Z = firstPlateZ + plateHeight
-    // Overlap: walls 0 & 2 extend 3.5" past each end, walls 1 & 3 don't.
+    // Overlap: walls 1 & 3 extend 3.5" past each end (perpendicular tie),
+    // walls 0 & 2 stay same length as first plates.
     // ---------------------------------------------------------------
     for (int32 i = 0; i < PlacedBottomPlates.Num(); i++)
     {
@@ -1488,7 +1489,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         float DblPlateZ = FirstTopPlatePositions[i].Z + PlateHeight;
 
-        bool bHasOverlap = (i == 0 || i == 2);
+        bool bHasOverlap = (i == 1 || i == 3);
         float BaseLengthCm = BotPlate->GetBoardLengthFeet() * 30.48f;
         float DblPlateLengthCm = bHasOverlap ? (BaseLengthCm + 2.0f * OverlapCm) : BaseLengthCm;
 
