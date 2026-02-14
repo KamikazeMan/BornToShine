@@ -1133,7 +1133,7 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
             APlywoodSheet* Ply = Cast<APlywoodSheet>(Piece);
             if (!Ply) continue;
 
-            float PlyTopZ = Ply->GetActorLocation().Z - Ply->SheetThickness / 2.0f;
+            float PlyTopZ = Ply->GetActorLocation().Z + Ply->SheetThickness / 2.0f;
 
             if (!bFoundPlywood || PlyTopZ > BestPlywoodTopZ)
             {
@@ -1525,24 +1525,43 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
 {
     if (!Plate || !HasTopPlateSuggestions()) return false;
 
-    // Skip suggestions that overlap with existing top plates
+    // Skip suggestions that overlap with existing top plates.
+    // Use XY + Z-layer check so double plates (same XY, different Z)
+    // don't falsely overlap the first plates 3.81cm below.
     FVector LastSkipPos = FVector::ZeroVector;
     FRotator LastSkipRot = FRotator::ZeroRotator;
     bool bAnySkipped = false;
     while (PlacedTopPlateCount < TopPlateSuggestions.Num())
     {
         FTopPlateSuggestion& NextSug = TopPlateSuggestions[PlacedTopPlateCount];
-        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::TopPlate, NextSug.Position))
+        if (!NextSug.bIsValid) break;
+
+        // Check overlap: same XY (within 15cm) AND same Z layer (within 2cm)
+        bool bOverlaps = false;
+        if (AConstructionPhaseManager::Instance)
         {
-            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
-                PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
-            LastSkipPos = NextSug.Position;
-            LastSkipRot = NextSug.Rotation;
-            bAnySkipped = true;
-            PlacedTopPlateCount++;
-            continue;
+            TArray<ABuildablePiece*> Existing = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+            for (ABuildablePiece* Piece : Existing)
+            {
+                if (!Piece) continue;
+                FVector ExistPos = Piece->GetActorLocation();
+                float DXY = FVector::Dist2D(ExistPos, NextSug.Position);
+                float DZ = FMath::Abs(ExistPos.Z - NextSug.Position.Z);
+                if (DXY < 15.0f && DZ < 2.0f)
+                {
+                    bOverlaps = true;
+                    break;
+                }
+            }
         }
-        break;
+        if (!bOverlaps) break; // no overlap → place this one
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
+            PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+        LastSkipPos = NextSug.Position;
+        LastSkipRot = NextSug.Rotation;
+        bAnySkipped = true;
+        PlacedTopPlateCount++;
     }
     if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
     {
