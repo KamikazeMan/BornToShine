@@ -1565,8 +1565,11 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
     if (!Plate || !HasTopPlateSuggestions()) return false;
 
     // Skip suggestions that overlap with existing top plates.
-    // Use XY + Z-layer check so double plates (same XY, different Z)
-    // don't falsely overlap the first plates 3.81cm below.
+    // Uses bounds-aware overlap (1D extent along wall) so that top plates
+    // on shared walls are detected even when the suggestion center doesn't
+    // match the existing plate center (e.g. when calculated from a door
+    // frame remnant plate). Z-layer check distinguishes first plates from
+    // double plates (3.81cm apart).
     FVector LastSkipPos = FVector::ZeroVector;
     FRotator LastSkipRot = FRotator::ZeroRotator;
     bool bAnySkipped = false;
@@ -1575,18 +1578,39 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
         FTopPlateSuggestion& NextSug = TopPlateSuggestions[PlacedTopPlateCount];
         if (!NextSug.bIsValid) break;
 
-        // Check overlap: same XY (within 15cm) AND same Z layer (within 2cm)
+        // Bounds-aware overlap: check if any existing top plate's extent
+        // along the wall overlaps with this suggestion's extent.
         bool bOverlaps = false;
         if (AConstructionPhaseManager::Instance)
         {
             TArray<ABuildablePiece*> Existing = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+            FVector SugFwd = NextSug.Rotation.RotateVector(FVector::ForwardVector);
+            FVector SugRgt = NextSug.Rotation.RotateVector(FVector::RightVector);
+            float SugHalfLen = NextSug.LengthCm / 2.0f;
+
             for (ABuildablePiece* Piece : Existing)
             {
                 if (!Piece) continue;
+                ATopPlate* ExPlate = Cast<ATopPlate>(Piece);
+                if (!ExPlate) continue;
+
                 FVector ExistPos = Piece->GetActorLocation();
-                float DXY = FVector::Dist2D(ExistPos, NextSug.Position);
+
+                // Z-layer check: must be same layer (within 2cm)
                 float DZ = FMath::Abs(ExistPos.Z - NextSug.Position.Z);
-                if (DXY < 15.0f && DZ < 2.0f)
+                if (DZ > 2.0f) continue;
+
+                FVector Delta = ExistPos - NextSug.Position;
+                Delta.Z = 0.0f;
+
+                // Perpendicular distance (must be on same wall line)
+                float PerpDist = FMath::Abs(FVector::DotProduct(Delta, SugRgt));
+                if (PerpDist > 15.0f) continue;
+
+                // 1D overlap along wall: |center_dist| < halfLen_A + halfLen_B
+                float AlongDist = FMath::Abs(FVector::DotProduct(Delta, SugFwd));
+                float ExHalfLen = ExPlate->BoardLength / 2.0f;
+                if (AlongDist < SugHalfLen + ExHalfLen)
                 {
                     bOverlaps = true;
                     break;
