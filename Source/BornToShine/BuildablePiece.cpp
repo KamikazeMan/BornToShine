@@ -1129,15 +1129,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// --- Duplicate overlap check ---
 			// When building adjacent to an existing structure, skip candidates
 			// where a piece of the same type already exists at the snap location.
-			// Only applies to piece types that can double up on shared walls.
+			// Prevents doubling on shared walls (plates, studs, posts, rim boards).
 			if (AConstructionPhaseManager::Instance &&
-				(PieceType == EPieceType::WallPlate ||
+				(PieceType == EPieceType::RimBoard ||
+				 PieceType == EPieceType::WallPlate ||
 				 PieceType == EPieceType::WallStud ||
 				 PieceType == EPieceType::CornerPost ||
 				 PieceType == EPieceType::TopPlate ||
 				 PieceType == EPieceType::DoubleTopPlate))
 			{
-				const float OverlapTolerance = 5.0f; // cm
+				// 15cm tolerance — wide enough to catch flush-offset duplicates
+				// but narrow enough to not skip adjacent studs (16" = 40.6cm apart)
+				const float OverlapTolerance = 15.0f; // cm
 				float OverlapToleranceSq = OverlapTolerance * OverlapTolerance;
 				bool bOverlapsExisting = false;
 
@@ -1152,6 +1155,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (DistSq < OverlapToleranceSq)
 						{
 							bOverlapsExisting = true;
+							UE_LOG(LogTemp, Log,
+								TEXT("Overlap skip: %s at (%.1f,%.1f,%.1f) blocked by existing %s at (%.1f,%.1f,%.1f) dist=%.1fcm"),
+								*UEnum::GetValueAsString(PieceType),
+								CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z,
+								*Existing->GetName(),
+								Existing->GetActorLocation().X, Existing->GetActorLocation().Y, Existing->GetActorLocation().Z,
+								FMath::Sqrt(DistSq));
 							break;
 						}
 					}
