@@ -50,6 +50,26 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
 {
     if (!Board) return;
 
+    // First board of a new rectangle — clear all stale layout data
+    // from the previous rectangle so it doesn't interfere.
+    if (TrackedBoards.Num() == 0)
+    {
+        ClearGhostPreviews();
+        JoistSuggestions.Empty();
+        PlacedJoistCount = 0;
+        ThroughBoard1 = nullptr;
+        ThroughBoard3 = nullptr;
+        PlateSuggestions.Empty();
+        PlacedPlateCount = 0;
+        PlacedBottomPlates.Empty();
+        StudSuggestions.Empty();
+        PlacedStudCount = 0;
+        TopPlateSuggestions.Empty();
+        PlacedTopPlateCount = 0;
+        PlacedTopPlates.Empty();
+        CompletedRimBoards.Empty();
+    }
+
     TrackedBoards.AddUnique(Board);
     RecalculateState();
 
