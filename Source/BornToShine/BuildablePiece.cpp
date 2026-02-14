@@ -1126,6 +1126,43 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateRotation.Yaw);
 			}
 
+			// --- Duplicate overlap check ---
+			// When building adjacent to an existing structure, skip candidates
+			// where a piece of the same type already exists at the snap location.
+			// Only applies to piece types that can double up on shared walls.
+			if (AConstructionPhaseManager::Instance &&
+				(PieceType == EPieceType::WallPlate ||
+				 PieceType == EPieceType::WallStud ||
+				 PieceType == EPieceType::CornerPost ||
+				 PieceType == EPieceType::TopPlate ||
+				 PieceType == EPieceType::DoubleTopPlate))
+			{
+				const float OverlapTolerance = 5.0f; // cm
+				float OverlapToleranceSq = OverlapTolerance * OverlapTolerance;
+				bool bOverlapsExisting = false;
+
+				TArray<ABuildablePiece*> SameTypePieces =
+					AConstructionPhaseManager::Instance->GetPiecesOfType(PieceType);
+
+				for (ABuildablePiece* Existing : SameTypePieces)
+				{
+					if (Existing && Existing != this)
+					{
+						float DistSq = FVector::DistSquared(Existing->GetActorLocation(), CandidateLocation);
+						if (DistSq < OverlapToleranceSq)
+						{
+							bOverlapsExisting = true;
+							break;
+						}
+					}
+				}
+
+				if (bOverlapsExisting)
+				{
+					continue; // Skip this candidate — a piece already exists here
+				}
+			}
+
 			Candidates.Add(Candidate);
 		}
 	}
