@@ -225,23 +225,44 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		SnappedToPiece ? *SnappedToPiece->GetName() : TEXT("null"),
 		OrigPlate ? *OrigPlate->GetName() : TEXT("null"));
 
-	// Fallback: search nearby if snap reference isn't a plate
+	// Fallback: search nearby if snap reference isn't a plate.
+	// Must check BOTH through-wall distance AND that the door center
+	// falls within the plate's length to avoid picking a plate from
+	// a completely different wall.
 	if (!OrigPlate)
 	{
 		TArray<ABuildablePiece*> Nearby =
 			AConstructionPhaseManager::Instance->GetNearbyPieces(DoorLoc, 500.0f);
+		float BestPlateDist = FLT_MAX;
 		for (ABuildablePiece* P : Nearby)
 		{
 			ABottomPlate* Plate = Cast<ABottomPlate>(P);
 			if (!Plate) continue;
 			FVector Delta = Plate->GetActorLocation() - DoorLoc;
 			Delta.Z = 0.0f;
-			if (FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall)) < DepthTolerance)
+
+			// Check through-wall distance (perpendicular to door frame)
+			float ThroughDist = FMath::Abs(FVector::DotProduct(Delta, DoorThroughWall));
+			if (ThroughDist >= DepthTolerance) continue;
+
+			// Check along-plate distance: door center must fall within the plate's length
+			FVector PlateDir = Plate->GetActorRotation().RotateVector(FVector::ForwardVector);
+			float AlongDist = FMath::Abs(FVector::DotProduct(Delta, PlateDir));
+			float PlateHalf = Plate->BoardLength / 2.0f;
+			if (AlongDist > PlateHalf) continue;
+
+			// Pick closest plate
+			float TotalDist = Delta.Size();
+			if (TotalDist < BestPlateDist)
 			{
+				BestPlateDist = TotalDist;
 				OrigPlate = Plate;
-				UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Fallback found plate %s"), *Plate->GetName());
-				break;
 			}
+		}
+		if (OrigPlate)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("DoorFrame: Fallback found plate %s (dist=%.1f)"),
+				*OrigPlate->GetName(), BestPlateDist);
 		}
 	}
 
@@ -261,10 +282,22 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 	// Plate forward axis (along its length)
 	FVector PlateForward = PlateRot.RotateVector(FVector::ForwardVector);
 
-	// Project door centre onto plate axis (signed offset from plate centre)
+	// Project door centre onto plate axis (signed offset from plate centre).
+	// DeltaDP is relative to the plate, so DoorCentreOnPlate is bounded by ±PlateHalfLen.
 	FVector DeltaDP = DoorLoc - PlatePos;
 	DeltaDP.Z = 0.0f;
 	float DoorCentreOnPlate = FVector::DotProduct(DeltaDP, PlateForward);
+
+	// Sanity check: clamp offset to plate bounds
+	if (FMath::Abs(DoorCentreOnPlate) > PlateHalfLen)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("DoorFrame: DoorOffset=%.1f exceeds PlateHalfLen=%.1f! "
+			     "DoorLoc=(%.1f,%.1f) PlatePos=(%.1f,%.1f) PlateYaw=%.1f — clamping"),
+			DoorCentreOnPlate, PlateHalfLen,
+			DoorLoc.X, DoorLoc.Y, PlatePos.X, PlatePos.Y, PlateRot.Yaw);
+		DoorCentreOnPlate = FMath::Clamp(DoorCentreOnPlate, -PlateHalfLen, PlateHalfLen);
+	}
 
 	// Remnant lengths on each side of the opening (uses RoughOpeningWidth, NOT full frame)
 	float LeftLength  = PlateHalfLen + DoorCentreOnPlate - PlateHalfCut;

@@ -637,6 +637,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			TargetPiece,
 			TargetSocketName))
 		{
+			// Door frames ONLY snap to bottom plates — ignore top plates,
+			// studs, and everything else so the frame always anchors to
+			// the correct plate for the Z correction and plate split.
+			if (PieceType == EPieceType::DoorFrame && TargetPiece &&
+				TargetPiece->GetPieceType() != EPieceType::WallPlate)
+			{
+				UE_LOG(LogTemp, Log,
+					TEXT("DoorFrame snap filter: REJECTED target %s (type %d) — only WallPlate accepted"),
+					*TargetPiece->GetName(), (int32)TargetPiece->GetPieceType());
+				continue;
+			}
+
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
