@@ -1064,50 +1064,78 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
 {
     if (!Plate || !HasPlateSuggestions()) return false;
 
-    // Skip suggestions that overlap with existing bottom plates
+    // Skip suggestions that overlap with existing bottom plates.
+    // Uses bounds-aware overlap (not just center distance) so that
+    // door frame remnant plates — whose centers are offset from the
+    // original plate center — are correctly detected.
     FVector LastSkipPos = FVector::ZeroVector;
     FRotator LastSkipRot = FRotator::ZeroRotator;
     bool bAnySkipped = false;
     while (PlacedPlateCount < PlateSuggestions.Num())
     {
         FPlateSuggestion& NextSug = PlateSuggestions[PlacedPlateCount];
-        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::WallPlate, NextSug.Position))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
-                PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+        if (!NextSug.bIsValid) break;
 
-            // Find the existing plate and add it to PlacedBottomPlates so downstream
-            // layouts (studs, top plates) still reference all 4 walls.
-            if (AConstructionPhaseManager::Instance)
+        // Bounds-aware overlap: check if any existing plate's 1D extent
+        // along the wall overlaps with this suggestion's extent.
+        bool bOverlaps = false;
+        ABottomPlate* ClosestOverlap = nullptr;
+
+        if (AConstructionPhaseManager::Instance)
+        {
+            TArray<ABuildablePiece*> ExistingPlates =
+                AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallPlate);
+            FVector SugFwd = NextSug.Rotation.RotateVector(FVector::ForwardVector);
+            FVector SugRgt = NextSug.Rotation.RotateVector(FVector::RightVector);
+            float SugHalfLen = (NextSug.LengthFeet * 30.48f) / 2.0f;
+            float BestDist = FLT_MAX;
+
+            for (ABuildablePiece* Piece : ExistingPlates)
             {
-                TArray<ABuildablePiece*> ExistingPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallPlate);
-                ABottomPlate* ExistingPlate = nullptr;
-                float BestDist = FLT_MAX;
-                for (ABuildablePiece* Piece : ExistingPlates)
+                ABottomPlate* ExPlate = Cast<ABottomPlate>(Piece);
+                if (!ExPlate) continue;
+
+                FVector Delta = ExPlate->GetActorLocation() - NextSug.Position;
+                Delta.Z = 0.0f;
+
+                // Must be on the same wall line (perpendicular < 15cm)
+                float PerpDist = FMath::Abs(FVector::DotProduct(Delta, SugRgt));
+                if (PerpDist > 15.0f) continue;
+
+                // 1D overlap along wall: two segments overlap when
+                // |center_dist| < halfLen_A + halfLen_B
+                float AlongDist = FMath::Abs(FVector::DotProduct(Delta, SugFwd));
+                float ExHalfLen = ExPlate->BoardLength / 2.0f;
+                if (AlongDist < SugHalfLen + ExHalfLen)
                 {
-                    if (!Piece) continue;
-                    float Dist = FVector::Dist(Piece->GetActorLocation(), NextSug.Position);
-                    if (Dist < 15.0f && Dist < BestDist)
+                    bOverlaps = true;
+                    float TotalDist = Delta.Size();
+                    if (TotalDist < BestDist)
                     {
-                        ExistingPlate = Cast<ABottomPlate>(Piece);
-                        BestDist = Dist;
+                        BestDist = TotalDist;
+                        ClosestOverlap = ExPlate;
                     }
                 }
-                if (ExistingPlate)
-                {
-                    PlacedBottomPlates.AddUnique(ExistingPlate);
-                    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Reusing existing plate '%s' for wall %d"),
-                        *ExistingPlate->GetName(), PlacedPlateCount);
-                }
             }
-
-            LastSkipPos = NextSug.Position;
-            LastSkipRot = NextSug.Rotation;
-            bAnySkipped = true;
-            PlacedPlateCount++;
-            continue;
         }
-        break;
+
+        if (!bOverlaps) break;
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
+            PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+
+        if (ClosestOverlap)
+        {
+            PlacedBottomPlates.AddUnique(ClosestOverlap);
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Reusing existing plate '%s' for wall %d"),
+                *ClosestOverlap->GetName(), PlacedPlateCount);
+        }
+
+        LastSkipPos = NextSug.Position;
+        LastSkipRot = NextSug.Rotation;
+        bAnySkipped = true;
+        PlacedPlateCount++;
+        continue;
     }
     if (PlacedPlateCount >= PlateSuggestions.Num())
     {
