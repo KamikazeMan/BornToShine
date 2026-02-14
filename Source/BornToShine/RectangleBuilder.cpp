@@ -1361,7 +1361,6 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
     const float PlateHeight = 3.81f;              // 1.5" plate VISUAL height (2x4 lies flat)
     const float PlateHalfHeight = PlateHeight / 2.0f; // 1.905cm
-    const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
     // For each wall, find the highest StudTop/PostTop socket world Z
@@ -1479,8 +1478,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
     // ---------------------------------------------------------------
     // Phase 2: Double top plates (suggestions N..2N-1)
     // Sit on top of first top plates: center Z = firstPlateZ + plateHeight
-    // Overlap: walls 1 & 3 extend 3.5" past each end (perpendicular tie),
-    // walls 0 & 2 stay same length as first plates.
+    // Same length as the first top plates (no overlap extension).
     // ---------------------------------------------------------------
     for (int32 i = 0; i < PlacedBottomPlates.Num(); i++)
     {
@@ -1489,9 +1487,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         float DblPlateZ = FirstTopPlatePositions[i].Z + PlateHeight;
 
-        bool bHasOverlap = (i == 1 || i == 3);
         float BaseLengthCm = BotPlate->GetBoardLengthFeet() * 30.48f;
-        float DblPlateLengthCm = bHasOverlap ? (BaseLengthCm + 2.0f * OverlapCm) : BaseLengthCm;
+        float DblPlateLengthCm = BaseLengthCm;
 
         FTopPlateSuggestion Sug;
         Sug.Position = FVector(BotPlate->GetActorLocation().X, BotPlate->GetActorLocation().Y, DblPlateZ);
@@ -1503,10 +1500,10 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
         Sug.bIsValid = true;
         TopPlateSuggestions.Add(Sug);
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: TopPlate[%d] (double) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  overlap=%d"),
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: TopPlate[%d] (double) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm"),
             PlacedBottomPlates.Num() + i,
             Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
-            Sug.Rotation.Yaw, DblPlateLengthCm, bHasOverlap);
+            Sug.Rotation.Yaw, DblPlateLengthCm);
     }
 
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d top plate suggestions (%d first + %d double)"),
