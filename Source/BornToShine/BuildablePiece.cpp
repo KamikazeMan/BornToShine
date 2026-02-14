@@ -1052,49 +1052,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Door frame Z correction.
 			// The door frame sits on the PLYWOOD, not on top of the plate,
 			// because the plate section under the door gets removed.
-			// Find the actual plywood piece and use its top surface Z directly.
+			// Derive the Z from the plate's own geometry: the plate's top-face
+			// socket is at +SocketLocalZ above center, so the plate bottom
+			// (= plywood top) is at center - SocketLocalZ. Position the door
+			// frame so its bottom socket sits at the plate bottom face.
 			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				float PlywoodTopZ = 0.0f;
-				bool bFoundPlywood = false;
-
-				if (AConstructionPhaseManager::Instance)
+				FConstructionSocket* TgtSocket = TargetPiece->GetSocketByName(TargetSocketName);
+				if (TgtSocket)
 				{
-					TArray<ABuildablePiece*> PlywoodPieces =
-						AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Plywood);
-
-					// Find the nearest plywood piece (by XY distance to the target plate)
-					FVector PlatePos = TargetPiece->GetActorLocation();
-					float BestDistSq = FLT_MAX;
-
-					for (ABuildablePiece* PlyPiece : PlywoodPieces)
-					{
-						if (!PlyPiece) continue;
-						UStaticMeshComponent* PlyMesh = PlyPiece->GetMeshComponent();
-						if (!PlyMesh) continue;
-
-						float DistSq = FVector::DistSquared2D(PlyPiece->GetActorLocation(), PlatePos);
-						if (DistSq < BestDistSq)
-						{
-							BestDistSq = DistSq;
-							FBoxSphereBounds PlyBounds = PlyMesh->CalcBounds(PlyMesh->GetComponentTransform());
-							PlywoodTopZ = PlyBounds.Origin.Z + PlyBounds.BoxExtent.Z;
-							bFoundPlywood = true;
-						}
-					}
-				}
-
-				if (bFoundPlywood)
-				{
-					// Override Z so door frame bottom sits at plywood top surface.
-					// Socket.LocalPosition.Z is the door frame mesh bottom (negative).
-					CandidateLocation.Z = PlywoodTopZ - Socket.LocalPosition.Z;
+					float PlateBottomZ = TargetPiece->GetActorLocation().Z - TgtSocket->LocalPosition.Z;
+					CandidateLocation.Z = PlateBottomZ - Socket.LocalPosition.Z;
 
 					UE_LOG(LogTemp, Log,
-						TEXT("DoorFrame Z-fix: PlywoodTopZ=%.2f SocketLocalZ=%.2f -> ActorZ=%.2f (from plywood piece)"),
-						PlywoodTopZ, Socket.LocalPosition.Z, CandidateLocation.Z);
+						TEXT("DoorFrame Z-fix: PlateCenter=%.2f SocketLocalZ=%.2f PlateBottom=%.2f FrameSocketZ=%.2f -> ActorZ=%.2f"),
+						TargetPiece->GetActorLocation().Z, TgtSocket->LocalPosition.Z,
+						PlateBottomZ, Socket.LocalPosition.Z, CandidateLocation.Z);
 				}
 			}
 
