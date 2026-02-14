@@ -1205,8 +1205,7 @@ void URectangleBuilderComponent::CalculateStudLayout()
     }
 
     // Stud height: wall studs self-scale to 247.66cm in BeginPlay (king stud height).
-    // Use the SCALED height so stud center Z is correct and sockets aren't reset.
-    const float DefaultStudHeightCm = 247.66f;
+    const float ScaledStudHalfHeight = 247.66f / 2.0f; // 123.83cm
     const float StudWidthCm = 3.81f; // 1.5" stud width (along wall)
 
     int32 TotalStudIndex = 0;
@@ -1214,6 +1213,15 @@ void URectangleBuilderComponent::CalculateStudLayout()
     for (ABottomPlate* Plate : PlacedBottomPlates)
     {
         if (!Plate) continue;
+
+        // Find the actual plate mesh top Z (bypasses BoardHeight socket mismatch)
+        float PlateMeshTopZ = Plate->GetActorLocation().Z; // fallback
+        if (Plate->GetMeshComponent())
+        {
+            FBoxSphereBounds PBounds = Plate->GetMeshComponent()->CalcBounds(
+                Plate->GetMeshComponent()->GetComponentTransform());
+            PlateMeshTopZ = PBounds.Origin.Z + PBounds.BoxExtent.Z;
+        }
 
         FRotator PlateRotation = Plate->GetActorRotation();
 
@@ -1226,12 +1234,13 @@ void URectangleBuilderComponent::CalculateStudLayout()
 
             FVector SocketWorldPos = Plate->GetActorTransform().TransformPosition(Socket.LocalPosition);
             FVector StudCenter = SocketWorldPos;
-            StudCenter.Z += DefaultStudHeightCm / 2.0f;
+            // Z: stud mesh bottom sits on plate mesh top
+            StudCenter.Z = PlateMeshTopZ + ScaledStudHalfHeight;
 
             FStudSuggestion Sug;
             Sug.Position = StudCenter;
             Sug.Rotation = PlateRotation;
-            Sug.StudHeightCm = DefaultStudHeightCm;
+            Sug.StudHeightCm = ScaledStudHalfHeight * 2.0f;
             Sug.SourcePlate = Plate;
             Sug.PlateSocketName = Socket.SocketName;
             Sug.StudIndex = TotalStudIndex;
