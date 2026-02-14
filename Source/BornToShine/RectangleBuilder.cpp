@@ -700,7 +700,12 @@ void URectangleBuilderComponent::SpawnGhostForSuggestion(const FBoardSuggestion&
         ));
     }
 
-    // Make it translucent
+    // Make it translucent — red if overlapping existing piece, blue if valid
+    bool bGhostOverlaps = OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position);
+    FLinearColor GhostColor = bGhostOverlaps
+        ? FLinearColor(1.0f, 0.0f, 0.0f, 0.4f)   // Red — position is taken
+        : FLinearColor(0.2f, 0.5f, 1.0f, 0.3f);   // Blue — available
+
     if (GhostMaterial)
     {
         MeshComp->SetMaterial(0, GhostMaterial);
@@ -712,7 +717,7 @@ void URectangleBuilderComponent::SpawnGhostForSuggestion(const FBoardSuggestion&
             MeshComp->GetMaterial(0), Ghost);
         if (DynMat)
         {
-            DynMat->SetVectorParameterValue(FName("BaseColor"), FLinearColor(0.2f, 0.5f, 1.0f, 0.3f));
+            DynMat->SetVectorParameterValue(FName("BaseColor"), GhostColor);
             MeshComp->SetMaterial(0, DynMat);
         }
     }
@@ -925,6 +930,7 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
 
     PlateSuggestions.Empty();
     PlacedPlateCount = 0;
+    PlacedBottomPlates.Empty(); // Clear from previous rectangle
 
     // Store all 4 rim boards for reference
     CompletedRimBoards.Empty();

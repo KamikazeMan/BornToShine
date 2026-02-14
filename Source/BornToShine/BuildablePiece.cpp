@@ -1080,6 +1080,23 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
+			// Door frame centering: override XY to center on the plate's midpoint.
+			// The door frame should always be centered on whatever wall it snaps to.
+			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				FVector PlateCenter = TargetPiece->GetActorLocation();
+				float SavedZ = CandidateLocation.Z; // Keep the Z from snap + corrections
+				CandidateLocation.X = PlateCenter.X;
+				CandidateLocation.Y = PlateCenter.Y;
+				CandidateLocation.Z = SavedZ;
+
+				UE_LOG(LogTemp, Log,
+					TEXT("DoorFrame CENTER: Centered on plate [%s] at (%.1f, %.1f) Z=%.1f"),
+					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
+			}
+
 			// Plywood XY alignment: apply pre-computed slot position
 			// (computed once before the loop using frame centroid as origin)
 			if (bHavePlywoodSlot &&
