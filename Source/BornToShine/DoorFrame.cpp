@@ -5,6 +5,7 @@
 #include "WallStud.h"
 #include "BottomPlate.h"
 #include "Components/StaticMeshComponent.h"
+#include "PhysicsEngine/BodySetup.h"
 
 ADoorFrame::ADoorFrame()
 {
@@ -55,6 +56,19 @@ void ADoorFrame::BeginPlay()
 
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
+
+	// Use per-triangle (complex) collision so the door opening is passable.
+	// The default convex hull covers the entire bounding box including the opening.
+	if (MeshComponent && MeshComponent->GetStaticMesh())
+	{
+		UBodySetup* BodySetup = MeshComponent->GetStaticMesh()->GetBodySetup();
+		if (BodySetup)
+		{
+			BodySetup->CollisionTraceFlag = ECollisionTraceFlag::CTF_UseComplexAsSimple;
+			MeshComponent->RecreatePhysicsState();
+			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Set collision to UseComplexAsSimple"));
+		}
+	}
 
 	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === DoorFrame king stud height: %.2fcm (%.2f in)"),
 		FrameHeight, FrameHeight / 2.54f);
@@ -136,8 +150,6 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 			TEXT("DoorFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, FrameOverall=%.2fcm, RoughOpening=%.2fcm"),
 			MeshBottomZ, MeshTopZ, ActualHeight, FrameOverallWidth, RoughOpeningWidth);
 	}
-
-	SetupCollisionBoxes();
 }
 
 // ---------------------------------------------------------------------------
@@ -158,14 +170,14 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// The mesh convex hull covers the door opening — keep it query-only
-	// for snap traces and let the collision boxes block the player instead.
+	// Complex-as-simple was set in BeginPlay — the per-triangle collision
+	// naturally has the door opening so the pawn can walk through.
+	// Super::TryPlace doesn't change collision, so explicitly enable it.
 	if (MeshComponent)
 	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 	}
-	EnableDoorCollision(true);
 
 	return true;
 }
@@ -181,19 +193,8 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 	{
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
-
-		// Override Super's QueryAndPhysics — the mesh convex hull covers the
-		// door opening, so keep it query-only and use collision boxes instead.
-		if (MeshComponent)
-		{
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-		}
-		EnableDoorCollision(true);
-	}
-	else
-	{
-		EnableDoorCollision(false);
+		// Super already sets QueryAndPhysics + pawn block.
+		// Complex-as-simple from BeginPlay ensures the opening is passable.
 	}
 }
 
