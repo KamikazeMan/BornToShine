@@ -148,13 +148,6 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 
 	if (!bIsPreview)
 	{
-		// Door frame must not block pawn movement — player needs to walk through the opening.
-		// Super sets ECR_Block for ECC_Pawn; override to ECR_Ignore for door frames.
-		if (MeshComponent)
-		{
-			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
-		}
-
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
 	}

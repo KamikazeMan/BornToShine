@@ -706,20 +706,15 @@ void URectangleBuilderComponent::SpawnGhostForSuggestion(const FBoardSuggestion&
         ? FLinearColor(1.0f, 0.0f, 0.0f, 0.4f)   // Red — position is taken
         : FLinearColor(0.2f, 0.5f, 1.0f, 0.3f);   // Blue — available
 
-    if (GhostMaterial)
+    UMaterialInterface* BaseMat = GhostMaterial ? GhostMaterial : MeshComp->GetMaterial(0);
+    UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(BaseMat, Ghost);
+    if (DynMat)
     {
-        MeshComp->SetMaterial(0, GhostMaterial);
-    }
-    else
-    {
-        // Create a simple translucent material
-        UMaterialInstanceDynamic* DynMat = UMaterialInstanceDynamic::Create(
-            MeshComp->GetMaterial(0), Ghost);
-        if (DynMat)
-        {
-            DynMat->SetVectorParameterValue(FName("BaseColor"), GhostColor);
-            MeshComp->SetMaterial(0, DynMat);
-        }
+        DynMat->SetVectorParameterValue(FName("BaseColor"), GhostColor);
+        DynMat->SetVectorParameterValue(FName("Base Color"), GhostColor);
+        DynMat->SetVectorParameterValue(FName("Color"), GhostColor);
+        DynMat->SetScalarParameterValue(FName("Opacity"), GhostColor.A);
+        MeshComp->SetMaterial(0, DynMat);
     }
 
     MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -928,9 +923,15 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
 {
     if (!Board1 || !Board2 || !Board3 || !Board4) return;
 
+    // Full state reset for new rectangle — prevent accumulation from previous build
     PlateSuggestions.Empty();
     PlacedPlateCount = 0;
-    PlacedBottomPlates.Empty(); // Clear from previous rectangle
+    PlacedBottomPlates.Empty();
+    StudSuggestions.Empty();
+    PlacedStudCount = 0;
+    TopPlateSuggestions.Empty();
+    PlacedTopPlateCount = 0;
+    PlacedTopPlates.Empty();
 
     // Store all 4 rim boards for reference
     CompletedRimBoards.Empty();
