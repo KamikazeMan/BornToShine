@@ -1204,8 +1204,9 @@ void URectangleBuilderComponent::CalculateStudLayout()
         return;
     }
 
-    // Default stud height: 92-5/8" = 235.27cm
-    const float DefaultStudHeightCm = 235.27f;
+    // Stud height: wall studs self-scale to 247.66cm in BeginPlay (king stud height).
+    // Use the SCALED height so stud center Z is correct and sockets aren't reset.
+    const float DefaultStudHeightCm = 247.66f;
     const float StudWidthCm = 3.81f; // 1.5" stud width (along wall)
 
     int32 TotalStudIndex = 0;
@@ -1288,11 +1289,10 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
     FStudSuggestion Suggestion = StudSuggestions[PlacedStudCount];
     if (!Suggestion.bIsValid) return false;
 
-    // Set stud height if different from default
-    if (!FMath::IsNearlyEqual(Suggestion.StudHeightCm, Stud->GetStudHeightCm(), 0.1f))
-    {
-        Stud->SetStudHeightInches(Suggestion.StudHeightCm / 2.54f);
-    }
+    // NOTE: Do NOT call SetStudHeightInches here. WallStud::BeginPlay
+    // self-scales the mesh to 247.66cm and sets sockets to match.
+    // Calling SetStudHeightInches would reset sockets to the nominal
+    // (unscaled) positions, creating a mismatch with the visual mesh.
 
     // Set position and rotation
     Stud->SetActorLocation(Suggestion.Position);
