@@ -508,6 +508,15 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
 
     FBoardSuggestion Suggestion = GetActiveSuggestion();
 
+    // Skip if existing rim board already at this position
+    if (OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping board suggestion — overlaps existing rim board at (%.1f, %.1f, %.1f)"),
+            Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
+        CurrentSuggestions.RemoveAt(0);
+        return false;
+    }
+
     // 1. Resize to the suggested length
     if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Board->GetBoardLengthFeet())
     {
@@ -779,6 +788,20 @@ bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
 {
     if (!Joist || !HasJoistSuggestions()) return false;
 
+    // Skip suggestions that overlap with existing joists
+    while (PlacedJoistCount < JoistSuggestions.Num())
+    {
+        FJoistSuggestion& NextSug = JoistSuggestions[PlacedJoistCount];
+        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::FloorJoist, NextSug.Position))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping joist %d — overlaps existing joist"), PlacedJoistCount);
+            PlacedJoistCount++;
+            continue;
+        }
+        break;
+    }
+    if (PlacedJoistCount >= JoistSuggestions.Num()) return false;
+
     FJoistSuggestion Suggestion = GetNextJoistSuggestion();
     if (!Suggestion.bIsValid) return false;
 
@@ -958,6 +981,26 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
 {
     if (!Plate || !HasPlateSuggestions()) return false;
 
+    // Skip suggestions that overlap with existing bottom plates
+    while (PlacedPlateCount < PlateSuggestions.Num())
+    {
+        FPlateSuggestion& NextSug = PlateSuggestions[PlacedPlateCount];
+        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::WallPlate, NextSug.Position))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
+                PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            PlacedPlateCount++;
+            continue;
+        }
+        break;
+    }
+    if (PlacedPlateCount >= PlateSuggestions.Num())
+    {
+        // All remaining plates were skipped — trigger next phase
+        CalculateStudLayout();
+        return false;
+    }
+
     FPlateSuggestion Suggestion = GetNextPlateSuggestion();
     if (!Suggestion.bIsValid) return false;
 
@@ -1111,6 +1154,26 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
 {
     if (!Stud) return false;
     if (!HasStudSuggestions()) return false;
+
+    // Skip suggestions that overlap with existing wall studs
+    while (PlacedStudCount < StudSuggestions.Num())
+    {
+        FStudSuggestion& NextSug = StudSuggestions[PlacedStudCount];
+        if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::WallStud, NextSug.Position))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping stud %d — overlaps existing stud at (%.1f, %.1f, %.1f)"),
+                PlacedStudCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            PlacedStudCount++;
+            continue;
+        }
+        break;
+    }
+    if (PlacedStudCount >= StudSuggestions.Num())
+    {
+        // All remaining studs were skipped — trigger next phase
+        CalculateTopPlateLayout();
+        return false;
+    }
 
     FStudSuggestion Suggestion = StudSuggestions[PlacedStudCount];
     if (!Suggestion.bIsValid) return false;
@@ -1331,6 +1394,22 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
 {
     if (!Plate || !HasTopPlateSuggestions()) return false;
 
+    // Skip suggestions that overlap with existing top plates
+    EPieceType CheckType = EPieceType::TopPlate; // covers both first and double top plates
+    while (PlacedTopPlateCount < TopPlateSuggestions.Num())
+    {
+        FTopPlateSuggestion& NextSug = TopPlateSuggestions[PlacedTopPlateCount];
+        if (NextSug.bIsValid && OverlapsExistingPiece(CheckType, NextSug.Position))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
+                PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            PlacedTopPlateCount++;
+            continue;
+        }
+        break;
+    }
+    if (PlacedTopPlateCount >= TopPlateSuggestions.Num()) return false;
+
     FTopPlateSuggestion Suggestion = GetNextTopPlateSuggestion();
     if (!Suggestion.bIsValid) return false;
 
@@ -1370,5 +1449,23 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
         Suggestion.Rotation.Yaw, Suggestion.LengthCm);
 
     return true;
+}
+
+// --- Overlap helper: checks if an existing placed piece is near a position ---
+bool URectangleBuilderComponent::OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance) const
+{
+    if (!AConstructionPhaseManager::Instance) return false;
+
+    float ToleranceSq = Tolerance * Tolerance;
+    TArray<ABuildablePiece*> Existing = AConstructionPhaseManager::Instance->GetPiecesOfType(Type);
+
+    for (ABuildablePiece* Piece : Existing)
+    {
+        if (Piece && FVector::DistSquared(Piece->GetActorLocation(), Position) < ToleranceSq)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 

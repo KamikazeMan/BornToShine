@@ -477,4 +477,7 @@ private:
     UPROPERTY()
     TArray<ATopPlate*> PlacedTopPlates;
 
+    // Check if an existing placed piece of the given type is near the position
+    bool OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance = 15.0f) const;
+
 };
