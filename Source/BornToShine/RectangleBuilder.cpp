@@ -506,13 +506,19 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
 {
     if (!Board || !HasActiveSuggestion()) return false;
 
-    FBoardSuggestion Suggestion = GetActiveSuggestion();
-
-    // Skip if existing rim board already at this position
-    if (OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position))
+    // Skip all suggestions that overlap with existing rim boards (while loop
+    // auto-skips multiple in one call, same pattern as plates/top plates).
+    FVector LastSkipPos = FVector::ZeroVector;
+    FRotator LastSkipRot = FRotator::ZeroRotator;
+    bool bAnySkipped = false;
+    while (HasActiveSuggestion())
     {
+        FBoardSuggestion Sug = GetActiveSuggestion();
+        if (!OverlapsExistingPiece(EPieceType::RimBoard, Sug.Position))
+            break; // no overlap → place this one
+
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Board suggestion overlaps existing — reusing existing board at (%.1f, %.1f, %.1f)"),
-            Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
+            Sug.Position.X, Sug.Position.Y, Sug.Position.Z);
 
         // Find the existing board and track it so the state machine advances
         if (AConstructionPhaseManager::Instance)
@@ -523,7 +529,7 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
             for (ABuildablePiece* Piece : ExistingBoards)
             {
                 if (!Piece) continue;
-                float Dist = FVector::Dist(Piece->GetActorLocation(), Suggestion.Position);
+                float Dist = FVector::Dist(Piece->GetActorLocation(), Sug.Position);
                 if (Dist < 15.0f && Dist < BestDist)
                 {
                     ExistingBoard = Cast<ARimBoard>(Piece);
@@ -539,6 +545,9 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
             }
         }
 
+        LastSkipPos = Sug.Position;
+        LastSkipRot = Sug.Rotation;
+        bAnySkipped = true;
         CurrentSuggestions.RemoveAt(0);
 
         // Manually advance state (bypasses AreConnectedAtCorner socket check)
@@ -561,13 +570,17 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
             CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
             TrackedBoards.Empty();
             CurrentState = ERectangleState::None;
+            break; // State reset — no more suggestions
         }
-
-        // Position preview at overlap location for red feedback (caller will SetLifeSpan)
-        Board->SetActorLocation(Suggestion.Position);
-        Board->SetActorRotation(Suggestion.Rotation);
+    }
+    if (!HasActiveSuggestion())
+    {
+        // All remaining boards were skipped — position for red feedback
+        if (bAnySkipped) { Board->SetActorLocation(LastSkipPos); Board->SetActorRotation(LastSkipRot); }
         return false;
     }
+
+    FBoardSuggestion Suggestion = GetActiveSuggestion();
 
     // 1. Resize to the suggested length
     if (Suggestion.LengthFeet > 0 && Suggestion.LengthFeet != Board->GetBoardLengthFeet())
