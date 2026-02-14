@@ -256,22 +256,9 @@ bool ATopPlate::TryPlace()
 	FVector TargetPos = SnappedToPiece ? SnappedToPiece->GetActorLocation() : FVector::ZeroVector;
 	FRotator TargetRot = SnappedToPiece ? SnappedToPiece->GetActorRotation() : FRotator::ZeroRotator;
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("=== TOP PLATE PLACED === [%s] pos=(%.1f, %.1f, %.1f) yaw=%.1f meshBottom=%.2f len=%dft"),
-		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z, PlateRot.Yaw, PlateBotZ, CurrentLengthFeet);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("  SnapTarget: %s (%s) socket=%s pos=(%.1f, %.1f, %.1f) yaw=%.1f"),
-		*TargetName, *TargetType, *SnappedToSocketName.ToString(),
-		TargetPos.X, TargetPos.Y, TargetPos.Z, TargetRot.Yaw);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("  SnapCandidate: src=%s tgt=%s prio=%d dist=%.1f corner=%d inline=%d"),
-		*CurrentSnapCandidate.SourceSocketName.ToString(),
-		*CurrentSnapCandidate.TargetSocketName.ToString(),
-		CurrentSnapCandidate.Priority, CurrentSnapCandidate.Distance,
-		CurrentSnapCandidate.bIsCornerSnap ? 1 : 0,
-		CurrentSnapCandidate.bIsInlineSnap ? 1 : 0);
+	UE_LOG(LogTemp, Log,
+		TEXT("TopPlate placed [%s] pos=(%.1f, %.1f, %.1f) yaw=%.1f len=%dft"),
+		*GetName(), PlatePos.X, PlatePos.Y, PlatePos.Z, PlateRot.Yaw, CurrentLengthFeet);
 
 	return true;
 }
@@ -319,7 +306,7 @@ void ATopPlate::AdjustSocketsToMeshBounds()
 		}
 	}
 
-	UE_LOG(LogTemp, Warning,
+	UE_LOG(LogTemp, Log,
 		TEXT("TopPlate: AdjustSockets — MeshZ=[%.2f, %.2f] height=%.2fcm (was %.2fcm) center=%.2f MeshRelZ=%.2f"),
 		MeshBottomZ, MeshTopZ, ActualHeight, OldHeight, MeshCenterZ, MeshRelLoc.Z);
 }
@@ -351,13 +338,13 @@ void ATopPlate::ExtendMeshForFlushCorners()
 			FVector RelLoc = MeshComponent->GetRelativeLocation();
 			RelLoc.X -= CenterShift;
 			MeshComponent->SetRelativeLocation(RelLoc);
-			UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: Re-centered mesh X by %.3f (asset origin X=%.2f)"),
+			UE_LOG(LogTemp, Log, TEXT("TopPlate [%s]: Re-centered mesh X by %.3f (asset origin X=%.2f)"),
 				*GetName(), -CenterShift, AssetBounds.Origin.X);
 		}
 	}
 
 	bMeshExtended = true;
 
-	UE_LOG(LogTemp, Warning, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f (ext=%.2fcm, %.2fcm/end)"),
+	UE_LOG(LogTemp, Log, TEXT("TopPlate [%s]: ExtendMesh ratio=%.4f scale X: %.4f -> %.4f (ext=%.2fcm, %.2fcm/end)"),
 		*GetName(), Ratio, CurrentScale3D.X, CurrentScale3D.X * Ratio, BoardWidth, BoardWidth / 2.0f);
 }

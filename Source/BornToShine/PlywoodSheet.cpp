@@ -47,7 +47,7 @@ void APlywoodSheet::BeginPlay()
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{
 		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-		UE_LOG(LogTemp, Warning, TEXT("PLYWOOD MESH BOUNDS: Origin=(%.2f, %.2f, %.2f) Extent=(%.2f, %.2f, %.2f) Min.Z=%.2f Max.Z=%.2f"),
+		UE_LOG(LogTemp, Log, TEXT("PLYWOOD MESH BOUNDS: Origin=(%.2f, %.2f, %.2f) Extent=(%.2f, %.2f, %.2f) Min.Z=%.2f Max.Z=%.2f"),
 			Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z,
 			Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z,
 			Bounds.Origin.Z - Bounds.BoxExtent.Z,

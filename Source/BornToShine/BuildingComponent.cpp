@@ -208,7 +208,7 @@ void UBuildingComponent::SpawnPreviewPiece()
 		bool bHasMesh = Mesh && Mesh->GetStaticMesh();
 		bool bHasMaterial = Mesh && Mesh->GetMaterial(0);
 
-		UE_LOG(LogTemp, Warning, TEXT("SpawnPreviewPiece[%d]: Class=%s  Type=%s  HasMesh=%d  HasMaterial=%d  Visible=%d"),
+		UE_LOG(LogTemp, Log, TEXT("SpawnPreviewPiece[%d]: Class=%s  Type=%s  HasMesh=%d  HasMaterial=%d  Visible=%d"),
 			CurrentPieceTypeIndex,
 			*PieceClass->GetName(),
 			*UEnum::GetDisplayValueAsText(CurrentPreviewPiece->GetPieceType()).ToString(),

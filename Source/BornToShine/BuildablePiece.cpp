@@ -1130,7 +1130,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom ||
 				Socket.SocketType == EConstructionSocketType::TopPlate_End)
 			{
-				UE_LOG(LogTemp, Warning,
+				UE_LOG(LogTemp, Log,
 					TEXT("  TopPlate CANDIDATE: src=%s → tgt=%s on [%s] snapZ=%.2f actorZ=%.2f prio=%d dist=%.1f corner=%d inline=%d yaw=%.1f"),
 					*Socket.SocketName.ToString(),
 					*TargetSocketName.ToString(),

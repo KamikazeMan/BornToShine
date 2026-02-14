@@ -964,7 +964,7 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
             float PlyHalfThickness = Ply->SheetThickness / 2.0f;
             float ThisTopZ = PlyActorZ + PlyHalfThickness;
 
-            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: Found plywood '%s' ActorZ=%.3f  HalfThickness=%.3f  TopZ=%.3f"),
+            UE_LOG(LogTemp, Log, TEXT("PLATE_Z: Found plywood '%s' ActorZ=%.3f  HalfThickness=%.3f  TopZ=%.3f"),
                 *Ply->GetName(), PlyActorZ, PlyHalfThickness, ThisTopZ);
 
             if (!bFoundPlywood || ThisTopZ > PlywoodTopZ)
@@ -982,7 +982,7 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
         const float RimBoardHalfHeight = 13.97f / 2.0f;  // 6.985cm
         const float PlywoodThickness = 1.905f;            // 3/4" = 1.905cm
         FallbackZOffset = RimBoardHalfHeight + PlywoodThickness + PlateHalfHeight;
-        UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: No plywood found! Using fallback ZOffset=%.3f from rim board center"), FallbackZOffset);
+        UE_LOG(LogTemp, Log, TEXT("PLATE_Z: No plywood found! Using fallback ZOffset=%.3f from rim board center"), FallbackZOffset);
     }
 
     // Inward Y offset: shift plate toward the building center so its outer face
@@ -1029,12 +1029,12 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
 
         PlateSuggestions.Add(Suggestion);
 
-        UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_DEBUG: Plate %d  RimBoardZ=%.3f  PlywoodTopZ=%.3f  PlateCenterZ=%.3f  PlatePos=(%.1f, %.1f, %.1f)"),
+        UE_LOG(LogTemp, Log, TEXT("PLATE_Z: Plate %d  RimBoardZ=%.3f  PlywoodTopZ=%.3f  PlateCenterZ=%.3f  PlatePos=(%.1f, %.1f, %.1f)"),
             i, Board->GetActorLocation().Z, PlywoodTopZ, PlateCenterZ,
             Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d bottom plate positions (PlywoodFound=%d, PlywoodTopZ=%.3f, PlateHalfH=%.3f)"),
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d bottom plate positions (PlywoodFound=%d, PlywoodTopZ=%.3f, PlateHalfH=%.3f)"),
         PlateSuggestions.Num(), bFoundPlywood, PlywoodTopZ, PlateHalfHeight);
 }
 
@@ -1145,13 +1145,13 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
         if (bFoundPlywood)
         {
             float NewZ = BestPlywoodTopZ + PlateHalfHeight;
-            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_FIX: PlywoodTopZ=%.3f + PlateHalfH=%.3f = NewZ=%.3f (was %.3f, delta=%.3f)"),
+            UE_LOG(LogTemp, Log, TEXT("PLATE_Z_FIX: PlywoodTopZ=%.3f + PlateHalfH=%.3f = NewZ=%.3f (was %.3f, delta=%.3f)"),
                 BestPlywoodTopZ, PlateHalfHeight, NewZ, PlatePos.Z, NewZ - PlatePos.Z);
             PlatePos.Z = NewZ;
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("PLATE_Z_FIX: No plywood found at placement time! Using suggestion Z=%.3f"), PlatePos.Z);
+            UE_LOG(LogTemp, Log, TEXT("PLATE_Z_FIX: No plywood found at placement time! Using suggestion Z=%.3f"), PlatePos.Z);
         }
     }
 
@@ -1355,47 +1355,59 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
-    // For each wall, find the highest visual mesh top Z from placed
-    // wall studs and corner posts. Using actual mesh bounds is the only
-    // reliable way — geometric calculations don't match Rhino mesh extents.
+    // For each wall, find the highest StudTop/PostTop socket world Z
+    // from placed wall studs and corner posts. Using socket positions
+    // (not CalcBounds) ensures we match the snap system exactly.
     // ---------------------------------------------------------------
-    float GlobalMeshTopZ = 0.0f;
+    float GlobalSocketTopZ = 0.0f;
     bool bFoundAnyPiece = false;
 
     if (AConstructionPhaseManager::Instance)
     {
-        // Scan placed wall studs
+        // Scan placed wall studs for StudTop socket
         TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
         for (ABuildablePiece* Piece : Studs)
         {
-            if (!Piece || !Piece->GetMeshComponent()) continue;
-            UStaticMeshComponent* Mesh = Piece->GetMeshComponent();
-            FBoxSphereBounds WBounds = Mesh->CalcBounds(Mesh->GetComponentTransform());
-            float MeshTopZ = WBounds.Origin.Z + WBounds.BoxExtent.Z;
-            if (!bFoundAnyPiece || MeshTopZ > GlobalMeshTopZ)
+            if (!Piece) continue;
+            TArray<FConstructionSocket> PieceSockets = Piece->GetAllSockets();
+            for (const FConstructionSocket& Socket : PieceSockets)
             {
-                GlobalMeshTopZ = MeshTopZ;
-                bFoundAnyPiece = true;
+                if (Socket.SocketName == FName("StudTop"))
+                {
+                    FVector WorldPos = Piece->GetActorTransform().TransformPosition(Socket.LocalPosition);
+                    if (!bFoundAnyPiece || WorldPos.Z > GlobalSocketTopZ)
+                    {
+                        GlobalSocketTopZ = WorldPos.Z;
+                        bFoundAnyPiece = true;
+                    }
+                    break;
+                }
             }
         }
 
-        // Scan placed corner posts
+        // Scan placed corner posts for PostTop socket
         TArray<ABuildablePiece*> CornerPosts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
         for (ABuildablePiece* Piece : CornerPosts)
         {
-            if (!Piece || !Piece->GetMeshComponent()) continue;
-            UStaticMeshComponent* Mesh = Piece->GetMeshComponent();
-            FBoxSphereBounds WBounds = Mesh->CalcBounds(Mesh->GetComponentTransform());
-            float MeshTopZ = WBounds.Origin.Z + WBounds.BoxExtent.Z;
-            if (!bFoundAnyPiece || MeshTopZ > GlobalMeshTopZ)
+            if (!Piece) continue;
+            TArray<FConstructionSocket> PieceSockets = Piece->GetAllSockets();
+            for (const FConstructionSocket& Socket : PieceSockets)
             {
-                GlobalMeshTopZ = MeshTopZ;
-                bFoundAnyPiece = true;
+                if (Socket.SocketName == FName("PostTop"))
+                {
+                    FVector WorldPos = Piece->GetActorTransform().TransformPosition(Socket.LocalPosition);
+                    if (!bFoundAnyPiece || WorldPos.Z > GlobalSocketTopZ)
+                    {
+                        GlobalSocketTopZ = WorldPos.Z;
+                        bFoundAnyPiece = true;
+                    }
+                    break;
+                }
             }
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: MeshBounds scan — GlobalMeshTopZ=%.2f from %d studs + %d corner posts"),
-            GlobalMeshTopZ, Studs.Num(), CornerPosts.Num());
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: SocketTop scan — GlobalSocketTopZ=%.2f from %d studs + %d corner posts"),
+            GlobalSocketTopZ, Studs.Num(), CornerPosts.Num());
     }
 
     TArray<float> WallTopZPerWall;
@@ -1407,7 +1419,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         if (bFoundAnyPiece)
         {
-            WallTopZPerWall[i] = GlobalMeshTopZ;
+            WallTopZPerWall[i] = GlobalSocketTopZ;
         }
         else if (BotPlate)
         {
@@ -1416,7 +1428,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d - No placed studs/posts, fallback TopZ=%.2f"), i, WallTopZPerWall[i]);
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Wall %d WallTopZ=%.2f (from mesh bounds)"),
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Wall %d WallTopZ=%.2f (from socket positions)"),
             i, WallTopZPerWall[i]);
     }
 
@@ -1449,7 +1461,7 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
 
         FirstTopPlatePositions.Add(Pos);
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  WallTopZ=%.2f  PlateZ=%.2f"),
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: TopPlate[%d] (first) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  WallTopZ=%.2f  PlateZ=%.2f"),
             i, Pos.X, Pos.Y, Pos.Z,
             Sug.Rotation.Yaw, BaseLengthCm,
             WallTopZPerWall[i], TopPlateZ);
@@ -1481,13 +1493,13 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
         Sug.bIsValid = true;
         TopPlateSuggestions.Add(Sug);
 
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: TopPlate[%d] (double) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  overlap=%d"),
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: TopPlate[%d] (double) Pos=(%.1f, %.1f, %.1f) Rot=%.1f Len=%.1fcm  overlap=%d"),
             PlacedBottomPlates.Num() + i,
             Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
             Sug.Rotation.Yaw, DblPlateLengthCm, bHasOverlap);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Calculated %d top plate suggestions (%d first + %d double)"),
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d top plate suggestions (%d first + %d double)"),
         TopPlateSuggestions.Num(), PlacedBottomPlates.Num(), PlacedBottomPlates.Num());
 }
 

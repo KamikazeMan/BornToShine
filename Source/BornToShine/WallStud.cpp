@@ -45,7 +45,7 @@ void AWallStud::BeginPlay()
 	// matches the real mesh top regardless of Rhino export pivot position.
 	AdjustSocketsToMeshBounds();
 
-	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === WallStud UNSCALED mesh height: %.2fcm (%.2f in)"),
+	UE_LOG(LogTemp, Log, TEXT("WallStud: UNSCALED mesh height: %.2fcm (%.2f in)"),
 		StudHeight, StudHeight / 2.54f);
 
 	// Scale mesh Z to match door frame king stud height (247.66cm).
@@ -77,13 +77,13 @@ void AWallStud::BeginPlay()
 					Socket.LocalPosition.Z = NewTopZ;
 			}
 
-			UE_LOG(LogTemp, Warning,
+			UE_LOG(LogTemp, Log,
 				TEXT("WallStud: Scaled Z by %.4f → height now %.2fcm (target %.2fcm)"),
 				ScaleZ, StudHeight, TargetHeight);
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === WallStud FINAL height: %.2fcm (%.2f in)"),
+	UE_LOG(LogTemp, Log, TEXT("WallStud: FINAL height: %.2fcm (%.2f in)"),
 		StudHeight, StudHeight / 2.54f);
 
 	UE_LOG(LogTemp, Log, TEXT("WallStud: BeginPlay - Height=%.1fcm (%.2f in), Total sockets: %d"),
@@ -224,7 +224,7 @@ void AWallStud::AdjustSocketsToMeshBounds()
 		}
 	}
 
-	UE_LOG(LogTemp, Warning,
+	UE_LOG(LogTemp, Log,
 		TEXT("WallStud: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, MeshRelZ=%.2f → "
 		     "StudBottom Z: %.2f→%.2f, StudTop Z: %.2f→%.2f"),
 		Bounds.Origin.Z - Bounds.BoxExtent.Z, Bounds.Origin.Z + Bounds.BoxExtent.Z,
