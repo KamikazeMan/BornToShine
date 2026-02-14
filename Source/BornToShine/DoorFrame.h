@@ -74,8 +74,17 @@ private:
 	 */
 	void AutoDeleteOverlappingPieces();
 
+	/**
+	 * Spawns extension mesh components above the king studs to bridge
+	 * the gap between the door frame top and the expected wall stud top.
+	 */
+	void SpawnKingStudExtensions();
+
 	/** Prevents AutoDeleteOverlappingPieces from running more than once. */
 	bool bHasAutoDeleted = false;
+
+	/** Prevents SpawnKingStudExtensions from running more than once. */
+	bool bHasSpawnedExtensions = false;
 
 	/** Override: hook into placement to trigger auto-delete. */
 	virtual void SetPreviewMode(bool bIsPreview) override;

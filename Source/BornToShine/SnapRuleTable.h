@@ -159,4 +159,5 @@ private:
 	void AddPlywoodRules();
 	void AddBottomPlateRules();
 	void AddTopPlateRules();
+	void AddDoorFrameRules();
 };

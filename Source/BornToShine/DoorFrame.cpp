@@ -136,6 +136,8 @@ bool ADoorFrame::TryPlace()
 
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
+	// Add extension pieces above king studs to reach the top plate
+	SpawnKingStudExtensions();
 	return true;
 }
 
@@ -150,6 +152,8 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 	{
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
+		// Add extension pieces above king studs to reach the top plate
+		SpawnKingStudExtensions();
 	}
 }
 
@@ -343,4 +347,194 @@ void ADoorFrame::AutoDeleteOverlappingPieces()
 		DeletedStuds,
 		(LeftLength >= MinRemnant && RightLength >= MinRemnant) ? TEXT("2") :
 		(LeftLength >= MinRemnant || RightLength >= MinRemnant) ? TEXT("1") : TEXT("0"));
+}
+
+// ---------------------------------------------------------------------------
+// SpawnKingStudExtensions
+// Creates two mesh components above the king studs to bridge the gap
+// between the door frame top and the expected wall stud top (top plate).
+// ---------------------------------------------------------------------------
+void ADoorFrame::SpawnKingStudExtensions()
+{
+	// Guard: run only once
+	if (bHasSpawnedExtensions) return;
+	bHasSpawnedExtensions = true;
+
+	if (!AConstructionPhaseManager::Instance) return;
+
+	FVector DoorLoc = GetActorLocation();
+
+	// --- 1. Find expected wall top Z from nearby wall studs ---
+	float ExpectedWallTopZ = 0.0f;
+	bool bFoundRef = false;
+	UStaticMesh* StudMesh = nullptr;
+	UMaterialInterface* StudMaterial = nullptr;
+
+	TArray<ABuildablePiece*> Studs =
+		AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
+
+	float ClosestDist = FLT_MAX;
+
+	for (ABuildablePiece* Piece : Studs)
+	{
+		AWallStud* Stud = Cast<AWallStud>(Piece);
+		if (!Stud) continue;
+
+		float Dist = FVector::Dist2D(Stud->GetActorLocation(), DoorLoc);
+		if (Dist < 500.0f && Dist < ClosestDist)
+		{
+			ClosestDist = Dist;
+
+			// Get stud top world Z from its socket
+			TArray<FConstructionSocket> StudSockets = Stud->GetAllSockets();
+			for (const FConstructionSocket& S : StudSockets)
+			{
+				if (S.SocketName == FName("StudTop"))
+				{
+					ExpectedWallTopZ = Stud->GetActorLocation().Z + S.LocalPosition.Z;
+					bFoundRef = true;
+					break;
+				}
+			}
+
+			// Grab the stud mesh and material for visual consistency
+			if (Stud->GetMeshComponent() && Stud->GetMeshComponent()->GetStaticMesh())
+			{
+				StudMesh = Stud->GetMeshComponent()->GetStaticMesh();
+				StudMaterial = Stud->GetMeshComponent()->GetMaterial(0);
+			}
+		}
+	}
+
+	// Fallback: estimate wall top from door frame bottom + standard stud height
+	if (!bFoundRef)
+	{
+		float FrameBottomLocal = 0.0f;
+		for (const FConstructionSocket& S : Sockets)
+		{
+			if (S.SocketName == FName("FrameBottom"))
+			{
+				FrameBottomLocal = S.LocalPosition.Z;
+				break;
+			}
+		}
+		// Standard wall stud height = 247.66cm (matches WallStud.cpp TargetHeight)
+		ExpectedWallTopZ = DoorLoc.Z + FrameBottomLocal + 247.66f;
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("DoorFrame: No nearby studs found, using fallback wall height 247.66cm"));
+	}
+
+	// --- 2. Get door frame top world Z ---
+	float FrameTopLocal = 0.0f;
+	for (const FConstructionSocket& S : Sockets)
+	{
+		if (S.SocketName == FName("FrameTop"))
+		{
+			FrameTopLocal = S.LocalPosition.Z;
+			break;
+		}
+	}
+	float FrameTopWorldZ = DoorLoc.Z + FrameTopLocal;
+
+	float GapHeight = ExpectedWallTopZ - FrameTopWorldZ;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("DoorFrame: Extension check — FrameTopWorldZ=%.2f ExpectedWallTopZ=%.2f Gap=%.2fcm (%.2f in)"),
+		FrameTopWorldZ, ExpectedWallTopZ, GapHeight, GapHeight / 2.54f);
+
+	if (GapHeight < 1.0f)
+	{
+		UE_LOG(LogTemp, Log,
+			TEXT("DoorFrame: No king stud extension needed (gap %.2f cm)"), GapHeight);
+		return;
+	}
+
+	// --- 3. Get mesh for extensions ---
+	// Prefer the wall stud mesh (looks like actual 2x4). Fallback to engine cube.
+	UStaticMesh* ExtMesh = StudMesh;
+	bool bUsingCubeFallback = false;
+
+	if (!ExtMesh)
+	{
+		ExtMesh = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		bUsingCubeFallback = true;
+	}
+	if (!ExtMesh)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("DoorFrame: Could not load mesh for king stud extensions"));
+		return;
+	}
+
+	// If no stud material, use door frame's own material
+	if (!StudMaterial && MeshComponent)
+	{
+		StudMaterial = MeshComponent->GetMaterial(0);
+	}
+
+	// --- 4. Calculate mesh scale ---
+	FBoxSphereBounds ExtBounds = ExtMesh->GetBounds();
+	float MeshFullHeight = ExtBounds.BoxExtent.Z * 2.0f;
+
+	float ScaleX = 1.0f;
+	float ScaleY = 1.0f;
+	float ScaleZ = 1.0f;
+
+	if (bUsingCubeFallback)
+	{
+		// Engine cube is 100x100x100 — scale to 2x4 cross-section
+		ScaleX = 3.81f / 100.0f;   // 1.5" stud width
+		ScaleY = 8.89f / 100.0f;   // 3.5" stud depth
+		ScaleZ = GapHeight / 100.0f;
+	}
+	else
+	{
+		// Wall stud mesh: keep X/Y at natural 2x4 cross-section, scale Z
+		ScaleZ = (MeshFullHeight > 1.0f) ? (GapHeight / MeshFullHeight) : 1.0f;
+	}
+
+	// --- 5. Calculate positions in door frame local space ---
+	const float StudWidth = 3.81f; // 2x4 width (1.5")
+	float KingStudOffset = (FrameOverallWidth / 2.0f) - (StudWidth / 2.0f);
+
+	// Position the extension so its visual bottom aligns with the door frame top.
+	// Mesh visual bottom offset from component origin = (Origin.Z - BoxExtent.Z) * ScaleZ
+	float MeshBottomOffset = (ExtBounds.Origin.Z - ExtBounds.BoxExtent.Z) * ScaleZ;
+	float ExtCompZ = FrameTopLocal - MeshBottomOffset;
+
+	for (int32 Side = 0; Side < 2; Side++)
+	{
+		float XOffset = (Side == 0) ? -KingStudOffset : KingStudOffset;
+
+		UStaticMeshComponent* ExtComp = NewObject<UStaticMeshComponent>(
+			this, UStaticMeshComponent::StaticClass(),
+			(Side == 0) ? FName("KingStudExt_Left") : FName("KingStudExt_Right"));
+
+		if (!ExtComp) continue;
+
+		ExtComp->SetMobility(EComponentMobility::Movable);
+		ExtComp->SetStaticMesh(ExtMesh);
+		ExtComp->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+		ExtComp->SetRelativeLocation(FVector(XOffset, 0.0f, ExtCompZ));
+		ExtComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+		if (StudMaterial)
+		{
+			ExtComp->SetMaterial(0, StudMaterial);
+		}
+
+		ExtComp->SetupAttachment(GetRootComponent());
+		ExtComp->RegisterComponent();
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("DoorFrame: Spawned king stud extension %s at local (%.1f, 0, %.1f) "
+			     "Scale=(%.4f, %.4f, %.4f) GapH=%.1fcm"),
+			(Side == 0) ? TEXT("LEFT") : TEXT("RIGHT"),
+			XOffset, ExtCompZ, ScaleX, ScaleY, ScaleZ, GapHeight);
+	}
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("DoorFrame: King stud extensions complete — gap=%.2fcm (%.2f in), FrameOverall=%.2fcm"),
+		GapHeight, GapHeight / 2.54f, FrameOverallWidth);
 }

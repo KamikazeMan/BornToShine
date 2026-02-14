@@ -31,6 +31,7 @@ void ASnapRuleTable::InitializeRules()
 	AddPlywoodRules();
 	AddBottomPlateRules();
 	AddTopPlateRules();
+	AddDoorFrameRules();
 }
 
 void ASnapRuleTable::AddCornerRules(float BoardHalfWidth)
@@ -541,6 +542,31 @@ void ASnapRuleTable::AddTopPlateRules()
 
 	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added top plate rules (TopFace=%d, Corner=%d, Inline=%d)"),
 		800, 900, 700);
+}
+
+void ASnapRuleTable::AddDoorFrameRules()
+{
+	// DOOR FRAME BOTTOM -> WALL BOTTOM PLATE
+	// Priority 900: must beat DoorFrame_Top -> TopPlate_Bottom (800)
+	// so the door frame always anchors to the bottom plate first.
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::DoorFrame_Bottom,
+			EConstructionSocketType::Wall_Bottom_Plate
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added door frame rules (Bottom->Plate=%d)"), 900);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)

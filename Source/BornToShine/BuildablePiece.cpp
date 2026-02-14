@@ -1052,25 +1052,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Door frame Z correction.
 			// The door frame sits on the PLYWOOD, not on top of the plate,
 			// because the plate section under the door gets removed.
-			// Derive the Z from the plate's own geometry: the plate's top-face
-			// socket is at +SocketLocalZ above center, so the plate bottom
-			// (= plywood top) is at center - SocketLocalZ. Position the door
-			// frame so its bottom socket sits at the plate bottom face.
+			// The plate lies flat (2x4: 3.81cm vertical). Its center Z was
+			// calculated as PlywoodTopZ + PlateHalfHeight in CalculatePlateLayout,
+			// so PlywoodTopZ = PlateCenter.Z - PlateHalfHeight.
 			if (Socket.SocketType == EConstructionSocketType::DoorFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				FConstructionSocket* TgtSocket = TargetPiece->GetSocketByName(TargetSocketName);
-				if (TgtSocket)
-				{
-					float PlateBottomZ = TargetPiece->GetActorLocation().Z - TgtSocket->LocalPosition.Z;
-					CandidateLocation.Z = PlateBottomZ - Socket.LocalPosition.Z;
+				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm — 2x4 lies flat
+				float PlywoodTopZ = TargetPiece->GetActorLocation().Z - PlateHalfHeight;
+				CandidateLocation.Z = PlywoodTopZ - Socket.LocalPosition.Z;
 
-					UE_LOG(LogTemp, Log,
-						TEXT("DoorFrame Z-fix: PlateCenter=%.2f SocketLocalZ=%.2f PlateBottom=%.2f FrameSocketZ=%.2f -> ActorZ=%.2f"),
-						TargetPiece->GetActorLocation().Z, TgtSocket->LocalPosition.Z,
-						PlateBottomZ, Socket.LocalPosition.Z, CandidateLocation.Z);
-				}
+				UE_LOG(LogTemp, Log,
+					TEXT("DoorFrame Z-fix: PlateCenter=%.2f PlateHalfH=%.2f PlywoodTop=%.2f FrameSocketZ=%.2f -> ActorZ=%.2f"),
+					TargetPiece->GetActorLocation().Z, PlateHalfHeight,
+					PlywoodTopZ, Socket.LocalPosition.Z, CandidateLocation.Z);
 			}
 
 			// Door frame centering: override XY to center on the plate's midpoint.
