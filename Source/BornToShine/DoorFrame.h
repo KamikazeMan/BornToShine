@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BuildablePiece.h"
 #include "ConstructionTypes.h"
+#include "Components/BoxComponent.h"
 #include "DoorFrame.generated.h"
 
 /**
@@ -43,6 +44,11 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Construction|Dimensions")
 	float FrameOverallWidth;
 
+	/** Height of the door opening from the frame bottom to the header bottom.
+	    Default 205.74cm = 81" (standard 6'8" door trimmer height). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
+	float RoughOpeningHeight;
+
 	float GetFrameHeightCm() const { return FrameHeight; }
 
 	/** Mark overlap deletion as already done (used during save/load to prevent
@@ -66,6 +72,17 @@ private:
 	void CreateBottomSocket();
 	void CreateTopSocket();
 	void AdjustSocketsToMeshBounds();
+	void SetupCollisionBoxes();
+	void EnableDoorCollision(bool bEnable);
+
+	UPROPERTY()
+	UBoxComponent* LeftPostCollision;
+
+	UPROPERTY()
+	UBoxComponent* RightPostCollision;
+
+	UPROPERTY()
+	UBoxComponent* HeaderCollision;
 
 	/**
 	 * Called once after the door frame is placed (exits preview mode).

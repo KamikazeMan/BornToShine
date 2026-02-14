@@ -14,11 +14,30 @@ ADoorFrame::ADoorFrame()
 	FrameHeight = 235.27f;       // 92-5/8" (standard 8ft wall stud height)
 	RoughOpeningWidth = 91.44f;  // 36" rough opening (gap between trimmers)
 	FrameOverallWidth = 91.44f;  // Full mesh footprint (king studs + trimmers + opening)
+	RoughOpeningHeight = 205.74f; // 81" (standard 6'8" door trimmer height)
 
 	// SceneRoot decouples mesh scale from actor transform
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	SetRootComponent(SceneRoot);
 	MeshComponent->SetupAttachment(SceneRoot);
+
+	// Collision boxes for the frame structure (posts + header).
+	// The mesh's convex hull covers the door opening, so we disable
+	// pawn blocking on the mesh and use these boxes instead.
+	LeftPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("LeftPostCollision"));
+	LeftPostCollision->SetupAttachment(SceneRoot);
+	LeftPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	LeftPostCollision->SetHiddenInGame(true);
+
+	RightPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("RightPostCollision"));
+	RightPostCollision->SetupAttachment(SceneRoot);
+	RightPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RightPostCollision->SetHiddenInGame(true);
+
+	HeaderCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("HeaderCollision"));
+	HeaderCollision->SetupAttachment(SceneRoot);
+	HeaderCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HeaderCollision->SetHiddenInGame(true);
 
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
@@ -117,6 +136,8 @@ void ADoorFrame::AdjustSocketsToMeshBounds()
 			TEXT("DoorFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, FrameOverall=%.2fcm, RoughOpening=%.2fcm"),
 			MeshBottomZ, MeshTopZ, ActualHeight, FrameOverallWidth, RoughOpeningWidth);
 	}
+
+	SetupCollisionBoxes();
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +157,16 @@ bool ADoorFrame::TryPlace()
 
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
+
+	// The mesh convex hull covers the door opening — keep it query-only
+	// for snap traces and let the collision boxes block the player instead.
+	if (MeshComponent)
+	{
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	}
+	EnableDoorCollision(true);
+
 	return true;
 }
 
@@ -150,7 +181,107 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 	{
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
+
+		// Override Super's QueryAndPhysics — the mesh convex hull covers the
+		// door opening, so keep it query-only and use collision boxes instead.
+		if (MeshComponent)
+		{
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		}
+		EnableDoorCollision(true);
 	}
+	else
+	{
+		EnableDoorCollision(false);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SetupCollisionBoxes — sizes/positions the three collision boxes to match
+// the frame structure (left post, right post, header+cripples band).
+// Called from AdjustSocketsToMeshBounds after real dimensions are known.
+// ---------------------------------------------------------------------------
+void ADoorFrame::SetupCollisionBoxes()
+{
+	if (!LeftPostCollision || !RightPostCollision || !HeaderCollision) return;
+
+	// Mesh depth (through-wall direction)
+	float MeshDepth = 8.89f; // default 3.5" (2x4 depth)
+	if (MeshComponent && MeshComponent->GetStaticMesh())
+	{
+		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+		float BoundsDepth = Bounds.BoxExtent.Y * 2.0f;
+		if (BoundsDepth > 1.0f) MeshDepth = BoundsDepth;
+	}
+
+	// Frame bottom/top in local space (from sockets)
+	float BottomZ = -FrameHeight / 2.0f;
+	float TopZ = FrameHeight / 2.0f;
+	for (const FConstructionSocket& S : Sockets)
+	{
+		if (S.SocketName == FName("FrameBottom")) BottomZ = S.LocalPosition.Z;
+		else if (S.SocketName == FName("FrameTop")) TopZ = S.LocalPosition.Z;
+	}
+
+	// Side post width = (overall frame - rough opening) / 2
+	float SideWidth = (FrameOverallWidth - RoughOpeningWidth) / 2.0f;
+	if (SideWidth < 1.0f) SideWidth = 3.81f; // fallback: one 2x4 width (1.5")
+
+	float PostCenterZ = (BottomZ + TopZ) / 2.0f;
+	float PostHalfHeight = FrameHeight / 2.0f;
+
+	// Left post
+	float LeftX = -(FrameOverallWidth / 2.0f) + (SideWidth / 2.0f);
+	LeftPostCollision->SetBoxExtent(FVector(SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight));
+	LeftPostCollision->SetRelativeLocation(FVector(LeftX, 0.0f, PostCenterZ));
+
+	// Right post
+	float RightX = (FrameOverallWidth / 2.0f) - (SideWidth / 2.0f);
+	RightPostCollision->SetBoxExtent(FVector(SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight));
+	RightPostCollision->SetRelativeLocation(FVector(RightX, 0.0f, PostCenterZ));
+
+	// Header + cripples (band above the opening)
+	float OpeningTopZ = BottomZ + RoughOpeningHeight;
+	if (OpeningTopZ > TopZ) OpeningTopZ = TopZ;
+
+	float TopBandHeight = TopZ - OpeningTopZ;
+	if (TopBandHeight > 1.0f)
+	{
+		float TopBandCenterZ = OpeningTopZ + TopBandHeight / 2.0f;
+		HeaderCollision->SetBoxExtent(FVector(FrameOverallWidth / 2.0f, MeshDepth / 2.0f, TopBandHeight / 2.0f));
+		HeaderCollision->SetRelativeLocation(FVector(0.0f, 0.0f, TopBandCenterZ));
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("DoorFrame: Collision boxes set — SideWidth=%.1f MeshDepth=%.1f OpeningH=%.1f TopBand=%.1f"),
+		SideWidth, MeshDepth, RoughOpeningHeight, TopBandHeight);
+}
+
+// ---------------------------------------------------------------------------
+// EnableDoorCollision — toggles the collision boxes on/off
+// ---------------------------------------------------------------------------
+void ADoorFrame::EnableDoorCollision(bool bEnable)
+{
+	auto SetBox = [bEnable](UBoxComponent* Box)
+	{
+		if (!Box) return;
+		if (bEnable)
+		{
+			Box->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			Box->SetCollisionObjectType(ECC_WorldStatic);
+			Box->SetCollisionResponseToAllChannels(ECR_Ignore);
+			Box->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		}
+		else
+		{
+			Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+	};
+
+	SetBox(LeftPostCollision);
+	SetBox(RightPostCollision);
+	SetBox(HeaderCollision);
 }
 
 // ---------------------------------------------------------------------------
