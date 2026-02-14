@@ -940,7 +940,7 @@ void URectangleBuilderComponent::CalculatePlateLayout(ARimBoard* Board1, ARimBoa
     CompletedRimBoards.Add(Board3);
     CompletedRimBoards.Add(Board4);
 
-    const float PlateHalfHeight = 8.89f / 2.0f;      // 3.5" / 2 = 4.445cm
+    const float PlateHalfHeight = 3.81f / 2.0f;      // 1.5" / 2 = 1.905cm (2x4 lies flat)
 
     // --- Find the actual plywood top Z from placed plywood actors ---
     // The plate must sit ON TOP of the plywood, not under it.
@@ -1117,7 +1117,7 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
     // CalculatePlateLayout runs when the rectangle completes (before plywood is placed),
     // so the Z in the suggestion is a fallback estimate. Now that plywood is placed,
     // recalculate Z from the real plywood top surface.
-    const float PlateHalfHeight = 8.89f / 2.0f; // 4.445cm
+    const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm (2x4 lies flat)
     FVector PlatePos = Suggestion.Position;
 
     if (AConstructionPhaseManager::Instance)
@@ -1350,8 +1350,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
         return;
     }
 
-    const float PlateHeight = 8.89f;              // 3.5" plate height
-    const float PlateHalfHeight = PlateHeight / 2.0f; // 4.445cm
+    const float PlateHeight = 3.81f;              // 1.5" plate VISUAL height (2x4 lies flat)
+    const float PlateHalfHeight = PlateHeight / 2.0f; // 1.905cm
     const float OverlapCm = 8.89f;                // 3.5" overlap at corners for double plates
 
     // ---------------------------------------------------------------
