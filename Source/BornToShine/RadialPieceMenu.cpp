@@ -1,6 +1,7 @@
 // Born To Shine - Radial Piece Selection Menu (Sci-fi holographic style)
 
 #include "RadialPieceMenu.h"
+#include "ConstructionPhaseManager.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
 #include "Framework/Application/SlateApplication.h"
@@ -472,18 +473,52 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 
 				FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
 
-				FLinearColor CenterIconTint(0.80f, 0.95f, 1.00f, FadeAlpha);
+				FLinearColor CenterIconTint = Info.bAvailable
+					? FLinearColor(0.80f, 0.95f, 1.00f, FadeAlpha)
+					: FLinearColor(0.30f, 0.35f, 0.40f, FadeAlpha * 0.5f);
 				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
 					IconGeo.ToPaintGeometry(), &IconBrushes[HighlightedIndex],
 					ESlateDrawEffect::None, CenterIconTint);
 			}
 
 			// Piece name (centered below icon)
+			FLinearColor NameColor = Info.bAvailable ? TextWhite : TextUnavailable;
 			FVector2D NameSize = FontMeasure->Measure(Info.DisplayName, CenterNameFont);
 			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, CenterIconSize / 2.0f - 14.0f);
 			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
 			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
-				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(TextWhite));
+				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(NameColor));
+
+			// Subtitle line (progress info like "2x6 8ft  2/4")
+			if (!Info.Subtitle.IsEmpty())
+			{
+				FLinearColor SubColor = Info.bAvailable ? SubtitleColor : TextUnavailable;
+				FVector2D SubSize = FontMeasure->Measure(Info.Subtitle, CenterSubFont);
+				FVector2D SubPos = NamePos + FVector2D((NameSize.X - SubSize.X) / 2.0f, NameSize.Y + 2.0f);
+				FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
+				FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
+					Info.Subtitle, CenterSubFont, ESlateDrawEffect::None, Faded(SubColor));
+			}
+
+			// Prerequisite message for locked pieces (red/orange warning text)
+			if (!Info.bAvailable)
+			{
+				FString LockMsg = TEXT("LOCKED");
+				// Try to get prerequisite message from phase manager
+				if (AConstructionPhaseManager::Instance)
+				{
+					FString PrereqMsg = AConstructionPhaseManager::Instance->GetPrerequisiteMessage(Info.PieceType);
+					if (!PrereqMsg.IsEmpty()) LockMsg = PrereqMsg;
+				}
+				FSlateFontInfo LockFont = FCoreStyle::GetDefaultFontStyle("Bold", 11);
+				FLinearColor LockColor(1.0f, 0.6f, 0.1f, 1.0f); // Orange warning
+				FVector2D LockSize = FontMeasure->Measure(LockMsg, LockFont);
+				float SubOffset = Info.Subtitle.IsEmpty() ? 0.0f : FontMeasure->Measure(Info.Subtitle, CenterSubFont).Y + 4.0f;
+				FVector2D LockPos = NamePos + FVector2D((NameSize.X - LockSize.X) / 2.0f, NameSize.Y + SubOffset + 4.0f);
+				FGeometry LockGeo = AllottedGeometry.MakeChild(LockSize, FSlateLayoutTransform(LockPos));
+				FSlateDrawElement::MakeText(OutDrawElements, LayerId, LockGeo.ToPaintGeometry(),
+					LockMsg, LockFont, ESlateDrawEffect::None, Faded(LockColor));
+			}
 		}
 		else
 		{

@@ -66,6 +66,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetCurrentPhaseName() const;
 
+	// Get a user-friendly message explaining what's needed before this piece type can be placed.
+	// Returns empty string if the piece is already available.
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	FString GetPrerequisiteMessage(EPieceType PieceType) const;
+
+	// Get the number of placed pieces of a given type
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	int32 GetPieceCount(EPieceType PieceType) const;
+
 	// Enable/disable automatic phase advancement (default: true)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	bool bAutoAdvancePhases;

@@ -21,9 +21,93 @@ void AConstructionPhaseManager::BeginPlay()
 
 bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 {
-	// Free building mode - allow any piece type
-	// Logical order is enforced by CheckPrerequisites() instead
-	return true;
+	// Phase gating: each piece type requires earlier phases to be (partially) complete.
+	// Foundation is always available. Going backward is always allowed.
+	switch (PieceType)
+	{
+	case EPieceType::Foundation:
+		return true; // Always available
+
+	case EPieceType::RimBoard:
+		return GetPieceCount(EPieceType::Foundation) >= 1;
+
+	case EPieceType::FloorJoist:
+		return GetPieceCount(EPieceType::RimBoard) >= 4;
+
+	case EPieceType::Plywood:
+		return GetPieceCount(EPieceType::FloorJoist) >= 1;
+
+	case EPieceType::WallPlate:
+		return GetPieceCount(EPieceType::Plywood) >= 1;
+
+	case EPieceType::WallStud:
+	case EPieceType::CornerPost:
+	case EPieceType::DoorFrame:
+		return GetPieceCount(EPieceType::WallPlate) >= 1;
+
+	case EPieceType::Header:
+		return GetPieceCount(EPieceType::WallStud) >= 1;
+
+	case EPieceType::TopPlate:
+		return GetPieceCount(EPieceType::WallStud) >= 1;
+
+	case EPieceType::DoubleTopPlate:
+		return GetPieceCount(EPieceType::TopPlate) >= 1;
+
+	case EPieceType::Rafter:
+		return GetPieceCount(EPieceType::TopPlate) >= 1;
+
+	default:
+		return true;
+	}
+}
+
+FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) const
+{
+	if (CanPlacePieceType(PieceType)) return FString();
+
+	switch (PieceType)
+	{
+	case EPieceType::RimBoard:
+		return TEXT("Place at least 1 foundation first");
+
+	case EPieceType::FloorJoist:
+		return FString::Printf(TEXT("Complete rim board rectangle first (%d/4 placed)"),
+			GetPieceCount(EPieceType::RimBoard));
+
+	case EPieceType::Plywood:
+		return TEXT("Place floor joists first");
+
+	case EPieceType::WallPlate:
+		return TEXT("Install plywood sheathing first");
+
+	case EPieceType::WallStud:
+	case EPieceType::CornerPost:
+	case EPieceType::DoorFrame:
+		return TEXT("Place bottom plates first");
+
+	case EPieceType::Header:
+	case EPieceType::TopPlate:
+		return TEXT("Place wall studs first");
+
+	case EPieceType::DoubleTopPlate:
+		return TEXT("Place top plates first");
+
+	case EPieceType::Rafter:
+		return TEXT("Place top plates first");
+
+	default:
+		return TEXT("Prerequisites not met");
+	}
+}
+
+int32 AConstructionPhaseManager::GetPieceCount(EPieceType PieceType) const
+{
+	if (PlacedPieces.Contains(PieceType))
+	{
+		return PlacedPieces[PieceType].Num();
+	}
+	return 0;
 }
 
 bool AConstructionPhaseManager::CanAdvancePhase() const

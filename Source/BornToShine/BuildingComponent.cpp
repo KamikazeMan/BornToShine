@@ -717,7 +717,32 @@ void UBuildingComponent::CyclePieceType()
 {
 	if (!bIsInBuildMode || AvailablePieceTypes.Num() == 0) return;
 
-	CurrentPieceTypeIndex = (CurrentPieceTypeIndex + 1) % AvailablePieceTypes.Num();
+	// Cycle forward, but skip locked piece types (up to one full loop)
+	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+	int32 StartIndex = CurrentPieceTypeIndex;
+	int32 NextIndex = (CurrentPieceTypeIndex + 1) % AvailablePieceTypes.Num();
+
+	if (PM)
+	{
+		int32 Attempts = 0;
+		while (Attempts < AvailablePieceTypes.Num())
+		{
+			if (AvailablePieceTypes[NextIndex])
+			{
+				ABuildablePiece* CDO = AvailablePieceTypes[NextIndex]->GetDefaultObject<ABuildablePiece>();
+				if (CDO && PM->CanPlacePieceType(CDO->GetPieceType()))
+				{
+					break; // Found an available piece
+				}
+			}
+			NextIndex = (NextIndex + 1) % AvailablePieceTypes.Num();
+			Attempts++;
+		}
+		// If no available piece found after full loop, stay at current
+		if (Attempts >= AvailablePieceTypes.Num()) return;
+	}
+
+	CurrentPieceTypeIndex = NextIndex;
 	SpawnPreviewPiece();
 
 	UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Cycled to %s"), *GetCurrentPieceName());
@@ -890,6 +915,26 @@ void UBuildingComponent::SetPieceTypeIndex(int32 Index)
 	if (Index < 0 || Index >= AvailablePieceTypes.Num()) return;
 	if (Index == CurrentPieceTypeIndex) return;
 
+	// Phase gating: check if the target piece type is available
+	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+	if (PM && AvailablePieceTypes[Index])
+	{
+		ABuildablePiece* CDO = AvailablePieceTypes[Index]->GetDefaultObject<ABuildablePiece>();
+		if (CDO && !PM->CanPlacePieceType(CDO->GetPieceType()))
+		{
+			// Blocked — show prerequisite message on screen
+			FString Msg = PM->GetPrerequisiteMessage(CDO->GetPieceType());
+			if (GEngine && !Msg.IsEmpty())
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+					FString::Printf(TEXT("Locked: %s"), *Msg));
+			}
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Piece %s locked — %s"),
+				*UEnum::GetDisplayValueAsText(CDO->GetPieceType()).ToString(), *Msg);
+			return;
+		}
+	}
+
 	CurrentPieceTypeIndex = Index;
 	SpawnPreviewPiece();
 
@@ -935,6 +980,8 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 	TArray<FString> Names = GetPieceTypeNames();
 	TArray<FPieceTypeInfo> Infos;
 
+	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+
 	for (int32 i = 0; i < AvailablePieceTypes.Num(); i++)
 	{
 		FPieceTypeInfo Info;
@@ -972,8 +1019,57 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 					if (!EditorInfo.DisplayName.IsEmpty()) Info.DisplayName = EditorInfo.DisplayName;
 					if (!EditorInfo.Subtitle.IsEmpty()) Info.Subtitle = EditorInfo.Subtitle;
 					if (!EditorInfo.Icon.IsNull()) Info.Icon = EditorInfo.Icon;
-					Info.bAvailable = EditorInfo.bAvailable;
+					// Don't override bAvailable from editor — phase gating takes priority
 					break;
+				}
+			}
+
+			// --- Phase gating: set bAvailable from ConstructionPhaseManager ---
+			if (PM)
+			{
+				Info.bAvailable = PM->CanPlacePieceType(Info.PieceType);
+
+				// --- Progress indicators: append placed/total to subtitle ---
+				int32 Placed = PM->GetPieceCount(Info.PieceType);
+				int32 Total = 0;
+
+				// Use RectangleBuilder totals for suggestion-driven pieces
+				if (RectangleBuilder)
+				{
+					switch (Info.PieceType)
+					{
+					case EPieceType::RimBoard:
+						Total = 4; // Always 4 per rectangle
+						break;
+					case EPieceType::FloorJoist:
+						if (RectangleBuilder->GetJoistSuggestions().Num() > 0)
+							Total = RectangleBuilder->GetJoistSuggestions().Num();
+						break;
+					case EPieceType::WallPlate:
+						if (RectangleBuilder->GetPlateSuggestions().Num() > 0)
+							Total = RectangleBuilder->GetPlateSuggestions().Num();
+						break;
+					case EPieceType::WallStud:
+						if (RectangleBuilder->GetStudSuggestions().Num() > 0)
+							Total = RectangleBuilder->GetStudSuggestions().Num();
+						break;
+					case EPieceType::TopPlate:
+						if (RectangleBuilder->GetTopPlateSuggestions().Num() > 0)
+							Total = RectangleBuilder->GetTopPlateSuggestions().Num();
+						break;
+					default:
+						break;
+					}
+				}
+
+				// Append progress to subtitle (e.g. "2x6 8ft  2/4")
+				if (Total > 0)
+				{
+					Info.Subtitle = FString::Printf(TEXT("%s  %d/%d"), *Info.Subtitle, Placed, Total);
+				}
+				else if (Placed > 0)
+				{
+					Info.Subtitle = FString::Printf(TEXT("%s  x%d"), *Info.Subtitle, Placed);
 				}
 			}
 		}
