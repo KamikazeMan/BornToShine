@@ -362,6 +362,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
     TArray<FBoardSuggestion> GetGhostPreviews() const { return CurrentSuggestions; }
 
+    // Check if an existing placed piece of the given type is near the position
+    bool OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance = 50.0f) const;
+
     // Enable/disable ghost preview rendering
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Rectangle")
     bool bShowGhostPreviews;
@@ -476,8 +479,5 @@ private:
     // Placed top plates (tracked for double top plate layout)
     UPROPERTY()
     TArray<ATopPlate*> PlacedTopPlates;
-
-    // Check if an existing placed piece of the given type is near the position
-    bool OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance = 50.0f) const;
 
 };

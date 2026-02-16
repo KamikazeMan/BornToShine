@@ -1589,6 +1589,15 @@ bool ABuildablePiece::IsSupported() const
 	return bIsSnapped;
 }
 
+void ABuildablePiece::SetPreviewColor(const FLinearColor& Color)
+{
+	if (!DynamicMaterial) return;
+	DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), Color);
+	DynamicMaterial->SetVectorParameterValue(FName("Base Color"), Color);
+	DynamicMaterial->SetVectorParameterValue(FName("Color"), Color);
+	DynamicMaterial->SetScalarParameterValue(FName("Opacity"), Color.A);
+}
+
 void ABuildablePiece::UpdateVisualFeedback()
 {
 	if (!MeshComponent) return;

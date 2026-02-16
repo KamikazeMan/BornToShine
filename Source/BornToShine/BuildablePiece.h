@@ -100,6 +100,9 @@ public:
 	void SetHighlighted(bool bHighlight);
 	bool IsHighlighted() const { return bIsHighlighted; }
 
+	// Force the preview ghost to a specific color (used for overlap feedback)
+	void SetPreviewColor(const FLinearColor& Color);
+
 	// Get the mesh component (for line trace hit detection)
 	UStaticMeshComponent* GetMeshComponent() const { return MeshComponent; }
 

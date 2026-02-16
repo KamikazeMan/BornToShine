@@ -260,15 +260,9 @@ void UBuildingComponent::UpdatePreviewPosition()
 			CurrentPreviewPiece->MarkSnapped(true);
 
 			// Red ghost when joist already exists at this position
-			bool bJoistOverlaps = RectangleBuilder->OverlapsExistingPiece(
-				EPieceType::FloorJoist, JoistSug.Position);
-			if (bJoistOverlaps && CurrentPreviewPiece->DynamicMaterial)
+			if (RectangleBuilder->OverlapsExistingPiece(EPieceType::FloorJoist, JoistSug.Position))
 			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
+				CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			}
 			return;
 		}
@@ -395,17 +389,14 @@ void UBuildingComponent::UpdatePreviewPosition()
 		CurrentPreviewPiece->MarkSnapped(true);
 
 		// Turn preview red when an existing board already occupies this position
-		bool bSuggestionOverlaps = RectangleBuilder->OverlapsExistingPiece(
-			EPieceType::RimBoard, Suggestion.Position);
-		if (CurrentPreviewPiece->DynamicMaterial)
+		// Turn preview red when an existing board already occupies this position
+		if (RectangleBuilder->OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position))
 		{
-			FLinearColor PreviewColor = bSuggestionOverlaps
-				? CurrentPreviewPiece->InvalidPlacementColor   // Red — board already here
-				: CurrentPreviewPiece->ValidPlacementColor;    // Green — clear to place
-			CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), PreviewColor);
-			CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), PreviewColor);
-			CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), PreviewColor);
-			CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), PreviewColor.A);
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+		}
+		else
+		{
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f));
 		}
 		return;
 	}
@@ -513,14 +504,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 		else if (Joist)
 		{
 			// Overlap skip — show red flash at overlap position then respawn
-			if (CurrentPreviewPiece->DynamicMaterial)
-			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
-			}
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
@@ -549,14 +533,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 		else if (Plate)
 		{
 			// Overlap skip — show red flash at overlap position then respawn
-			if (CurrentPreviewPiece->DynamicMaterial)
-			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
-			}
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
@@ -586,14 +563,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 		else if (Stud)
 		{
 			// Overlap skip — show red flash at overlap position then respawn
-			if (CurrentPreviewPiece->DynamicMaterial)
-			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
-			}
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
@@ -623,14 +593,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 		else if (TopPlateActor)
 		{
 			// Overlap skip — show red flash at overlap position then respawn
-			if (CurrentPreviewPiece->DynamicMaterial)
-			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
-			}
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
@@ -662,14 +625,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 		else if (RimBoard)
 		{
 			// Overlap skip — existing board was reused, show red flash then respawn
-			if (CurrentPreviewPiece->DynamicMaterial)
-			{
-				FLinearColor RedColor = CurrentPreviewPiece->InvalidPlacementColor;
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Base Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetVectorParameterValue(FName("Color"), RedColor);
-				CurrentPreviewPiece->DynamicMaterial->SetScalarParameterValue(FName("Opacity"), RedColor.A);
-			}
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
 			SpawnPreviewPiece();
