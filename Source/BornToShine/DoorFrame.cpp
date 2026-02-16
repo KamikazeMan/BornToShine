@@ -5,7 +5,6 @@
 #include "WallStud.h"
 #include "BottomPlate.h"
 #include "Components/StaticMeshComponent.h"
-#include "PhysicsEngine/BodySetup.h"
 
 ADoorFrame::ADoorFrame()
 {
@@ -60,20 +59,6 @@ void ADoorFrame::BeginPlay()
 	// Size the per-instance collision boxes (posts + header) now that
 	// real dimensions are known from AdjustSocketsToMeshBounds.
 	SetupCollisionBoxes();
-
-	// Defence-in-depth: also set complex-as-simple on the mesh so traces
-	// see the actual geometry.  Pawn blocking is handled by the box
-	// collisions (EnableDoorCollision) which are immune to the shared
-	// BodySetup being invalidated when new instances spawn.
-	if (MeshComponent && MeshComponent->GetStaticMesh())
-	{
-		UBodySetup* BodySetup = MeshComponent->GetStaticMesh()->GetBodySetup();
-		if (BodySetup)
-		{
-			BodySetup->CollisionTraceFlag = ECollisionTraceFlag::CTF_UseComplexAsSimple;
-			MeshComponent->RecreatePhysicsState();
-		}
-	}
 
 	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === DoorFrame king stud height: %.2fcm (%.2f in)"),
 		FrameHeight, FrameHeight / 2.54f);
@@ -175,15 +160,13 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// Mesh stays QueryOnly so building-system line traces (ECC_Visibility)
-	// still hit it.  All other channels are ignored so the mesh's convex
-	// hull never blocks the player.  The per-instance box collisions
-	// (posts + header) handle pawn blocking with the door opening clear.
+	// Mesh collision completely disabled — its convex hull covers the door
+	// opening and can block the player.  The per-instance box collisions
+	// (posts + header) handle BOTH pawn blocking AND visibility line traces
+	// so the building system can still target the frame.
 	if (MeshComponent)
 	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-		MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
 	EnableDoorCollision(true);
 
@@ -202,14 +185,11 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
 
-		// Mesh only needs Visibility traces (for the building system).
-		// Everything else is ignored so the convex hull never blocks the
-		// player.  Box collisions handle pawn blocking with the door clear.
+		// Mesh collision completely disabled (convex hull covers the opening).
+		// Box collisions handle pawn blocking + visibility traces.
 		if (MeshComponent)
 		{
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-			MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-			MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		}
 		EnableDoorCollision(true);
 	}
@@ -295,6 +275,7 @@ void ADoorFrame::EnableDoorCollision(bool bEnable)
 			Box->SetCollisionObjectType(ECC_WorldStatic);
 			Box->SetCollisionResponseToAllChannels(ECR_Ignore);
 			Box->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+			Box->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 		}
 		else
 		{
