@@ -33,6 +33,10 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateDoorFrameRules();
 	CreateTopPlateRules();
 	CreateDoubleTopPlateRules();
+	CreateRidgePostRules();
+	CreateRidgeBoardRules();
+	CreateRafterRules();
+	CreateFasciaBoardRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -598,4 +602,116 @@ void ASocketManager::CreateDoubleTopPlateRules()
 	CompatibilityRules.Add(DblEndRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added double top plate compatibility rules"));
+}
+
+void ASocketManager::CreateRidgePostRules()
+{
+	// Ridge post bottom snaps to double top plate top face (or end)
+	FSocketCompatibilityRule PostBottomRule;
+	PostBottomRule.SourceSocketType = EConstructionSocketType::RidgePost_Bottom;
+	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_End);
+	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
+	PostBottomRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	PostBottomRule.SnapDistance = 250.0f;
+	PostBottomRule.bCheckAlignment = false;
+	PostBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PostBottomRule);
+
+	// Ridge post pocket accepts ridge board ends
+	FSocketCompatibilityRule PocketRule;
+	PocketRule.SourceSocketType = EConstructionSocketType::RidgePost_Pocket;
+	PocketRule.CompatibleSocketTypes.Add(EConstructionSocketType::RidgeBoard_End);
+	PocketRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	PocketRule.SnapDistance = 200.0f;
+	PocketRule.bCheckAlignment = false;
+	PocketRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PocketRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added ridge post compatibility rules"));
+}
+
+void ASocketManager::CreateRidgeBoardRules()
+{
+	// Ridge board ends snap into ridge post pockets
+	FSocketCompatibilityRule EndRule;
+	EndRule.SourceSocketType = EConstructionSocketType::RidgeBoard_End;
+	EndRule.CompatibleSocketTypes.Add(EConstructionSocketType::RidgePost_Pocket);
+	EndRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	EndRule.SnapDistance = 200.0f;
+	EndRule.bCheckAlignment = false;
+	EndRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(EndRule);
+
+	// Ridge board side sockets accept rafter ridge ends
+	FSocketCompatibilityRule SideRule;
+	SideRule.SourceSocketType = EConstructionSocketType::RidgeBoard_Side;
+	SideRule.CompatibleSocketTypes.Add(EConstructionSocketType::Rafter_Ridge);
+	SideRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	SideRule.SnapDistance = 100.0f;
+	SideRule.bCheckAlignment = false;
+	SideRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(SideRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added ridge board compatibility rules"));
+}
+
+void ASocketManager::CreateRafterRules()
+{
+	// Rafter ridge end snaps to ridge board side
+	FSocketCompatibilityRule RidgeRule;
+	RidgeRule.SourceSocketType = EConstructionSocketType::Rafter_Ridge;
+	RidgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::RidgeBoard_Side);
+	RidgeRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	RidgeRule.SnapDistance = 100.0f;
+	RidgeRule.bCheckAlignment = false;
+	RidgeRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(RidgeRule);
+
+	// Rafter birdsmouth snaps to top plate top face
+	FSocketCompatibilityRule BirdsmouthRule;
+	BirdsmouthRule.SourceSocketType = EConstructionSocketType::Rafter_BirdsMouth;
+	BirdsmouthRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
+	BirdsmouthRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_End);
+	BirdsmouthRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	BirdsmouthRule.SnapDistance = 100.0f;
+	BirdsmouthRule.bCheckAlignment = false;
+	BirdsmouthRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(BirdsmouthRule);
+
+	// Rafter tail accepts fascia board
+	FSocketCompatibilityRule TailRule;
+	TailRule.SourceSocketType = EConstructionSocketType::Rafter_Tail;
+	TailRule.CompatibleSocketTypes.Add(EConstructionSocketType::Fascia_RafterTail);
+	TailRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	TailRule.SnapDistance = 100.0f;
+	TailRule.bCheckAlignment = false;
+	TailRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(TailRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added rafter compatibility rules"));
+}
+
+void ASocketManager::CreateFasciaBoardRules()
+{
+	// Fascia rafter tail sockets snap to rafter tail ends
+	FSocketCompatibilityRule TailRule;
+	TailRule.SourceSocketType = EConstructionSocketType::Fascia_RafterTail;
+	TailRule.CompatibleSocketTypes.Add(EConstructionSocketType::Rafter_Tail);
+	TailRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	TailRule.SnapDistance = 100.0f;
+	TailRule.bCheckAlignment = false;
+	TailRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(TailRule);
+
+	// Fascia end-to-end
+	FSocketCompatibilityRule EndRule;
+	EndRule.SourceSocketType = EConstructionSocketType::Fascia_End;
+	EndRule.CompatibleSocketTypes.Add(EConstructionSocketType::Fascia_End);
+	EndRule.RequiredPhase = EConstructionPhase::RoofFrame;
+	EndRule.SnapDistance = 60.0f;
+	EndRule.bCheckAlignment = true;
+	EndRule.MaxAlignmentAngle = 95.0f;
+	CompatibilityRules.Add(EndRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added fascia board compatibility rules"));
 }

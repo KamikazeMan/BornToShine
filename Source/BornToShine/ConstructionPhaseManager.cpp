@@ -54,8 +54,17 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 	case EPieceType::DoubleTopPlate:
 		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
 
+	case EPieceType::RidgePost:
+		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 1;
+
+	case EPieceType::RidgeBoard:
+		return GetCyclePieceCount(EPieceType::RidgePost) >= 1;
+
 	case EPieceType::Rafter:
-		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
+		return GetCyclePieceCount(EPieceType::RidgeBoard) >= 1;
+
+	case EPieceType::FasciaBoard:
+		return GetCyclePieceCount(EPieceType::Rafter) >= 1;
 
 	default:
 		return true;
@@ -93,8 +102,17 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 	case EPieceType::DoubleTopPlate:
 		return TEXT("Place top plates first");
 
+	case EPieceType::RidgePost:
+		return TEXT("Place double top plates first");
+
+	case EPieceType::RidgeBoard:
+		return TEXT("Place ridge posts first");
+
 	case EPieceType::Rafter:
-		return TEXT("Place top plates first");
+		return TEXT("Place ridge board first");
+
+	case EPieceType::FasciaBoard:
+		return TEXT("Place rafters first");
 
 	default:
 		return TEXT("Prerequisites not met");

@@ -76,6 +76,10 @@ protected:
 	void CreateDoorFrameRules();
 	void CreateTopPlateRules();
 	void CreateDoubleTopPlateRules();
+	void CreateRidgePostRules();
+	void CreateRidgeBoardRules();
+	void CreateRafterRules();
+	void CreateFasciaBoardRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(

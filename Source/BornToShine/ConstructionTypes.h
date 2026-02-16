@@ -27,7 +27,10 @@ enum class EPieceType : uint8
 	Rafter				UMETA(DisplayName = "Rafter"),
 	DoorFrame			UMETA(DisplayName = "Door Frame"),
 	TopPlate			UMETA(DisplayName = "Top Plate"),
-	DoubleTopPlate		UMETA(DisplayName = "Double Top Plate")
+	DoubleTopPlate		UMETA(DisplayName = "Double Top Plate"),
+	RidgePost			UMETA(DisplayName = "Ridge Post"),
+	RidgeBoard			UMETA(DisplayName = "Ridge Board"),
+	FasciaBoard			UMETA(DisplayName = "Fascia Board")
 };
 
 /**
@@ -96,6 +99,23 @@ enum class EConstructionSocketType : uint8
 	// Double Top Plate Sockets (second plate, stacks on first)
 	DoubleTopPlate_Bottom		UMETA(DisplayName = "Double Top Plate Bottom"),
 	DoubleTopPlate_End			UMETA(DisplayName = "Double Top Plate End"),
+
+	// Ridge Post Sockets (3-laminated 2x6 with pocket)
+	RidgePost_Bottom			UMETA(DisplayName = "Ridge Post Bottom"),
+	RidgePost_Pocket			UMETA(DisplayName = "Ridge Post Pocket (Top)"),
+
+	// Ridge Board Sockets (horizontal beam at peak)
+	RidgeBoard_End				UMETA(DisplayName = "Ridge Board End"),
+	RidgeBoard_Side				UMETA(DisplayName = "Ridge Board Side (Rafter Attach)"),
+
+	// Rafter Sockets (angled roof members)
+	Rafter_Ridge				UMETA(DisplayName = "Rafter Ridge End"),
+	Rafter_BirdsMouth			UMETA(DisplayName = "Rafter Birdsmouth"),
+	Rafter_Tail					UMETA(DisplayName = "Rafter Tail End"),
+
+	// Fascia Board Sockets
+	Fascia_End					UMETA(DisplayName = "Fascia Board End"),
+	Fascia_RafterTail			UMETA(DisplayName = "Fascia Rafter Tail Attach"),
 
 	None						UMETA(DisplayName = "None")
 };

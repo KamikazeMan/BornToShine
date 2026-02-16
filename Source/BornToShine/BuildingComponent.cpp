@@ -9,6 +9,10 @@
 #include "WallStud.h"
 #include "TopPlate.h"
 #include "DoorFrame.h"
+#include "RidgePost.h"
+#include "RidgeBoard.h"
+#include "Rafter.h"
+#include "FasciaBoard.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
@@ -85,6 +89,26 @@ void UBuildingComponent::BeginPlay()
 		AvailablePieceTypes.Add(ATopPlate::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added TopPlate to AvailablePieceTypes"));
 	}
+	if (!HasPieceType(EPieceType::RidgePost))
+	{
+		AvailablePieceTypes.Add(ARidgePost::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added RidgePost to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::RidgeBoard))
+	{
+		AvailablePieceTypes.Add(ARidgeBoard::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added RidgeBoard to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::Rafter))
+	{
+		AvailablePieceTypes.Add(ARafter::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added Rafter to AvailablePieceTypes"));
+	}
+	if (!HasPieceType(EPieceType::FasciaBoard))
+	{
+		AvailablePieceTypes.Add(AFasciaBoard::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added FasciaBoard to AvailablePieceTypes"));
+	}
 
 	// Also scan PieceTypeInfos for any piece types configured in the editor
 	// that still aren't in AvailablePieceTypes (handles the case where the user
@@ -102,6 +126,10 @@ void UBuildingComponent::BeginPlay()
 		case EPieceType::WallPlate:       AutoClass = ABottomPlate::StaticClass(); break;
 		case EPieceType::Plywood:         AutoClass = APlywoodSheet::StaticClass(); break;
 		case EPieceType::TopPlate:        AutoClass = ATopPlate::StaticClass(); break;
+		case EPieceType::RidgePost:       AutoClass = ARidgePost::StaticClass(); break;
+		case EPieceType::RidgeBoard:      AutoClass = ARidgeBoard::StaticClass(); break;
+		case EPieceType::Rafter:          AutoClass = ARafter::StaticClass(); break;
+		case EPieceType::FasciaBoard:     AutoClass = AFasciaBoard::StaticClass(); break;
 		default: break;
 		}
 
@@ -609,6 +637,38 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 	}
 
+	// RIDGE POST SUGGESTION PATH: When ridge post suggestions exist,
+	// bypass TryPlace and use the calculated center position.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasRidgePostSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::RidgePost)
+	{
+		ARidgePost* Post = Cast<ARidgePost>(CurrentPreviewPiece);
+		if (Post && RectangleBuilder->ApplyRidgePostSuggestion(Post))
+		{
+			PlacedPieces.Add(CurrentPreviewPiece);
+			LastPlacedPiece = CurrentPreviewPiece;
+
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+
+			UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Ridge post placed via suggestion (Total: %d)"), PlacedPieces.Num());
+			return;
+		}
+		else if (Post)
+		{
+			// Overlap skip
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::RidgePost);
+			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+			CurrentPreviewPiece->SetLifeSpan(0.75f);
+			CurrentPreviewPiece = nullptr;
+			SpawnPreviewPiece();
+			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Ridge post skipped (overlap), respawning"));
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER PATH: When a suggestion is active, bypass TryPlace entirely.
 	// Place the board exactly where the RectangleBuilder calculated, with correct length.
 	if (RectangleBuilder && RectangleBuilder->HasActiveSuggestion() &&
@@ -1025,14 +1085,16 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 	// Diagnostic: log cycle piece counts when building menu infos
 	if (PM)
 	{
-		UE_LOG(LogTemp, Log, TEXT("GetPieceTypeInfos: CycleCounts — Foundation=%d RimBoard=%d Joist=%d Plywood=%d Plate=%d Stud=%d TopPlate=%d"),
+		UE_LOG(LogTemp, Log, TEXT("GetPieceTypeInfos: CycleCounts — Found=%d Rim=%d Joist=%d Ply=%d Plate=%d Stud=%d Top=%d DblTop=%d Ridge=%d"),
 			PM->GetCyclePieceCount(EPieceType::Foundation),
 			PM->GetCyclePieceCount(EPieceType::RimBoard),
 			PM->GetCyclePieceCount(EPieceType::FloorJoist),
 			PM->GetCyclePieceCount(EPieceType::Plywood),
 			PM->GetCyclePieceCount(EPieceType::WallPlate),
 			PM->GetCyclePieceCount(EPieceType::WallStud),
-			PM->GetCyclePieceCount(EPieceType::TopPlate));
+			PM->GetCyclePieceCount(EPieceType::TopPlate),
+			PM->GetCyclePieceCount(EPieceType::DoubleTopPlate),
+			PM->GetCyclePieceCount(EPieceType::RidgePost));
 	}
 	else
 	{
@@ -1064,6 +1126,10 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::CornerPost:      Info.Subtitle = TEXT("4-Stud"); break;
 				case EPieceType::DoorFrame:       Info.Subtitle = TEXT("36\""); break;
 				case EPieceType::TopPlate:        Info.Subtitle = TEXT("2x4"); break;
+				case EPieceType::RidgePost:       Info.Subtitle = TEXT("3-2x6"); break;
+				case EPieceType::RidgeBoard:      Info.Subtitle = TEXT("2x8"); break;
+				case EPieceType::Rafter:          Info.Subtitle = TEXT("2x6"); break;
+				case EPieceType::FasciaBoard:     Info.Subtitle = TEXT("1x6"); break;
 				default: break;
 				}
 			}
@@ -1113,6 +1179,10 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 					case EPieceType::TopPlate:
 						if (RectangleBuilder->GetTopPlateSuggestions().Num() > 0)
 							Total = RectangleBuilder->GetTopPlateSuggestions().Num();
+						break;
+					case EPieceType::RidgePost:
+						if (RectangleBuilder->GetRidgePostSuggestions().Num() > 0)
+							Total = RectangleBuilder->GetRidgePostSuggestions().Num();
 						break;
 					default:
 						break;

@@ -9,6 +9,7 @@
 #include "CornerPost.h"
 #include "PlywoodSheet.h"
 #include "FoundationBlock.h"
+#include "RidgePost.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -29,6 +30,7 @@ URectangleBuilderComponent::URectangleBuilderComponent()
     PlacedPlateCount = 0;
     PlacedStudCount = 0;
     PlacedTopPlateCount = 0;
+    PlacedRidgePostCount = 0;
 }
 
 void URectangleBuilderComponent::BeginPlay()
@@ -1829,7 +1831,11 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
             PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
         if (AConstructionPhaseManager::Instance)
+        {
             AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::TopPlate);
+            if (NextSug.bIsDoubleTopPlate)
+                AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::DoubleTopPlate);
+        }
         LastSkipPos = NextSug.Position;
         LastSkipRot = NextSug.Rotation;
         bAnySkipped = true;
@@ -1837,8 +1843,9 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
     }
     if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
     {
-        // All remaining top plates were skipped — position for red feedback
+        // All remaining top plates were skipped — trigger next phase
         if (bAnySkipped) { Plate->SetActorLocation(LastSkipPos); Plate->SetActorRotation(LastSkipRot); }
+        CalculateRidgePostLayout();
         return false;
     }
 
@@ -1866,6 +1873,14 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
     if (AConstructionPhaseManager::Instance)
     {
         AConstructionPhaseManager::Instance->RegisterPlacedPiece(Plate);
+
+        // Double top plates: also increment DoubleTopPlate cycle count
+        // (the actor's PieceType is TopPlate, but phase gating for RidgePost
+        // checks DoubleTopPlate count)
+        if (Suggestion.bIsDoubleTopPlate)
+        {
+            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::DoubleTopPlate);
+        }
     }
 
     PlacedTopPlates.Add(Plate);
@@ -1876,6 +1891,12 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
         LayerName, PlacedTopPlateCount, TopPlateSuggestions.Num(),
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
         Suggestion.Rotation.Yaw, Suggestion.LengthCm);
+
+    // After all top plates are placed, calculate ridge post layout
+    if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
+    {
+        CalculateRidgePostLayout();
+    }
 
     return true;
 }
@@ -1895,5 +1916,197 @@ bool URectangleBuilderComponent::OverlapsExistingPiece(EPieceType Type, const FV
         }
     }
     return false;
+}
+
+// =============================================================================
+// Ridge Post Layout (2 posts at gable ends, centered on building width)
+// =============================================================================
+
+void URectangleBuilderComponent::CalculateRidgePostLayout()
+{
+    RidgePostSuggestions.Empty();
+    PlacedRidgePostCount = 0;
+    PlacedRidgePosts.Empty();
+
+    // Need completed rectangle geometry and through boards
+    if (CompletedRimBoards.Num() < 4 || !ThroughBoard1 || !ThroughBoard3)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateRidgePostLayout - Missing rectangle geometry!"));
+        return;
+    }
+
+    // --- Identify end boards (gable walls) from completed rim boards ---
+    // ThroughBoard1 and ThroughBoard3 are the long parallel walls.
+    // End boards are the other two in CompletedRimBoards.
+    ARimBoard* EndBoardA = nullptr;
+    ARimBoard* EndBoardB = nullptr;
+    for (ARimBoard* Board : CompletedRimBoards)
+    {
+        if (Board != ThroughBoard1 && Board != ThroughBoard3)
+        {
+            if (!EndBoardA) EndBoardA = Board;
+            else EndBoardB = Board;
+        }
+    }
+
+    if (!EndBoardA || !EndBoardB)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateRidgePostLayout - Could not identify end boards!"));
+        return;
+    }
+
+    // --- Calculate building geometry ---
+    FVector Through1Center = ThroughBoard1->GetActorLocation();
+    FVector Through3Center = ThroughBoard3->GetActorLocation();
+
+    // Building center line (midpoint between the two long walls)
+    FVector BuildingCenter2D = (Through1Center + Through3Center) / 2.0f;
+
+    // Building half-width = half the distance between through boards (perpendicular)
+    FVector EndFwd = EndBoardA->GetActorRotation().RotateVector(FVector::ForwardVector);
+    float FullWidth = FMath::Abs(FVector::DotProduct(Through3Center - Through1Center, EndFwd));
+    float HalfWidth = FullWidth / 2.0f;
+
+    // Ridge line direction (parallel to through boards)
+    FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
+    FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
+
+    // Default post height for 6/12 pitch: rise = (6/12) * halfWidth
+    float DefaultPostHeight = (6.0f / 12.0f) * HalfWidth;
+    DefaultPostHeight = FMath::Clamp(DefaultPostHeight, 30.48f, 243.84f);
+
+    // --- Find the Z position: top of double top plate ---
+    float DoubleTopPlateTopZ = 0.0f;
+    bool bFoundDTP = false;
+
+    if (AConstructionPhaseManager::Instance)
+    {
+        TArray<ABuildablePiece*> TopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+        for (ABuildablePiece* Piece : TopPlates)
+        {
+            if (!Piece) continue;
+            ATopPlate* TP = Cast<ATopPlate>(Piece);
+            if (!TP) continue;
+
+            float PlateTopZ = Piece->GetActorLocation().Z + TP->BoardHeight / 2.0f;
+            if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+            {
+                DoubleTopPlateTopZ = PlateTopZ;
+                bFoundDTP = true;
+            }
+        }
+    }
+
+    if (!bFoundDTP)
+    {
+        // Fallback: estimate from rim boards + wall height + two plates
+        DoubleTopPlateTopZ = Through1Center.Z + 13.97f + 1.905f + 235.27f + 3.81f + 3.81f;
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateRidgePostLayout - No placed top plates found, estimating DTP Z=%.1f"),
+            DoubleTopPlateTopZ);
+    }
+
+    // Ridge post center Z = DTP top + half the default post height
+    float PostCenterZ = DoubleTopPlateTopZ + DefaultPostHeight / 2.0f;
+
+    // --- Create suggestions for each gable end ---
+    ARimBoard* EndBoards[2] = { EndBoardA, EndBoardB };
+
+    for (int32 i = 0; i < 2; i++)
+    {
+        if (!EndBoards[i]) continue;
+
+        // Project end board center onto the building center line
+        FVector EndCenter = EndBoards[i]->GetActorLocation();
+        float ProjectionDist = FVector::DotProduct(EndCenter - BuildingCenter2D, RidgeFwd);
+        FVector PostXY = BuildingCenter2D + RidgeFwd * ProjectionDist;
+
+        FRidgePostSuggestion Sug;
+        Sug.Position = FVector(PostXY.X, PostXY.Y, PostCenterZ);
+        Sug.Rotation = RidgeRotation;
+        Sug.PostHeightCm = DefaultPostHeight;
+        Sug.BuildingHalfWidthCm = HalfWidth;
+        Sug.PostIndex = i;
+        Sug.bIsValid = true;
+        RidgePostSuggestions.Add(Sug);
+
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: RidgePost[%d] Pos=(%.1f, %.1f, %.1f) Rot=%.1f Height=%.1fcm HalfWidth=%.1fcm Pitch=%.1f/12"),
+            i, Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
+            Sug.Rotation.Yaw, DefaultPostHeight, HalfWidth,
+            (DefaultPostHeight / HalfWidth) * 12.0f);
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, default pitch=6/12)"),
+        RidgePostSuggestions.Num(), FullWidth, HalfWidth);
+}
+
+FRidgePostSuggestion URectangleBuilderComponent::GetNextRidgePostSuggestion() const
+{
+    if (PlacedRidgePostCount < RidgePostSuggestions.Num())
+    {
+        return RidgePostSuggestions[PlacedRidgePostCount];
+    }
+    return FRidgePostSuggestion();
+}
+
+bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
+{
+    if (!Post || !HasRidgePostSuggestions()) return false;
+
+    // Skip suggestions that overlap with existing ridge posts
+    while (PlacedRidgePostCount < RidgePostSuggestions.Num())
+    {
+        FRidgePostSuggestion& NextSug = RidgePostSuggestions[PlacedRidgePostCount];
+        if (!NextSug.bIsValid) break;
+
+        if (!OverlapsExistingPiece(EPieceType::RidgePost, NextSug.Position, 30.0f))
+            break;
+
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping ridge post %d — overlaps existing at (%.1f, %.1f, %.1f)"),
+            PlacedRidgePostCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+        if (AConstructionPhaseManager::Instance)
+            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::RidgePost);
+        PlacedRidgePostCount++;
+    }
+    if (PlacedRidgePostCount >= RidgePostSuggestions.Num())
+    {
+        return false;
+    }
+
+    FRidgePostSuggestion Suggestion = GetNextRidgePostSuggestion();
+    if (!Suggestion.bIsValid) return false;
+
+    // Set building half-width for pitch calculation
+    Post->SetBuildingHalfWidth(Suggestion.BuildingHalfWidthCm);
+
+    // Set default height (player can adjust with scroll wheel before placing)
+    Post->SetPostHeightCm(Suggestion.PostHeightCm);
+
+    // Set position and rotation
+    Post->SetActorLocation(Suggestion.Position);
+    Post->SetActorRotation(Suggestion.Rotation);
+
+    // Mark as placed
+    Post->SetPreviewMode(false);
+    if (Post->ShouldAutoNail())
+    {
+        Post->NailInPlace();
+    }
+
+    // Register with PhaseManager
+    if (AConstructionPhaseManager::Instance)
+    {
+        AConstructionPhaseManager::Instance->RegisterPlacedPiece(Post);
+    }
+
+    PlacedRidgePosts.Add(Post);
+    PlacedRidgePostCount++;
+
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed ridge post %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f Height=%.1fcm %s"),
+        PlacedRidgePostCount, RidgePostSuggestions.Num(),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.Rotation.Yaw, Suggestion.PostHeightCm,
+        *Post->GetPitchDisplayString());
+
+    return true;
 }
 

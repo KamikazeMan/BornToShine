@@ -15,6 +15,7 @@ class AFloorJoist;
 class ABottomPlate;
 class AWallStud;
 class ATopPlate;
+class ARidgePost;
 
 /**
  * Tracks the state of rectangle construction
@@ -250,6 +251,45 @@ struct FTopPlateSuggestion
 };
 
 /**
+ * Data for a suggested ridge post placement (auto-placed at gable ends)
+ */
+USTRUCT(BlueprintType)
+struct FRidgePostSuggestion
+{
+    GENERATED_BODY()
+
+    // World position for the post base (on top of double top plate)
+    UPROPERTY(BlueprintReadOnly)
+    FVector Position;
+
+    // World rotation (aligned with ridge line direction)
+    UPROPERTY(BlueprintReadOnly)
+    FRotator Rotation;
+
+    // Default post height (for 6/12 pitch)
+    UPROPERTY(BlueprintReadOnly)
+    float PostHeightCm;
+
+    // Building half-width for pitch calculation (center to wall)
+    UPROPERTY(BlueprintReadOnly)
+    float BuildingHalfWidthCm;
+
+    // Post index (0 = first gable end, 1 = second gable end)
+    int32 PostIndex;
+
+    bool bIsValid;
+
+    FRidgePostSuggestion()
+        : Position(FVector::ZeroVector)
+        , Rotation(FRotator::ZeroRotator)
+        , PostHeightCm(60.96f)
+        , BuildingHalfWidthCm(121.92f)
+        , PostIndex(0)
+        , bIsValid(false)
+    {}
+};
+
+/**
  * Component that tracks rectangle construction progress.
  * Attach to the same actor as BuildingComponent.
  * Recognizes L-shapes from placed boards and suggests/auto-places remaining boards.
@@ -357,6 +397,23 @@ public:
 
     // How many top plates have been placed
     int32 GetPlacedTopPlateCount() const { return PlacedTopPlateCount; }
+
+    // --- Ridge Post Layout System ---
+
+    // Does the builder have ridge post suggestions ready?
+    bool HasRidgePostSuggestions() const { return RidgePostSuggestions.Num() > 0 && PlacedRidgePostCount < RidgePostSuggestions.Num(); }
+
+    // Get the next ridge post suggestion (first unplaced)
+    FRidgePostSuggestion GetNextRidgePostSuggestion() const;
+
+    // Apply a ridge post suggestion: sets position, rotation, height, building half-width
+    bool ApplyRidgePostSuggestion(ARidgePost* Post);
+
+    // Get all ridge post suggestions
+    TArray<FRidgePostSuggestion> GetRidgePostSuggestions() const { return RidgePostSuggestions; }
+
+    // How many ridge posts have been placed
+    int32 GetPlacedRidgePostCount() const { return PlacedRidgePostCount; }
 
     // Get the ghost preview locations for rendering
     UFUNCTION(BlueprintCallable, Category = "Construction|Rectangle")
@@ -481,5 +538,20 @@ private:
     // Placed top plates (tracked for double top plate layout)
     UPROPERTY()
     TArray<ATopPlate*> PlacedTopPlates;
+
+    // --- Ridge Post Layout ---
+
+    // Calculate ridge post positions after all top plates are placed
+    void CalculateRidgePostLayout();
+
+    // Ridge post suggestions (one per gable end, typically 2)
+    TArray<FRidgePostSuggestion> RidgePostSuggestions;
+
+    // Number of ridge posts placed so far
+    int32 PlacedRidgePostCount;
+
+    // Placed ridge posts (tracked for ridge board layout)
+    UPROPERTY()
+    TArray<ARidgePost*> PlacedRidgePosts;
 
 };
