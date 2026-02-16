@@ -75,6 +75,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	int32 GetPieceCount(EPieceType PieceType) const;
 
+	// Get piece count for the CURRENT build cycle only (resets when starting new section)
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	int32 GetCyclePieceCount(EPieceType PieceType) const;
+
+	// Reset the build cycle — clears cycle counts so gating restarts from Foundation.
+	// Called when the player selects Foundation to start a new section.
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	void ResetBuildCycle();
+
 	// Enable/disable automatic phase advancement (default: true)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	bool bAutoAdvancePhases;
@@ -88,6 +97,10 @@ protected:
 
 	// All placed pieces tracked by type (not replicated - internal tracking only)
 	TMap<EPieceType, TArray<class ABuildablePiece*>> PlacedPieces;
+
+	// Per-cycle piece counts: resets each time the player starts a new section (selects Foundation).
+	// CanPlacePieceType uses these for gating, not the global PlacedPieces.
+	TMap<EPieceType, int32> CyclePieceCounts;
 
 	// Phase advancement requirements
 	struct FPhaseRequirement

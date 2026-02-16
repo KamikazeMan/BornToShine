@@ -751,6 +751,16 @@ void UBuildingComponent::CyclePieceType()
 		if (Attempts >= AvailablePieceTypes.Num()) return;
 	}
 
+	// Selecting Foundation resets the build cycle
+	if (PM && AvailablePieceTypes[NextIndex])
+	{
+		ABuildablePiece* NextCDO = AvailablePieceTypes[NextIndex]->GetDefaultObject<ABuildablePiece>();
+		if (NextCDO && NextCDO->GetPieceType() == EPieceType::Foundation)
+		{
+			PM->ResetBuildCycle();
+		}
+	}
+
 	CurrentPieceTypeIndex = NextIndex;
 	SpawnPreviewPiece();
 
@@ -924,24 +934,35 @@ void UBuildingComponent::SetPieceTypeIndex(int32 Index)
 	if (Index < 0 || Index >= AvailablePieceTypes.Num()) return;
 	if (Index == CurrentPieceTypeIndex) return;
 
-	// Phase gating: check if the target piece type is available
 	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
-	if (PM && AvailablePieceTypes[Index])
+
+	// Determine the target piece type
+	EPieceType TargetType = EPieceType::None;
+	if (AvailablePieceTypes[Index])
 	{
 		ABuildablePiece* CDO = AvailablePieceTypes[Index]->GetDefaultObject<ABuildablePiece>();
-		if (CDO && !PM->CanPlacePieceType(CDO->GetPieceType()))
+		if (CDO) TargetType = CDO->GetPieceType();
+	}
+
+	// Selecting Foundation resets the build cycle — everything locks again
+	if (TargetType == EPieceType::Foundation && PM)
+	{
+		PM->ResetBuildCycle();
+	}
+
+	// Phase gating: check if the target piece type is available (AFTER potential reset)
+	if (PM && TargetType != EPieceType::None && !PM->CanPlacePieceType(TargetType))
+	{
+		// Blocked — show prerequisite message on screen
+		FString Msg = PM->GetPrerequisiteMessage(TargetType);
+		if (GEngine && !Msg.IsEmpty())
 		{
-			// Blocked — show prerequisite message on screen
-			FString Msg = PM->GetPrerequisiteMessage(CDO->GetPieceType());
-			if (GEngine && !Msg.IsEmpty())
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
-					FString::Printf(TEXT("Locked: %s"), *Msg));
-			}
-			UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Piece %s locked — %s"),
-				*UEnum::GetDisplayValueAsText(CDO->GetPieceType()).ToString(), *Msg);
-			return;
+			GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
+				FString::Printf(TEXT("Locked: %s"), *Msg));
 		}
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Piece %s locked — %s"),
+			*UEnum::GetDisplayValueAsText(TargetType).ToString(), *Msg);
+		return;
 	}
 
 	CurrentPieceTypeIndex = Index;
@@ -991,18 +1012,17 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 
 	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
 
-	// Diagnostic: log phase gating state when building menu infos
+	// Diagnostic: log cycle piece counts when building menu infos
 	if (PM)
 	{
-		UE_LOG(LogTemp, Log, TEXT("GetPieceTypeInfos: PM=%p Foundation=%d RimBoard=%d Joist=%d Plywood=%d Plate=%d Stud=%d TopPlate=%d"),
-			PM,
-			PM->GetPieceCount(EPieceType::Foundation),
-			PM->GetPieceCount(EPieceType::RimBoard),
-			PM->GetPieceCount(EPieceType::FloorJoist),
-			PM->GetPieceCount(EPieceType::Plywood),
-			PM->GetPieceCount(EPieceType::WallPlate),
-			PM->GetPieceCount(EPieceType::WallStud),
-			PM->GetPieceCount(EPieceType::TopPlate));
+		UE_LOG(LogTemp, Log, TEXT("GetPieceTypeInfos: CycleCounts — Foundation=%d RimBoard=%d Joist=%d Plywood=%d Plate=%d Stud=%d TopPlate=%d"),
+			PM->GetCyclePieceCount(EPieceType::Foundation),
+			PM->GetCyclePieceCount(EPieceType::RimBoard),
+			PM->GetCyclePieceCount(EPieceType::FloorJoist),
+			PM->GetCyclePieceCount(EPieceType::Plywood),
+			PM->GetCyclePieceCount(EPieceType::WallPlate),
+			PM->GetCyclePieceCount(EPieceType::WallStud),
+			PM->GetCyclePieceCount(EPieceType::TopPlate));
 	}
 	else
 	{
@@ -1056,8 +1076,8 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 			{
 				Info.bAvailable = PM->CanPlacePieceType(Info.PieceType);
 
-				// --- Progress indicators: append placed/total to subtitle ---
-				int32 Placed = PM->GetPieceCount(Info.PieceType);
+				// --- Progress indicators: append placed/total to subtitle (cycle counts) ---
+				int32 Placed = PM->GetCyclePieceCount(Info.PieceType);
 				int32 Total = 0;
 
 				// Use RectangleBuilder totals for suggestion-driven pieces

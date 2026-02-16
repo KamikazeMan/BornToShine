@@ -21,7 +21,7 @@ void AConstructionPhaseManager::BeginPlay()
 
 bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 {
-	// Phase gating: each piece type requires earlier phases to be (partially) complete.
+	// Phase gating uses CYCLE counts (resets each time player starts a new section).
 	// Foundation is always available. Going backward is always allowed.
 	switch (PieceType)
 	{
@@ -29,33 +29,33 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 		return true; // Always available
 
 	case EPieceType::RimBoard:
-		return GetPieceCount(EPieceType::Foundation) >= 1;
+		return GetCyclePieceCount(EPieceType::Foundation) >= 1;
 
 	case EPieceType::FloorJoist:
-		return GetPieceCount(EPieceType::RimBoard) >= 4;
+		return GetCyclePieceCount(EPieceType::RimBoard) >= 4;
 
 	case EPieceType::Plywood:
-		return GetPieceCount(EPieceType::FloorJoist) >= 1;
+		return GetCyclePieceCount(EPieceType::FloorJoist) >= 1;
 
 	case EPieceType::WallPlate:
-		return GetPieceCount(EPieceType::Plywood) >= 1;
+		return GetCyclePieceCount(EPieceType::Plywood) >= 1;
 
 	case EPieceType::WallStud:
 	case EPieceType::CornerPost:
 	case EPieceType::DoorFrame:
-		return GetPieceCount(EPieceType::WallPlate) >= 1;
+		return GetCyclePieceCount(EPieceType::WallPlate) >= 1;
 
 	case EPieceType::Header:
-		return GetPieceCount(EPieceType::WallStud) >= 1;
+		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
 
 	case EPieceType::TopPlate:
-		return GetPieceCount(EPieceType::WallStud) >= 1;
+		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
 
 	case EPieceType::DoubleTopPlate:
-		return GetPieceCount(EPieceType::TopPlate) >= 1;
+		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
 
 	case EPieceType::Rafter:
-		return GetPieceCount(EPieceType::TopPlate) >= 1;
+		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
 
 	default:
 		return true;
@@ -73,7 +73,7 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 
 	case EPieceType::FloorJoist:
 		return FString::Printf(TEXT("Complete rim board rectangle first (%d/4 placed)"),
-			GetPieceCount(EPieceType::RimBoard));
+			GetCyclePieceCount(EPieceType::RimBoard));
 
 	case EPieceType::Plywood:
 		return TEXT("Place floor joists first");
@@ -108,6 +108,26 @@ int32 AConstructionPhaseManager::GetPieceCount(EPieceType PieceType) const
 		return PlacedPieces[PieceType].Num();
 	}
 	return 0;
+}
+
+int32 AConstructionPhaseManager::GetCyclePieceCount(EPieceType PieceType) const
+{
+	if (const int32* Count = CyclePieceCounts.Find(PieceType))
+	{
+		return *Count;
+	}
+	return 0;
+}
+
+void AConstructionPhaseManager::ResetBuildCycle()
+{
+	CyclePieceCounts.Empty();
+	UE_LOG(LogTemp, Log, TEXT("ConstructionPhaseManager: Build cycle RESET — all piece types locked until prerequisites met again"));
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan,
+			TEXT("New section — build cycle reset"));
+	}
 }
 
 bool AConstructionPhaseManager::CanAdvancePhase() const
@@ -184,9 +204,17 @@ void AConstructionPhaseManager::RegisterPlacedPiece(ABuildablePiece* Piece)
 
 	PlacedPieces[PieceType].Add(Piece);
 
-	UE_LOG(LogTemp, Log, TEXT("Registered piece: %s type=%s (Total of this type: %d)"),
+	// Increment cycle count (used for phase gating)
+	if (!CyclePieceCounts.Contains(PieceType))
+	{
+		CyclePieceCounts.Add(PieceType, 0);
+	}
+	CyclePieceCounts[PieceType]++;
+
+	UE_LOG(LogTemp, Log, TEXT("Registered piece: %s type=%s (Cycle: %d, Total: %d)"),
 		*Piece->GetName(),
 		*UEnum::GetValueAsString(PieceType),
+		CyclePieceCounts[PieceType],
 		PlacedPieces[PieceType].Num());
 
 	// Auto-advance phase if enabled and requirements are met
