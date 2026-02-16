@@ -12,6 +12,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "GameFramework/PlayerController.h"
 #include "SnapRuleTable.h"
+#include "RectangleBuilder.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -270,7 +271,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 		}
 	}
 
-	if (PieceType == EPieceType::RimBoard && PlacedRimBoardCount >= 3)
+	// Only allow dual-end snap when RectangleBuilder is in UShape state
+	// (i.e., actually waiting for a closing board 4). Without this gate,
+	// completed sections' open corner sockets cause bogus diagonal snaps.
+	bool bRectangleNeedsClosingBoard = false;
+	if (UWorld* World = GetWorld())
+	{
+		APlayerController* PC = World->GetFirstPlayerController();
+		if (PC && PC->GetPawn())
+		{
+			URectangleBuilderComponent* RectBuilder = PC->GetPawn()->FindComponentByClass<URectangleBuilderComponent>();
+			if (RectBuilder && RectBuilder->GetRectangleState() == ERectangleState::UShape)
+			{
+				bRectangleNeedsClosingBoard = true;
+			}
+		}
+	}
+
+	if (PieceType == EPieceType::RimBoard && PlacedRimBoardCount >= 3 && bRectangleNeedsClosingBoard)
 	{
 		// Find our Left and Right EndCorner sockets
 		const FConstructionSocket* LeftCornerSocket = nullptr;
