@@ -586,8 +586,8 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
             for (ABuildablePiece* Piece : ExistingBoards)
             {
                 if (!Piece) continue;
-                float Dist = FVector::Dist(Piece->GetActorLocation(), Sug.Position);
-                if (Dist < 15.0f && Dist < BestDist)
+                float Dist = FVector::Dist2D(Piece->GetActorLocation(), Sug.Position);
+                if (Dist < 50.0f && Dist < BestDist)
                 {
                     ExistingBoard = Cast<ARimBoard>(Piece);
                     BestDist = Dist;
@@ -1852,12 +1852,11 @@ bool URectangleBuilderComponent::OverlapsExistingPiece(EPieceType Type, const FV
 {
     if (!AConstructionPhaseManager::Instance) return false;
 
-    float ToleranceSq = Tolerance * Tolerance;
     TArray<ABuildablePiece*> Existing = AConstructionPhaseManager::Instance->GetPiecesOfType(Type);
 
     for (ABuildablePiece* Piece : Existing)
     {
-        if (Piece && FVector::DistSquared(Piece->GetActorLocation(), Position) < ToleranceSq)
+        if (Piece && FVector::Dist2D(Piece->GetActorLocation(), Position) < Tolerance)
         {
             return true;
         }
