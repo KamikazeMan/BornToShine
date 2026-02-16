@@ -363,7 +363,9 @@ public:
     TArray<FBoardSuggestion> GetGhostPreviews() const { return CurrentSuggestions; }
 
     // Check if an existing placed piece of the given type is near the position
-    bool OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance = 50.0f) const;
+    // Default 15cm is safe for joists (16" OC = 40.64cm spacing).
+    // Pass 50cm explicitly for rim board overlap checks (8ft spacing).
+    bool OverlapsExistingPiece(EPieceType Type, const FVector& Position, float Tolerance = 15.0f) const;
 
     // Enable/disable ghost preview rendering
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Rectangle")

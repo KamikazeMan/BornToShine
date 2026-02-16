@@ -571,7 +571,7 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     while (HasActiveSuggestion())
     {
         FBoardSuggestion Sug = GetActiveSuggestion();
-        if (!OverlapsExistingPiece(EPieceType::RimBoard, Sug.Position))
+        if (!OverlapsExistingPiece(EPieceType::RimBoard, Sug.Position, 50.0f))
             break; // no overlap → place this one
 
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Board suggestion overlaps existing — reusing existing board at (%.1f, %.1f, %.1f)"),
@@ -838,7 +838,7 @@ void URectangleBuilderComponent::SpawnGhostForSuggestion(const FBoardSuggestion&
     }
 
     // Make it translucent — red if overlapping existing piece, blue if valid
-    bool bGhostOverlaps = OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position);
+    bool bGhostOverlaps = OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position, 50.0f);
     FLinearColor GhostColor = bGhostOverlaps
         ? FLinearColor(1.0f, 0.0f, 0.0f, 0.4f)   // Red — position is taken
         : FLinearColor(0.2f, 0.5f, 1.0f, 0.3f);   // Blue — available

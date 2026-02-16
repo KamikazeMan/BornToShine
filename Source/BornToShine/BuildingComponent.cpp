@@ -389,8 +389,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 		CurrentPreviewPiece->MarkSnapped(true);
 
 		// Turn preview red when an existing board already occupies this position
-		// Turn preview red when an existing board already occupies this position
-		if (RectangleBuilder->OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position))
+		if (RectangleBuilder->OverlapsExistingPiece(EPieceType::RimBoard, Suggestion.Position, 50.0f))
 		{
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 		}
