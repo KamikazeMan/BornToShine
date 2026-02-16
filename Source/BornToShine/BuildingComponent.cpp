@@ -654,6 +654,27 @@ void UBuildingComponent::PlaceCurrentPiece()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Cannot place piece at this location"));
 	}
+
+	// --- Self-healing: after EVERY placement, scan all door frames and fix
+	// any mesh collision that was re-enabled by shared BodySetup mutation. ---
+	if (AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> AllDoors =
+			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoorFrame);
+		for (ABuildablePiece* P : AllDoors)
+		{
+			if (!P) continue;
+			UStaticMeshComponent* M = P->GetMeshComponent();
+			if (M && M->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("DOORFRAME COLLISION CORRUPTION detected after placement! [%s] CollisionEnabled=%d. Forcing NoCollision."),
+					*P->GetName(), (int32)M->GetCollisionEnabled());
+				M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				M->SetCollisionResponseToAllChannels(ECR_Ignore);
+			}
+		}
+	}
 }
 
 void UBuildingComponent::NailLastPlacedPiece()

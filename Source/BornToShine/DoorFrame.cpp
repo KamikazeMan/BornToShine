@@ -21,9 +21,18 @@ ADoorFrame::ADoorFrame()
 	SetRootComponent(SceneRoot);
 	MeshComponent->SetupAttachment(SceneRoot);
 
+	// CRITICAL: Kill ALL mesh collision immediately — BEFORE UE5 creates any
+	// physics state for this component.  The parent ABuildablePiece constructor
+	// set it to QueryOnly + Block(All), which creates a physics body from the
+	// shared BodySetup.  The door frame mesh's convex hull covers the door
+	// opening, so ANY collision on the mesh will block the player.
+	// Setting NoCollision here means no FBodyInstance is ever allocated.
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	MeshComponent->SetGenerateOverlapEvents(false);
+
 	// Collision boxes for the frame structure (posts + header).
-	// The mesh's convex hull covers the door opening, so we disable
-	// pawn blocking on the mesh and use these boxes instead.
+	// These are the ONLY collision primitives on the door frame.
 	LeftPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("LeftPostCollision"));
 	LeftPostCollision->SetupAttachment(SceneRoot);
 	LeftPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -160,15 +169,39 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// Mesh collision completely disabled — its convex hull covers the door
-	// opening and can block the player.  The per-instance box collisions
-	// (posts + header) handle BOTH pawn blocking AND visibility line traces
-	// so the building system can still target the frame.
+	// Force mesh to NoCollision (convex hull covers opening).
+	// Box collisions handle pawn blocking + visibility line traces.
 	if (MeshComponent)
 	{
 		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	}
 	EnableDoorCollision(true);
+
+	// --- Diagnostic: scan ALL placed door frames for collision corruption ---
+	if (AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> AllDoors =
+			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoorFrame);
+		for (ABuildablePiece* P : AllDoors)
+		{
+			ADoorFrame* DF = Cast<ADoorFrame>(P);
+			if (!DF || DF == this) continue;
+			UStaticMeshComponent* M = DF->GetMeshComponent();
+			if (M)
+			{
+				ECollisionEnabled::Type CE = M->GetCollisionEnabled();
+				if (CE != ECollisionEnabled::NoCollision)
+				{
+					UE_LOG(LogTemp, Error,
+						TEXT("COLLISION CORRUPTION: DoorFrame [%s] mesh has CollisionEnabled=%d (expected 0=NoCollision). Forcing NoCollision."),
+						*DF->GetName(), (int32)CE);
+					M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					M->SetCollisionResponseToAllChannels(ECR_Ignore);
+				}
+			}
+		}
+	}
 
 	return true;
 }
@@ -180,22 +213,23 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 {
 	Super::SetPreviewMode(bIsPreview);
 
+	// ALWAYS force mesh back to NoCollision after the parent runs.
+	// Super::SetPreviewMode sets QueryOnly (preview) or QueryAndPhysics (placed)
+	// on the mesh, which creates physics from the shared BodySetup and can
+	// re-enable the convex hull that covers the door opening.
+	if (MeshComponent)
+	{
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	}
+
 	if (!bIsPreview)
 	{
-		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
-
-		// Mesh collision completely disabled (convex hull covers the opening).
-		// Box collisions handle pawn blocking + visibility traces.
-		if (MeshComponent)
-		{
-			MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		}
 		EnableDoorCollision(true);
 	}
 	else
 	{
-		// Preview mode: disable box collisions (player walks through ghost)
 		EnableDoorCollision(false);
 	}
 }
