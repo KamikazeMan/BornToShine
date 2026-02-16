@@ -46,8 +46,8 @@ void ASocketManager::CreateFoundationRules()
 	FoundationSideRule.SourceSocketType = EConstructionSocketType::Foundation_Side;
 	FoundationSideRule.CompatibleSocketTypes.Add(EConstructionSocketType::RimBoard_Bottom_End);
 	FoundationSideRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	FoundationSideRule.SnapDistance = 50.0f;
-	FoundationSideRule.bCheckAlignment = true;
+	FoundationSideRule.SnapDistance = 100.0f;
+	FoundationSideRule.bCheckAlignment = false; // Foundation groove accepts boards at any yaw
 	FoundationSideRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(FoundationSideRule);
 
@@ -63,8 +63,8 @@ void ASocketManager::CreateRimBoardRules()
 	RimBottomRule.SourceSocketType = EConstructionSocketType::RimBoard_Bottom_End;
 	RimBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Foundation_Side); // Primary - centered on groove
 	RimBottomRule.RequiredPhase = EConstructionPhase::FloorFrame;
-	RimBottomRule.SnapDistance = 60.0f;
-	RimBottomRule.bCheckAlignment = true;
+	RimBottomRule.SnapDistance = 100.0f;
+	RimBottomRule.bCheckAlignment = false; // Foundation groove accepts boards at any yaw
 	RimBottomRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(RimBottomRule);
 

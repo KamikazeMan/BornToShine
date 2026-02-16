@@ -8,6 +8,7 @@
 #include "TopPlate.h"
 #include "CornerPost.h"
 #include "PlywoodSheet.h"
+#include "FoundationBlock.h"
 #include "BuildablePiece.h"
 #include "ConstructionPhaseManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -213,6 +214,42 @@ void URectangleBuilderComponent::RecalculateState()
         {
             CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
             CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
+        }
+
+        // Occupy Foundation_Side sockets near each rim board so future sections
+        // don't snap to foundations already supporting this rectangle's boards.
+        if (AConstructionPhaseManager::Instance)
+        {
+            TArray<ABuildablePiece*> Foundations =
+                AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Foundation);
+            for (ARimBoard* Board : TrackedBoards)
+            {
+                if (!Board) continue;
+                float HalfLen = Board->GetEffectiveLength() / 2.0f;
+                FVector BoardFwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
+                FVector CheckPositions[3] = {
+                    Board->GetActorLocation(),
+                    Board->GetActorLocation() - BoardFwd * HalfLen,
+                    Board->GetActorLocation() + BoardFwd * HalfLen
+                };
+                for (ABuildablePiece* Foundation : Foundations)
+                {
+                    if (!Foundation) continue;
+                    for (int32 pi = 0; pi < 3; pi++)
+                    {
+                        if (FVector::Dist2D(CheckPositions[pi], Foundation->GetActorLocation()) < 50.0f)
+                        {
+                            FConstructionSocket* SideSocket =
+                                Foundation->GetSocketByName(FName("Foundation_Side_Center"));
+                            if (SideSocket && !SideSocket->bIsOccupied)
+                            {
+                                Foundation->OccupySocket(FName("Foundation_Side_Center"), Board);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         // Reset for the next rectangle
@@ -589,6 +626,34 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Rectangle COMPLETE (board reused). Calculating layouts."));
             CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
             CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
+
+            // Occupy Foundation_Side sockets near each rim board
+            if (AConstructionPhaseManager::Instance)
+            {
+                TArray<ABuildablePiece*> Foundations =
+                    AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Foundation);
+                for (ARimBoard* TB : TrackedBoards)
+                {
+                    if (!TB) continue;
+                    float HL = TB->GetEffectiveLength() / 2.0f;
+                    FVector Fwd = TB->GetActorRotation().RotateVector(FVector::ForwardVector);
+                    FVector CP[3] = { TB->GetActorLocation(), TB->GetActorLocation() - Fwd * HL, TB->GetActorLocation() + Fwd * HL };
+                    for (ABuildablePiece* F : Foundations)
+                    {
+                        if (!F) continue;
+                        for (int32 pi = 0; pi < 3; pi++)
+                        {
+                            if (FVector::Dist2D(CP[pi], F->GetActorLocation()) < 50.0f)
+                            {
+                                FConstructionSocket* SS = F->GetSocketByName(FName("Foundation_Side_Center"));
+                                if (SS && !SS->bIsOccupied) F->OccupySocket(FName("Foundation_Side_Center"), TB);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
             TrackedBoards.Empty();
             CurrentState = ERectangleState::None;
             break; // State reset — no more suggestions
@@ -695,6 +760,42 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed board [%s] socket %s -> World=(%.3f, %.3f, %.3f)"),
             *Board->GetName(), *S.SocketName.ToString(),
             WorldPos.X, WorldPos.Y, WorldPos.Z);
+    }
+
+    // Occupy Foundation_Side sockets near this board.
+    // Boards placed via suggestion bypass CommitPlacement() which normally
+    // occupies the foundation socket.  Without this, future sections can
+    // incorrectly snap to foundations that already have a rim board on them.
+    if (AConstructionPhaseManager::Instance)
+    {
+        TArray<ABuildablePiece*> Foundations =
+            AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Foundation);
+        float HalfLen = Board->GetEffectiveLength() / 2.0f;
+        FVector BoardFwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
+        FVector CheckPositions[3] = {
+            Board->GetActorLocation(),
+            Board->GetActorLocation() - BoardFwd * HalfLen,
+            Board->GetActorLocation() + BoardFwd * HalfLen
+        };
+        for (ABuildablePiece* Foundation : Foundations)
+        {
+            if (!Foundation) continue;
+            for (int32 pi = 0; pi < 3; pi++)
+            {
+                if (FVector::Dist2D(CheckPositions[pi], Foundation->GetActorLocation()) < 50.0f)
+                {
+                    FConstructionSocket* SideSocket =
+                        Foundation->GetSocketByName(FName("Foundation_Side_Center"));
+                    if (SideSocket && !SideSocket->bIsOccupied)
+                    {
+                        Foundation->OccupySocket(FName("Foundation_Side_Center"), Board);
+                        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Occupied Foundation_Side_Center on [%s] for board [%s]"),
+                            *Foundation->GetName(), *Board->GetName());
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Board placed via suggestion at (%.1f, %.1f, %.1f) Yaw=%.1f"),
