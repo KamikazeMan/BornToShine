@@ -130,6 +130,18 @@ void AConstructionPhaseManager::ResetBuildCycle()
 	}
 }
 
+void AConstructionPhaseManager::IncrementCyclePieceCount(EPieceType PieceType)
+{
+	if (!CyclePieceCounts.Contains(PieceType))
+	{
+		CyclePieceCounts.Add(PieceType, 0);
+	}
+	CyclePieceCounts[PieceType]++;
+	UE_LOG(LogTemp, Log, TEXT("Cycle count incremented (skip): type=%s (Cycle: %d)"),
+		*UEnum::GetValueAsString(PieceType),
+		CyclePieceCounts[PieceType]);
+}
+
 bool AConstructionPhaseManager::CanAdvancePhase() const
 {
 	switch (CurrentPhase)

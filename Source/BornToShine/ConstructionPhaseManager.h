@@ -84,6 +84,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void ResetBuildCycle();
 
+	// Increment cycle count for a piece type without registering a placed piece.
+	// Used when a piece is SKIPPED (overlap with existing) — the slot was handled
+	// even though no new piece was spawned, so it should count toward gating.
+	UFUNCTION(BlueprintCallable, Category = "Construction")
+	void IncrementCyclePieceCount(EPieceType PieceType);
+
 	// Enable/disable automatic phase advancement (default: true)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction")
 	bool bAutoAdvancePhases;

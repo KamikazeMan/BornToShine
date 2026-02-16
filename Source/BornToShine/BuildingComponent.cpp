@@ -502,7 +502,9 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 		else if (Joist)
 		{
-			// Overlap skip — show red flash at overlap position then respawn
+			// Overlap skip — count toward cycle gating even though no new piece placed
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::FloorJoist);
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
@@ -531,7 +533,9 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 		else if (Plate)
 		{
-			// Overlap skip — show red flash at overlap position then respawn
+			// Overlap skip — count toward cycle gating
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::WallPlate);
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
@@ -561,7 +565,9 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 		else if (Stud)
 		{
-			// Overlap skip — show red flash at overlap position then respawn
+			// Overlap skip — count toward cycle gating
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::WallStud);
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
@@ -591,7 +597,9 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 		else if (TopPlateActor)
 		{
-			// Overlap skip — show red flash at overlap position then respawn
+			// Overlap skip — count toward cycle gating
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::TopPlate);
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
@@ -623,7 +631,9 @@ void UBuildingComponent::PlaceCurrentPiece()
 		}
 		else if (RimBoard)
 		{
-			// Overlap skip — existing board was reused, show red flash then respawn
+			// Overlap skip — count toward cycle gating (shared wall counts as handled)
+			if (AConstructionPhaseManager::Instance)
+				AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::RimBoard);
 			CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 			CurrentPreviewPiece->SetLifeSpan(0.75f);
 			CurrentPreviewPiece = nullptr;
