@@ -1129,10 +1129,13 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
                 if (PerpDist > 15.0f) continue;
 
                 // 1D overlap along wall: two segments overlap when
-                // |center_dist| < halfLen_A + halfLen_B
+                // |center_dist| < halfLen_A + halfLen_B.
+                // Require at least 15cm of genuine overlap to ignore
+                // end-to-end plates that barely touch due to flush corner extensions.
                 float AlongDist = FMath::Abs(FVector::DotProduct(Delta, SugFwd));
                 float ExHalfLen = ExPlate->BoardLength / 2.0f;
-                if (AlongDist < SugHalfLen + ExHalfLen)
+                float OverlapAmount = (SugHalfLen + ExHalfLen) - AlongDist;
+                if (OverlapAmount > 15.0f)
                 {
                     bOverlaps = true;
                     float TotalDist = Delta.Size();
