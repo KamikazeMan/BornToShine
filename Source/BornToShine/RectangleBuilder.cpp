@@ -601,9 +601,10 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Board suggestion overlaps existing — reusing existing board at (%.1f, %.1f, %.1f)"),
             Sug.Position.X, Sug.Position.Y, Sug.Position.Z);
 
-        // Find the existing board and track it so the state machine advances
+        // Count skipped board toward cycle gating (shared wall still counts)
         if (AConstructionPhaseManager::Instance)
         {
+            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::RimBoard);
             TArray<ABuildablePiece*> ExistingBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RimBoard);
             ARimBoard* ExistingBoard = nullptr;
             float BestDist = FLT_MAX;
@@ -1054,6 +1055,8 @@ bool URectangleBuilderComponent::ApplyJoistSuggestion(AFloorJoist* Joist)
         if (NextSug.bIsValid && OverlapsExistingPiece(EPieceType::FloorJoist, NextSug.Position))
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping joist %d — overlaps existing joist"), PlacedJoistCount);
+            if (AConstructionPhaseManager::Instance)
+                AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::FloorJoist);
             LastSkipPos = NextSug.Position;
             LastSkipRot = NextSug.Rotation;
             bAnySkipped = true;
@@ -1323,6 +1326,8 @@ bool URectangleBuilderComponent::ApplyPlateSuggestion(ABottomPlate* Plate)
 
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping plate %d — overlaps existing plate at (%.1f, %.1f, %.1f)"),
             PlacedPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+        if (AConstructionPhaseManager::Instance)
+            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::WallPlate);
 
         if (ClosestOverlap)
         {
@@ -1520,6 +1525,8 @@ bool URectangleBuilderComponent::ApplyStudSuggestion(AWallStud* Stud)
         {
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping stud %d — overlaps existing stud at (%.1f, %.1f, %.1f)"),
                 PlacedStudCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+            if (AConstructionPhaseManager::Instance)
+                AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::WallStud);
             LastSkipPos = NextSug.Position;
             LastSkipRot = NextSug.Rotation;
             bAnySkipped = true;
@@ -1821,6 +1828,8 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
 
         UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping top plate %d — overlaps existing at (%.1f, %.1f, %.1f)"),
             PlacedTopPlateCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
+        if (AConstructionPhaseManager::Instance)
+            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::TopPlate);
         LastSkipPos = NextSug.Position;
         LastSkipRot = NextSug.Rotation;
         bAnySkipped = true;
