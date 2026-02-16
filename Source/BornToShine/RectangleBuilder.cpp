@@ -788,38 +788,83 @@ void URectangleBuilderComponent::CalculateJoistLayout(ARimBoard* Board1, ARimBoa
     JoistSuggestions.Empty();
     PlacedJoistCount = 0;
 
-    // Board1 and Board3 are the "through" boards (parallel to each other)
-    // Board2 and Board4 are the "end" boards (perpendicular)
-    // Joists run perpendicular to the through boards, from Board1 to Board3
-    ThroughBoard1 = Board1;
-    ThroughBoard3 = Board3;
+    // --- Identify through-boards and end-boards by geometry ---
+    // Through-boards are the parallel pair that joists nail into (top-face sockets).
+    // End-boards are perpendicular. Joists span from one through-board to the other.
+    // The longer parallel pair are the through-boards (joists span the short direction).
+    //
+    // TrackedBoards order is NOT guaranteed — overlap-skip board reuse from previous
+    // sections can put boards in any position, so we identify pairs by yaw comparison.
+    auto AreParallelBoards = [](const ARimBoard* A, const ARimBoard* B) -> bool {
+        float Diff = FMath::Abs(FMath::FindDeltaAngleDegrees(
+            A->GetActorRotation().Yaw, B->GetActorRotation().Yaw));
+        return (Diff < 10.0f || FMath::Abs(Diff - 180.0f) < 10.0f);
+    };
+
+    ARimBoard* ThroughA = nullptr;
+    ARimBoard* ThroughB = nullptr;
+    ARimBoard* EndA = nullptr;
+    ARimBoard* EndB = nullptr;
+
+    if (AreParallelBoards(Board1, Board3))
+    {
+        if (Board1->GetEffectiveLength() >= Board2->GetEffectiveLength())
+        { ThroughA = Board1; ThroughB = Board3; EndA = Board2; EndB = Board4; }
+        else
+        { ThroughA = Board2; ThroughB = Board4; EndA = Board1; EndB = Board3; }
+    }
+    else if (AreParallelBoards(Board1, Board2))
+    {
+        if (Board1->GetEffectiveLength() >= Board3->GetEffectiveLength())
+        { ThroughA = Board1; ThroughB = Board2; EndA = Board3; EndB = Board4; }
+        else
+        { ThroughA = Board3; ThroughB = Board4; EndA = Board1; EndB = Board2; }
+    }
+    else if (AreParallelBoards(Board1, Board4))
+    {
+        if (Board1->GetEffectiveLength() >= Board2->GetEffectiveLength())
+        { ThroughA = Board1; ThroughB = Board4; EndA = Board2; EndB = Board3; }
+        else
+        { ThroughA = Board2; ThroughB = Board3; EndA = Board1; EndB = Board4; }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: CalculateJoistLayout - No parallel pair found! Falling back to default order."));
+        ThroughA = Board1; ThroughB = Board3; EndA = Board2; EndB = Board4;
+    }
+
+    ThroughBoard1 = ThroughA;
+    ThroughBoard3 = ThroughB;
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Joist layout — ThroughBoards=[%s, %s] EndBoards=[%s, %s]"),
+        *ThroughA->GetName(), *ThroughB->GetName(), *EndA->GetName(), *EndB->GetName());
 
     // Through boards share the same rotation — joists are perpendicular
-    FRotator ThroughRotation = Board1->GetActorRotation();
+    FRotator ThroughRotation = ThroughA->GetActorRotation();
     FVector ThroughForward = ThroughRotation.RotateVector(FVector::ForwardVector);
 
-    // Joist rotation: perpendicular to through boards
-    FRotator JoistRotation = Board2->GetActorRotation();
+    // Joist rotation: perpendicular to through boards (same as end boards)
+    FRotator JoistRotation = EndA->GetActorRotation();
 
-    // Calculate the span (distance between Board1 and Board3 centers along the perpendicular axis)
-    FVector Board1Center = Board1->GetActorLocation();
-    FVector Board3Center = Board3->GetActorLocation();
-    FVector Board2Forward = Board2->GetActorRotation().RotateVector(FVector::ForwardVector);
+    // Calculate the span (distance between through-board centers along the perpendicular axis)
+    FVector ThroughACenter = ThroughA->GetActorLocation();
+    FVector ThroughBCenter = ThroughB->GetActorLocation();
+    FVector EndAForward = EndA->GetActorRotation().RotateVector(FVector::ForwardVector);
 
-    float SpanDistance = FMath::Abs(FVector::DotProduct(Board3Center - Board1Center, Board2Forward));
+    float SpanDistance = FMath::Abs(FVector::DotProduct(ThroughBCenter - ThroughACenter, EndAForward));
 
-    // Joist length = span between inside faces of Board1 and Board3
+    // Joist length = span between inside faces of the two through-boards
     // Subtract one BoardWidth (the joists butt up against the inside faces)
-    float JoistSpanCm = SpanDistance - Board1->BoardWidth;
+    float JoistSpanCm = SpanDistance - ThroughA->BoardWidth;
     int32 JoistLengthFeet = FMath::RoundToInt(JoistSpanCm / 30.48f);
     JoistLengthFeet = FMath::Clamp(JoistLengthFeet, 1, 16);
 
     // Joist Z position: same center as rim boards so tops are flush
-    float JoistZ = Board1Center.Z;
+    float JoistZ = ThroughACenter.Z;
 
     // 16" OC spacing along the through boards
     float Spacing = 40.64f; // 16" = 40.64cm
-    float ThroughLength = Board1->GetEffectiveLength();
+    float ThroughLength = ThroughA->GetEffectiveLength();
     float HalfThroughLen = ThroughLength / 2.0f;
 
     // Start from one end, offset by the spacing from the end board
@@ -827,10 +872,8 @@ void URectangleBuilderComponent::CalculateJoistLayout(ARimBoard* Board1, ARimBoa
     float StartOffset = Spacing;
     float CurrentOffset = -HalfThroughLen + StartOffset;
 
-    // Center of joist span (midpoint between Board1 and Board3)
-    FVector SpanCenter = (Board1Center + Board3Center) / 2.0f;
-    // Project SpanCenter along the through-board direction at each offset
-    FVector SpanPerp = Board2Forward; // Direction from Board1 toward Board3
+    // Center of joist span (midpoint between the two through-boards)
+    FVector SpanCenter = (ThroughACenter + ThroughBCenter) / 2.0f;
 
     int32 JoistIndex = 0;
     while (CurrentOffset < HalfThroughLen - StartOffset / 2.0f)
@@ -838,18 +881,18 @@ void URectangleBuilderComponent::CalculateJoistLayout(ARimBoard* Board1, ARimBoa
         FVector JoistCenter = SpanCenter + ThroughForward * CurrentOffset;
         JoistCenter.Z = JoistZ;
 
-        // Find the matching top-face socket names on Board1 and Board3
-        FName Board1Socket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
-        FName Board3Socket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
+        // Find the matching top-face socket names on through-boards
+        FName ThroughASocket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
+        FName ThroughBSocket = FName(*FString::Printf(TEXT("TopFace_%d"), JoistIndex));
 
         FJoistSuggestion Suggestion;
         Suggestion.Position = JoistCenter;
         Suggestion.Rotation = JoistRotation;
         Suggestion.LengthFeet = JoistLengthFeet;
-        Suggestion.Board1 = Board1;
-        Suggestion.Board3 = Board3;
-        Suggestion.Board1TargetSocket = Board1Socket;
-        Suggestion.Board3TargetSocket = Board3Socket;
+        Suggestion.Board1 = ThroughA;
+        Suggestion.Board3 = ThroughB;
+        Suggestion.Board1TargetSocket = ThroughASocket;
+        Suggestion.Board3TargetSocket = ThroughBSocket;
         Suggestion.JoistIndex = JoistIndex;
         Suggestion.bIsValid = true;
 

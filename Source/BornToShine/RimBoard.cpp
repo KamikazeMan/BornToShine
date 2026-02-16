@@ -258,19 +258,22 @@ void ARimBoard::SetBoardLengthFeet(int32 LengthInFeet)
 
 	if (LengthInFeet != CurrentLengthFeet)
 	{
+		// Capture old effective length BEFORE updating BoardLength
+		float OldEffectiveLen = GetEffectiveLength();
+
 		CurrentLengthFeet = LengthInFeet;
 		BoardLength = CurrentLengthFeet * 30.48f;
 		bMeshExtended = false; // Scale reset — allow re-extension
 
-		// Update mesh scale
-		if (MeshComponent)
+		// Proportional X-only scaling preserves BP mesh Y/Z dimensions.
+		// The BP mesh is pre-modeled at real-world size (correct at scale 1,1,1).
+		// Absolute scaling (dividing by 100) crushes Y/Z to ~4%, making boards paper-thin.
+		if (MeshComponent && OldEffectiveLen > 0.0f)
 		{
-			float EffectiveLen = GetEffectiveLength();
-			MeshComponent->SetRelativeScale3D(FVector(
-				EffectiveLen / 100.0f,
-				BoardWidth / 100.0f,
-				BoardHeight / 100.0f
-			));
+			float NewEffectiveLen = GetEffectiveLength();
+			float Ratio = NewEffectiveLen / OldEffectiveLen;
+			FVector S = MeshComponent->GetRelativeScale3D();
+			MeshComponent->SetRelativeScale3D(FVector(S.X * Ratio, S.Y, S.Z));
 		}
 
 		// Regenerate sockets — calculated positions will use new effective length
@@ -314,22 +317,21 @@ void ARimBoard::RegenerateSockets()
 
 void ARimBoard::ToggleBoardType()
 {
+	// Capture old effective length BEFORE toggling
+	float OldEffectiveLen = GetEffectiveLength();
+
 	bIsOutsideBoard = !bIsOutsideBoard;
 	bMeshExtended = false; // Scale reset — allow re-extension
 
 	RegenerateSockets();
 
-	if (MeshComponent)
+	if (MeshComponent && OldEffectiveLen > 0.0f)
 	{
-		// Set mesh scale directly from new effective length — same approach as SetBoardLengthFeet().
-		// The mesh is a centered unit cube, so rescaling keeps it centered automatically.
-		// No position adjustment needed.
-		float EffectiveLen = GetEffectiveLength();
-		MeshComponent->SetRelativeScale3D(FVector(
-			EffectiveLen / 100.0f,
-			BoardWidth / 100.0f,
-			BoardHeight / 100.0f
-		));
+		// Proportional X-only scaling preserves BP mesh Y/Z dimensions.
+		float NewEffectiveLen = GetEffectiveLength();
+		float Ratio = NewEffectiveLen / OldEffectiveLen;
+		FVector S = MeshComponent->GetRelativeScale3D();
+		MeshComponent->SetRelativeScale3D(FVector(S.X * Ratio, S.Y, S.Z));
 		MeshComponent->SetRelativeLocation(FVector::ZeroVector);
 	}
 
