@@ -176,9 +176,16 @@ void AConstructionPhaseManager::RegisterPlacedPiece(ABuildablePiece* Piece)
 		PlacedPieces.Add(PieceType, TArray<ABuildablePiece*>());
 	}
 
+	// Idempotent: skip if already registered
+	if (PlacedPieces[PieceType].Contains(Piece))
+	{
+		return;
+	}
+
 	PlacedPieces[PieceType].Add(Piece);
 
-	UE_LOG(LogTemp, Log, TEXT("Registered piece: %s (Total of this type: %d)"),
+	UE_LOG(LogTemp, Log, TEXT("Registered piece: %s type=%s (Total of this type: %d)"),
+		*Piece->GetName(),
 		*UEnum::GetValueAsString(PieceType),
 		PlacedPieces[PieceType].Num());
 

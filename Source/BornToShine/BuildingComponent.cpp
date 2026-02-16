@@ -636,6 +636,7 @@ void UBuildingComponent::PlaceCurrentPiece()
 	// Normal path: snap-based placement
 	if (CurrentPreviewPiece->TryPlace())
 	{
+		ABuildablePiece* JustPlaced = CurrentPreviewPiece;
 		PlacedPieces.Add(CurrentPreviewPiece);
 		LastPlacedPiece = CurrentPreviewPiece;
 
@@ -645,10 +646,18 @@ void UBuildingComponent::PlaceCurrentPiece()
 			RectangleBuilder->OnRimBoardPlaced(Cast<ARimBoard>(LastPlacedPiece));
 		}
 
+		// Safety registration with PhaseManager (idempotent — skips if already registered by CommitPlacement)
+		if (AConstructionPhaseManager::Instance && JustPlaced)
+		{
+			AConstructionPhaseManager::Instance->RegisterPlacedPiece(JustPlaced);
+		}
+
 		CurrentPreviewPiece = nullptr;
 		SpawnPreviewPiece();
 
-		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Piece placed (Total: %d)"), PlacedPieces.Num());
+		UE_LOG(LogTemp, Log, TEXT("BuildingComponent: Piece placed type=%s (Total: %d)"),
+			JustPlaced ? *UEnum::GetDisplayValueAsText(JustPlaced->GetPieceType()).ToString() : TEXT("null"),
+			PlacedPieces.Num());
 	}
 	else
 	{
@@ -981,6 +990,24 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 	TArray<FPieceTypeInfo> Infos;
 
 	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+
+	// Diagnostic: log phase gating state when building menu infos
+	if (PM)
+	{
+		UE_LOG(LogTemp, Log, TEXT("GetPieceTypeInfos: PM=%p Foundation=%d RimBoard=%d Joist=%d Plywood=%d Plate=%d Stud=%d TopPlate=%d"),
+			PM,
+			PM->GetPieceCount(EPieceType::Foundation),
+			PM->GetPieceCount(EPieceType::RimBoard),
+			PM->GetPieceCount(EPieceType::FloorJoist),
+			PM->GetPieceCount(EPieceType::Plywood),
+			PM->GetPieceCount(EPieceType::WallPlate),
+			PM->GetPieceCount(EPieceType::WallStud),
+			PM->GetPieceCount(EPieceType::TopPlate));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("GetPieceTypeInfos: PhaseManager Instance is NULL — all pieces will show as available"));
+	}
 
 	for (int32 i = 0; i < AvailablePieceTypes.Num(); i++)
 	{
