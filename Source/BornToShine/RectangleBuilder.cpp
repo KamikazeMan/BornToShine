@@ -51,6 +51,30 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
 {
     if (!Board) return;
 
+    // If we already have tracked boards, check whether the new board
+    // connects at a corner to ANY of them.  If not, the player has
+    // started a new rectangle elsewhere — discard the stale tracking
+    // so the old incomplete cycle doesn't corrupt the new one.
+    if (TrackedBoards.Num() > 0)
+    {
+        bool bConnectsToExisting = false;
+        for (ARimBoard* Existing : TrackedBoards)
+        {
+            if (AreConnectedAtCorner(Board, Existing))
+            {
+                bConnectsToExisting = true;
+                break;
+            }
+        }
+        if (!bConnectsToExisting)
+        {
+            UE_LOG(LogTemp, Warning,
+                TEXT("RectangleBuilder: New board [%s] not connected to %d tracked boards — resetting stale cycle"),
+                *Board->GetName(), TrackedBoards.Num());
+            TrackedBoards.Empty();
+        }
+    }
+
     // First board of a new rectangle — clear all stale layout data
     // from the previous rectangle so it doesn't interfere.
     if (TrackedBoards.Num() == 0)

@@ -175,15 +175,15 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// Use per-instance box collisions for pawn blocking (posts + header).
-	// The mesh stays query-only so line traces still hit it, but the pawn
-	// is blocked only by the structural boxes — the door opening stays clear.
-	// This is immune to the shared BodySetup being invalidated when other
-	// door frame instances spawn or the physics state is recreated.
+	// Mesh stays QueryOnly so building-system line traces (ECC_Visibility)
+	// still hit it.  All other channels are ignored so the mesh's convex
+	// hull never blocks the player.  The per-instance box collisions
+	// (posts + header) handle pawn blocking with the door opening clear.
 	if (MeshComponent)
 	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+		MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	}
 	EnableDoorCollision(true);
 
@@ -202,12 +202,14 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
 
-		// Override mesh pawn response: don't block pawn with the mesh
-		// (box collisions handle pawn blocking with a proper door opening).
-		// Super set ECR_Block on Pawn; revert to Ignore here.
+		// Mesh only needs Visibility traces (for the building system).
+		// Everything else is ignored so the convex hull never blocks the
+		// player.  Box collisions handle pawn blocking with the door clear.
 		if (MeshComponent)
 		{
-			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+			MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+			MeshComponent->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 		}
 		EnableDoorCollision(true);
 	}
