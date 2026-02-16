@@ -585,6 +585,7 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
         else if (N >= 4)
         {
             CurrentState = ERectangleState::Complete;
+            ClearGhostPreviews();
             UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Rectangle COMPLETE (board reused). Calculating layouts."));
             CalculateJoistLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
             CalculatePlateLayout(TrackedBoards[0], TrackedBoards[1], TrackedBoards[2], TrackedBoards[3]);
@@ -595,7 +596,9 @@ bool URectangleBuilderComponent::ApplySuggestionToBoard(ARimBoard* Board)
     }
     if (!HasActiveSuggestion())
     {
-        // All remaining boards were skipped — position for red feedback
+        // All remaining boards were skipped — clean up ghost previews
+        ClearGhostPreviews();
+        // Position for red feedback
         if (bAnySkipped) { Board->SetActorLocation(LastSkipPos); Board->SetActorRotation(LastSkipRot); }
         return false;
     }

@@ -57,8 +57,14 @@ void ADoorFrame::BeginPlay()
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
 
-	// Use per-triangle (complex) collision so the door opening is passable.
-	// The default convex hull covers the entire bounding box including the opening.
+	// Size the per-instance collision boxes (posts + header) now that
+	// real dimensions are known from AdjustSocketsToMeshBounds.
+	SetupCollisionBoxes();
+
+	// Defence-in-depth: also set complex-as-simple on the mesh so traces
+	// see the actual geometry.  Pawn blocking is handled by the box
+	// collisions (EnableDoorCollision) which are immune to the shared
+	// BodySetup being invalidated when new instances spawn.
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{
 		UBodySetup* BodySetup = MeshComponent->GetStaticMesh()->GetBodySetup();
@@ -66,7 +72,6 @@ void ADoorFrame::BeginPlay()
 		{
 			BodySetup->CollisionTraceFlag = ECollisionTraceFlag::CTF_UseComplexAsSimple;
 			MeshComponent->RecreatePhysicsState();
-			UE_LOG(LogTemp, Log, TEXT("DoorFrame: Set collision to UseComplexAsSimple"));
 		}
 	}
 
@@ -170,14 +175,17 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// Complex-as-simple was set in BeginPlay — the per-triangle collision
-	// naturally has the door opening so the pawn can walk through.
-	// Super::TryPlace doesn't change collision, so explicitly enable it.
+	// Use per-instance box collisions for pawn blocking (posts + header).
+	// The mesh stays query-only so line traces still hit it, but the pawn
+	// is blocked only by the structural boxes — the door opening stays clear.
+	// This is immune to the shared BodySetup being invalidated when other
+	// door frame instances spawn or the physics state is recreated.
 	if (MeshComponent)
 	{
 		MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	}
+	EnableDoorCollision(true);
 
 	return true;
 }
@@ -193,8 +201,20 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 	{
 		// Remove overlapping pieces (save/load path)
 		AutoDeleteOverlappingPieces();
-		// Super already sets QueryAndPhysics + pawn block.
-		// Complex-as-simple from BeginPlay ensures the opening is passable.
+
+		// Override mesh pawn response: don't block pawn with the mesh
+		// (box collisions handle pawn blocking with a proper door opening).
+		// Super set ECR_Block on Pawn; revert to Ignore here.
+		if (MeshComponent)
+		{
+			MeshComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+		}
+		EnableDoorCollision(true);
+	}
+	else
+	{
+		// Preview mode: disable box collisions (player walks through ghost)
+		EnableDoorCollision(false);
 	}
 }
 
