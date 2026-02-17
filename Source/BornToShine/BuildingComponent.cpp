@@ -14,7 +14,6 @@
 #include "RidgeBoard.h"
 #include "Rafter.h"
 #include "FasciaBoard.h"
-#include "ProceduralMeshComponent.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
@@ -253,17 +252,6 @@ void UBuildingComponent::SpawnPreviewPiece()
 			bHasMesh, bHasMaterial,
 			Mesh ? Mesh->IsVisible() : -1,
 			ProcMesh ? 1 : 0);
-
-		// Fallback: check for ProceduralMeshComponent (rafters use this instead of StaticMesh)
-		if (!bHasMesh)
-		{
-			UProceduralMeshComponent* ProcMesh = CurrentPreviewPiece->FindComponentByClass<UProceduralMeshComponent>();
-			if (ProcMesh && ProcMesh->GetNumSections() > 0)
-			{
-				bHasMesh = true;
-				bHasMaterial = ProcMesh->GetMaterial(0) != nullptr;
-			}
-		}
 
 		if (!bHasMesh)
 		{
