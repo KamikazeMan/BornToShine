@@ -80,14 +80,19 @@ private:
 	 *  remains on it, the opening is blocked by an invisible wall. */
 	void KillMeshCollision();
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
 	UBoxComponent* LeftPostCollision;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
 	UBoxComponent* RightPostCollision;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
 	UBoxComponent* HeaderCollision;
+
+	/** When true (default), BeginPlay auto-sizes boxes from mesh bounds.
+	 *  Uncheck after fine-tuning in the Blueprint viewport so your edits stick. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
+	bool bAutoSizeCollisionBoxes;
 
 	/**
 	 * Called once after the door frame is placed (exits preview mode).

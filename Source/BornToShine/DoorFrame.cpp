@@ -31,15 +31,29 @@ ADoorFrame::ADoorFrame()
 	MeshComponent->SetGenerateOverlapEvents(false);
 	MeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
 
+	// --- Default geometry for collision box placement ---
+	// These match the constructor dimension defaults above.
+	const float DefSideWidth = 7.62f;  // king stud + trimmer = 3" = 7.62cm
+	const float DefDepth     = 8.89f;  // 2x4 depth = 3.5" = 8.89cm
+	const float DefHalfH     = FrameHeight / 2.0f;           // 117.635cm
+	const float DefLeftX     = -(FrameOverallWidth / 2.0f) + (DefSideWidth / 2.0f); // -49.53
+	const float DefRightX    = (FrameOverallWidth / 2.0f) - (DefSideWidth / 2.0f);  //  49.53
+	const float DefOpenTopZ  = -DefHalfH + RoughOpeningHeight;                       //  88.105
+	const float DefBandH     = DefHalfH - DefOpenTopZ;                               //  29.53
+	const float DefBandCtrZ  = DefOpenTopZ + DefBandH / 2.0f;                        // 102.87
+
 	// THREE separate collision boxes — one per framing member.
 	// These are the ONLY collision primitives on the door frame.
 	// The door opening between them must have ZERO collision.
+	// EditAnywhere so they can be fine-tuned in the Blueprint viewport.
 	LeftPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("LeftPostCollision"));
 	LeftPostCollision->SetupAttachment(SceneRoot);
 	LeftPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	LeftPostCollision->SetHiddenInGame(false);
 	LeftPostCollision->ShapeColor = FColor::Cyan;
 	LeftPostCollision->SetLineThickness(2.0f);
+	LeftPostCollision->SetBoxExtent(FVector(DefSideWidth / 2.0f, DefDepth / 2.0f, DefHalfH));
+	LeftPostCollision->SetRelativeLocation(FVector(DefLeftX, 0.0f, 0.0f));
 
 	RightPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("RightPostCollision"));
 	RightPostCollision->SetupAttachment(SceneRoot);
@@ -47,6 +61,8 @@ ADoorFrame::ADoorFrame()
 	RightPostCollision->SetHiddenInGame(false);
 	RightPostCollision->ShapeColor = FColor::Yellow;
 	RightPostCollision->SetLineThickness(2.0f);
+	RightPostCollision->SetBoxExtent(FVector(DefSideWidth / 2.0f, DefDepth / 2.0f, DefHalfH));
+	RightPostCollision->SetRelativeLocation(FVector(DefRightX, 0.0f, 0.0f));
 
 	HeaderCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("HeaderCollision"));
 	HeaderCollision->SetupAttachment(SceneRoot);
@@ -54,7 +70,10 @@ ADoorFrame::ADoorFrame()
 	HeaderCollision->SetHiddenInGame(false);
 	HeaderCollision->ShapeColor = FColor::Magenta;
 	HeaderCollision->SetLineThickness(2.0f);
+	HeaderCollision->SetBoxExtent(FVector(FrameOverallWidth / 2.0f, DefDepth / 2.0f, DefBandH / 2.0f));
+	HeaderCollision->SetRelativeLocation(FVector(0.0f, 0.0f, DefBandCtrZ));
 
+	bAutoSizeCollisionBoxes = true;
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 }
@@ -78,9 +97,12 @@ void ADoorFrame::BeginPlay()
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
 
-	// Size the per-instance collision boxes (posts + header) now that
-	// real dimensions are known from AdjustSocketsToMeshBounds.
-	SetupCollisionBoxes();
+	// Auto-size collision boxes from actual mesh bounds.
+	// Uncheck bAutoSizeCollisionBoxes in the Blueprint to keep manual tweaks.
+	if (bAutoSizeCollisionBoxes)
+	{
+		SetupCollisionBoxes();
+	}
 
 	UE_LOG(LogTemp, Warning, TEXT("=== HEIGHT DIAGNOSTIC === DoorFrame king stud height: %.2fcm (%.2f in)"),
 		FrameHeight, FrameHeight / 2.54f);
