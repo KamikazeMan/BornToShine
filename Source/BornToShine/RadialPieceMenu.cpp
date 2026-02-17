@@ -216,7 +216,8 @@ FLinearColor URadialPieceMenu::WithAlpha(FLinearColor Color, float Alpha) const
 float URadialPieceMenu::GetPieceAngleDeg(int32 PieceIndex, int32 NumPieces, float CatMidDeg, float CatSweepDeg) const
 {
 	if (NumPieces <= 1) return CatMidDeg;
-	float TotalSpread = FMath::Min(NumPieces * 34.0f, CatSweepDeg * 0.85f);
+	// Spread cards across 90% of the category sweep for a clear arc
+	float TotalSpread = CatSweepDeg * 0.90f;
 	return CatMidDeg - TotalSpread / 2.0f + ((float)PieceIndex / (NumPieces - 1)) * TotalSpread;
 }
 
@@ -383,18 +384,8 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FSlateFontInfo BuildSubFont   = FCoreStyle::GetDefaultFontStyle("Regular",
 		FMath::Clamp(FMath::RoundToInt(8.0f * Scale), 6, 11));
 
-	// =================================================================
-	// LAYER 1: Category ring dark base circle
-	// React: <circle ... stroke="#060a10" strokeWidth={CATEGORY_RING_OUTER - INNER_RADIUS}/>
-	// =================================================================
-	{
-		float BaseR = (sInnerI + sInnerO) / 2.0f;
-		float BaseW = sInnerO - sInnerI;
-		FLinearColor BaseColor(0.024f, 0.039f, 0.063f, 0.95f); // #060a10
-		BaseColor.A *= FadeAlpha;
-		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			BaseR, -90.0f, 270.0f, BaseColor, BaseW);
-	}
+	// LAYER 1: No background disc — game world is fully visible behind menu.
+	// Only wedge fills, piece cards, glow lines, and center hub are opaque.
 	LayerId++;
 
 	// =================================================================
@@ -579,7 +570,10 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	LayerId++;
 
 	// =================================================================
-	// LAYER 6 + 7: Piece cards — rectangular cards at polar coordinates
+	// LAYER 6 + 7: Piece cards — rectangular cards fanned in an ARC
+	// Each card is positioned at its own angle along the outer ring,
+	// centered on the selected category wedge's angular range.
+	// Dual-layer cyan glow border matching the wedge edge style.
 	// =================================================================
 	if (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory))
 	{
@@ -589,53 +583,76 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		{
 			float CatMidDeg = (HighlightedCategory + 0.5f) * CatAngle;
 			float CardR = (sOuterI + sOuterO) / 2.0f;
-			float CardW = 92.0f * Scale;
-			float CardH = 82.0f * Scale;
+			float CardW = 86.0f * Scale;
+			float CardH = 76.0f * Scale;
+
+			// Spread cards evenly across the category sweep
+			// Each card sits at a distinct angle along the arc
+			auto GetCardAngle = [&](int32 Idx) -> float
+			{
+				if (NumPieces <= 1) return CatMidDeg;
+				// Use 90% of the category sweep for spacing
+				float TotalSpread = CatAngle * 0.90f;
+				float StartAngle = CatMidDeg - TotalSpread / 2.0f;
+				return StartAngle + ((float)Idx / (NumPieces - 1)) * TotalSpread;
+			};
 
 			for (int32 p = 0; p < NumPieces; p++)
 			{
 				int32 GlobalIdx = Cat.PieceIndices[p];
 				bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
 				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
+				bool bHovered = (p == HighlightedPieceSlot);
 
-				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				// Position this card at its arc angle
+				float PieceDeg = GetCardAngle(p);
 				float PieceRad = FMath::DegreesToRadians(PieceDeg - 90.0f);
-				FVector2D CardCenter = Center + FVector2D(FMath::Cos(PieceRad), FMath::Sin(PieceRad)) * CardR;
+				FVector2D Dir(FMath::Cos(PieceRad), FMath::Sin(PieceRad));
+				FVector2D CardCenter = Center + Dir * CardR;
 
-				float DrawW = CardW * (1.0f + 0.1f * HoverT);
-				float DrawH = CardH * (1.0f + 0.1f * HoverT);
+				float DrawW = CardW * (1.0f + 0.08f * HoverT);
+				float DrawH = CardH * (1.0f + 0.08f * HoverT);
 				FVector2D TL = CardCenter - FVector2D(DrawW / 2.0f, DrawH / 2.0f);
-
-				// Card fill
-				FLinearColor FillCol = bAvailable
-					? FMath::Lerp(DarkCard, FLinearColor(0.051f, 0.118f, 0.176f, 0.92f), HoverT * 0.5f)
-					: WithAlpha(DarkCard, DarkCard.A * 0.5f);
-				DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
-					TL, DrawW, DrawH, Faded(FillCol));
-
-				// Card border (cyan, brighter on hover)
-				float BorderAlpha = bAvailable
-					? FMath::Lerp(0.27f, 1.0f, HoverT) * Pulse
-					: 0.08f;
-				FLinearColor BorderCol = WithAlpha(Cyan, BorderAlpha * FadeAlpha);
-				float BW = FMath::Lerp(1.0f, 1.5f, HoverT);
 				FVector2D TR(TL.X + DrawW, TL.Y);
 				FVector2D BL(TL.X, TL.Y + DrawH);
 				FVector2D BR(TL.X + DrawW, TL.Y + DrawH);
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, TR, BorderCol, BW); // top
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry, BR, BL, BorderCol, BW); // bottom
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, BL, BorderCol, BW); // left
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TR, BR, BorderCol, BW); // right
 
-				// Hover glow bloom behind card
+				// --- Hover glow bloom BEHIND the card (drawn first) ---
 				if (HoverT > 0.01f && bAvailable)
 				{
-					float GlowExpand = 4.0f * Scale;
-					DrawFilledRect(OutDrawElements, LayerId - 1, AllottedGeometry,
+					float GlowExpand = 6.0f * Scale;
+					DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
 						TL - FVector2D(GlowExpand, GlowExpand),
 						DrawW + GlowExpand * 2, DrawH + GlowExpand * 2,
-						WithAlpha(Cyan, 0.06f * HoverT * Pulse * FadeAlpha));
+						WithAlpha(Cyan, 0.08f * HoverT * Pulse * FadeAlpha));
 				}
+
+				// --- Card dark fill (#0D1219) ---
+				FLinearColor FillCol = bAvailable
+					? FMath::Lerp(DarkCard, FLinearColor(0.051f, 0.118f, 0.176f, 0.95f), HoverT * 0.5f)
+					: WithAlpha(DarkCard, DarkCard.A * 0.5f);
+				FillCol.A = FMath::Max(FillCol.A, 0.92f); // Ensure solid fill
+				DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
+					TL, DrawW, DrawH, Faded(FillCol));
+
+				// --- Dual-layer cyan glow border (matching wedge edge style) ---
+				float GlowI = bHovered ? 1.0f : (bAvailable ? 0.4f : 0.08f);
+
+				// BLUR layer (thick, dim) — gives the soft glow
+				float BlurW = bHovered ? 3.0f * Scale : 2.0f * Scale;
+				FLinearColor BlurCol = WithAlpha(Cyan, GlowI * 0.5f * Pulse * FadeAlpha);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, TR, BlurCol, BlurW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, BR, BL, BlurCol, BlurW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, BL, BlurCol, BlurW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TR, BR, BlurCol, BlurW);
+
+				// CRISP layer (thin, bright) — the sharp border
+				float CrispW = bHovered ? 1.5f : 1.0f;
+				FLinearColor CrispCol = WithAlpha(Cyan, GlowI * Pulse * FadeAlpha);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, TR, CrispCol, CrispW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, BR, BL, CrispCol, CrispW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, BL, CrispCol, CrispW);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TR, BR, CrispCol, CrispW);
 			}
 			LayerId++;
 
@@ -646,17 +663,17 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 				bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
 				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
 
-				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				float PieceDeg = GetCardAngle(p);
 				float PieceRad = FMath::DegreesToRadians(PieceDeg - 90.0f);
 				FVector2D CardCenter = Center + FVector2D(FMath::Cos(PieceRad), FMath::Sin(PieceRad)) * CardR;
 
-				// Icon (texture)
-				float ScaledIcon = SegmentIconSize * Scale * 0.65f;
+				// Icon (texture thumbnail)
+				float ScaledIcon = SegmentIconSize * Scale * 0.60f;
 				if (IconBrushes.IsValidIndex(GlobalIdx) && IconBrushes[GlobalIdx].GetResourceObject())
 				{
-					float DrawSize = ScaledIcon * (1.0f + 0.08f * HoverT);
+					float DrawSize = ScaledIcon * (1.0f + 0.06f * HoverT);
 					FVector2D TexSize(DrawSize, DrawSize);
-					FVector2D TexPos = CardCenter - FVector2D(DrawSize / 2.0f, DrawSize / 2.0f + 10.0f * Scale);
+					FVector2D TexPos = CardCenter - FVector2D(DrawSize / 2.0f, DrawSize / 2.0f + 8.0f * Scale);
 					FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
 					FLinearColor IconTint = bAvailable
 						? FMath::Lerp(FLinearColor(0.60f, 0.75f, 0.85f, FadeAlpha),
@@ -676,7 +693,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 						: TextUnavailable;
 					NameTint.A *= FadeAlpha;
 					FVector2D NameSize = FontMeasure->Measure(Name, PieceNameFont);
-					FVector2D NamePos = CardCenter + FVector2D(-NameSize.X / 2.0f, 8.0f * Scale);
+					FVector2D NamePos = CardCenter + FVector2D(-NameSize.X / 2.0f, 6.0f * Scale);
 					FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
 					FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
 						Name, PieceNameFont, ESlateDrawEffect::None, NameTint);
@@ -691,7 +708,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 						: TextUnavailable;
 					DimTint.A *= FadeAlpha;
 					FVector2D DimSize = FontMeasure->Measure(Dims, PieceDimFont);
-					FVector2D DimPos = CardCenter + FVector2D(-DimSize.X / 2.0f, 22.0f * Scale);
+					FVector2D DimPos = CardCenter + FVector2D(-DimSize.X / 2.0f, 20.0f * Scale);
 					FGeometry DimGeo = AllottedGeometry.MakeChild(DimSize, FSlateLayoutTransform(DimPos));
 					FSlateDrawElement::MakeText(OutDrawElements, LayerId, DimGeo.ToPaintGeometry(),
 						Dims, PieceDimFont, ESlateDrawEffect::None, DimTint);
@@ -895,9 +912,10 @@ void URadialPieceMenu::DrawFilledRect(FSlateWindowElementList& OutDrawElements, 
 {
 	if (Color.A < 0.001f || Width < 1.0f || Height < 1.0f) return;
 
-	int32 NumLines = FMath::Max(4, FMath::CeilToInt(Height / 3.0f));
+	// Dense horizontal line fill with generous overlap to ensure solid coverage
+	int32 NumLines = FMath::Max(4, FMath::CeilToInt(Height / 2.0f));
 	float LineSpacing = Height / (float)NumLines;
-	float LineWidth = LineSpacing * 2.1f;
+	float LineWidth = LineSpacing * 2.8f; // Heavy overlap ensures no gaps
 	FPaintGeometry PG = Geo.ToPaintGeometry();
 
 	for (int32 r = 0; r < NumLines; r++)
@@ -907,6 +925,6 @@ void URadialPieceMenu::DrawFilledRect(FSlateWindowElementList& OutDrawElements, 
 		Points.Add(FVector2D(TopLeft.X, Y));
 		Points.Add(FVector2D(TopLeft.X + Width, Y));
 		FSlateDrawElement::MakeLines(OutDrawElements, LayerId, PG,
-			Points, ESlateDrawEffect::None, Color, false, LineWidth);
+			Points, ESlateDrawEffect::None, Color, true, LineWidth);
 	}
 }
