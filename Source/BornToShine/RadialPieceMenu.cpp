@@ -1,9 +1,13 @@
 // Born To Shine - Two-Tier Radial Piece Selection Menu (Cyan Glow Sci-fi)
 //
-// Rebuilt to match the React prototype: dark background (#0a0e17),
-// cyan glow (#00e5ff) on all edges/splits/borders, two-tier layout
-// (inner categories + outer piece cards), center hub with crosshair,
-// connector lines, tick marks, smooth animations.
+// Exact match to the React SVG prototype:
+//   - Transparent background (see through to game world)
+//   - Inner ring: 4 category wedges with dual-layer cyan glow borders
+//   - Outer ring: RECTANGULAR piece cards at polar coordinates
+//   - 72 tick marks around category ring outer edge
+//   - Connector lines from active category to piece cards
+//   - Center hub: crosshair with gaps when idle, category info when active
+//   - All glows: #00e5ff cyan with bloom pulse
 
 #include "RadialPieceMenu.h"
 #include "ConstructionPhaseManager.h"
@@ -21,48 +25,42 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	HighlightedPieceSlot = -1;
 	PrevHighlightedPieceSlot = -1;
 
-	// --- Geometry: reference pixels, scaled to 65% of screen height in NativePaint ---
-	CenterHubRadius = 70.0f;
+	// Geometry: matches React prototype exactly
+	CenterHubRadius = 70.0f;   // INNER_RADIUS
 	InnerRingInner  = 70.0f;   // flush with hub
-	InnerRingOuter  = 155.0f;
-	OuterRingInner  = 175.0f;
-	OuterRingOuter  = 290.0f;
+	InnerRingOuter  = 155.0f;  // CATEGORY_RING_OUTER
+	OuterRingInner  = 175.0f;  // PIECE_RING_INNER
+	OuterRingOuter  = 290.0f;  // PIECE_RING_OUTER
 	DeadZone        = 50.0f;
 
 	FadeAlpha = 0.0f;
 	FadeSpeed = 6.5f;
 	GlowPulseTime = 0.0f;
 
-	SegmentIconSize = 56.0f;
-	CenterIconSize  = 80.0f;
+	SegmentIconSize = 48.0f;
+	CenterIconSize  = 60.0f;
 
 	WedgeGapDeg = 0.6f;
 
-	// --- Color palette: matched to React prototype ---
-
-	// Background
+	// Color palette: exact React prototype values
 	DarkBg         = FLinearColor(0.039f, 0.055f, 0.090f, 1.0f);   // #0a0e17
-	BgOverlayColor = FLinearColor(0.039f, 0.055f, 0.090f, 0.60f);  // dark vignette
+	BgOverlayColor = FLinearColor(0.039f, 0.055f, 0.090f, 0.60f);
 
-	// Cyan glow family — all based on #00e5ff
-	Cyan     = FLinearColor(0.0f, 0.898f, 1.0f, 1.0f);    // #00e5ff full
-	CyanDim  = FLinearColor(0.0f, 0.898f, 1.0f, 0.27f);   // ~27% alpha
-	CyanMid  = FLinearColor(0.0f, 0.898f, 1.0f, 0.53f);   // ~53% alpha
-	CyanGlow = FLinearColor(0.0f, 0.898f, 1.0f, 0.80f);   // ~80% alpha
+	Cyan     = FLinearColor(0.0f, 0.898f, 1.0f, 1.0f);    // #00e5ff
+	CyanDim  = FLinearColor(0.0f, 0.898f, 1.0f, 0.27f);   // #00e5ff44
+	CyanMid  = FLinearColor(0.0f, 0.898f, 1.0f, 0.53f);   // #00e5ff88
+	CyanGlow = FLinearColor(0.0f, 0.898f, 1.0f, 0.80f);   // #00e5ffcc
 
-	// Wedge / card fills
 	DarkWedge       = FLinearColor(0.059f, 0.082f, 0.125f, 0.90f); // #0f1520
 	DarkHover       = FLinearColor(0.078f, 0.118f, 0.176f, 0.95f); // #141e2d
 	DarkCard        = FLinearColor(0.051f, 0.071f, 0.098f, 0.90f); // #0d1219
 	ActiveWedgeFill = FLinearColor(0.047f, 0.102f, 0.165f, 0.90f); // #0c1a2a
 
-	// Text
 	TextWhite       = FLinearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	TextDimmed      = FLinearColor(0.290f, 0.396f, 0.459f, 1.0f);  // #4a6575
 	TextUnavailable = FLinearColor(0.165f, 0.243f, 0.290f, 1.0f);  // #2a3e4a
 	SubtitleColor   = Cyan;
 
-	// Legacy aliases (point to new palette for any code that still references them)
 	SegmentFillColor        = DarkWedge;
 	SegmentHoverFillColor   = ActiveWedgeFill;
 	SegmentUnavailableColor = FLinearColor(0.06f, 0.08f, 0.10f, 0.70f);
@@ -77,20 +75,20 @@ void URadialPieceMenu::BuildCategories()
 	Categories.Empty();
 
 	FCategoryInfo Foundation;
-	Foundation.Name = TEXT("Foundation");
-	Foundation.Icon = TEXT("\u2302"); // Unicode house
+	Foundation.Name = TEXT("FOUNDATION");
+	Foundation.Icon = TEXT("\u2B1B"); // Black square
 
 	FCategoryInfo Floor;
-	Floor.Name = TEXT("Floor");
-	Floor.Icon = TEXT("\u25A6"); // Squared with horizontal fill
+	Floor.Name = TEXT("FLOOR");
+	Floor.Icon = TEXT("\u25A6"); // Squared with fill
 
 	FCategoryInfo Walls;
-	Walls.Name = TEXT("Walls");
-	Walls.Icon = TEXT("\u25EB"); // Square with right half black
+	Walls.Name = TEXT("WALLS");
+	Walls.Icon = TEXT("\u25A5"); // Square with vertical fill
 
 	FCategoryInfo Roof;
-	Roof.Name = TEXT("Roof");
-	Roof.Icon = TEXT("\u25B3"); // White up-pointing triangle
+	Roof.Name = TEXT("ROOF");
+	Roof.Icon = TEXT("\u25B3"); // Triangle
 
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
@@ -99,12 +97,10 @@ void URadialPieceMenu::BuildCategories()
 		{
 		case EPieceType::Foundation:
 			Foundation.PieceIndices.Add(i); break;
-
 		case EPieceType::RimBoard:
 		case EPieceType::FloorJoist:
 		case EPieceType::Plywood:
 			Floor.PieceIndices.Add(i); break;
-
 		case EPieceType::WallStud:
 		case EPieceType::WallPlate:
 		case EPieceType::CornerPost:
@@ -113,13 +109,11 @@ void URadialPieceMenu::BuildCategories()
 		case EPieceType::DoorFrame:
 		case EPieceType::Header:
 			Walls.PieceIndices.Add(i); break;
-
 		case EPieceType::RidgePost:
 		case EPieceType::RidgeBoard:
 		case EPieceType::Rafter:
 		case EPieceType::FasciaBoard:
 			Roof.PieceIndices.Add(i); break;
-
 		default:
 			Walls.PieceIndices.Add(i); break;
 		}
@@ -134,10 +128,8 @@ void URadialPieceMenu::BuildCategories()
 int32 URadialPieceMenu::FindCategoryForPieceIndex(int32 PieceIndex) const
 {
 	for (int32 c = 0; c < Categories.Num(); c++)
-	{
 		if (Categories[c].PieceIndices.Contains(PieceIndex))
 			return c;
-	}
 	return -1;
 }
 
@@ -149,8 +141,8 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 
 	HighlightedCategory = FindCategoryForPieceIndex(CurrentIndex);
 	PrevHighlightedCategory = HighlightedCategory;
-
 	HighlightedPieceSlot = -1;
+
 	if (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory))
 	{
 		const TArray<int32>& Pieces = Categories[HighlightedCategory].PieceIndices;
@@ -171,7 +163,6 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 	CategoryHoverScales.Init(0.0f, Categories.Num());
 	if (HighlightedCategory >= 0 && HighlightedCategory < CategoryHoverScales.Num())
 		CategoryHoverScales[HighlightedCategory] = 1.0f;
-
 	PieceHoverScales.Empty();
 
 	IconBrushes.Empty();
@@ -198,13 +189,9 @@ int32 URadialPieceMenu::GetHighlightedIndex() const
 	{
 		const TArray<int32>& Pieces = Categories[HighlightedCategory].PieceIndices;
 		if (HighlightedPieceSlot >= 0 && Pieces.IsValidIndex(HighlightedPieceSlot))
-		{
 			return Pieces[HighlightedPieceSlot];
-		}
 		if (Pieces.Num() > 0)
-		{
 			return Pieces[0];
-		}
 	}
 	return -1;
 }
@@ -226,8 +213,15 @@ FLinearColor URadialPieceMenu::WithAlpha(FLinearColor Color, float Alpha) const
 	return Color;
 }
 
+float URadialPieceMenu::GetPieceAngleDeg(int32 PieceIndex, int32 NumPieces, float CatMidDeg, float CatSweepDeg) const
+{
+	if (NumPieces <= 1) return CatMidDeg;
+	float TotalSpread = FMath::Min(NumPieces * 34.0f, CatSweepDeg * 0.85f);
+	return CatMidDeg - TotalSpread / 2.0f + ((float)PieceIndex / (NumPieces - 1)) * TotalSpread;
+}
+
 // ---------------------------------------------------------------------------
-// Tick: mouse tracking for both rings + animation interpolation
+// Tick: mouse tracking for both rings
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
@@ -248,7 +242,6 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		GEngine->GameViewport->GetViewportSize(ViewportSize);
 	FVector2D Center = ViewportSize / 2.0f;
 
-	// Scale geometry to 65% of screen height
 	float Scale = (ViewportSize.Y * 0.65f) / (OuterRingOuter * 2.0f);
 	float ScaledInnerI  = InnerRingInner * Scale;
 	float ScaledInnerO  = InnerRingOuter * Scale;
@@ -260,14 +253,13 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 	float DY = MouseY - Center.Y;
 	float Dist = FMath::Sqrt(DX * DX + DY * DY);
 
-	// Angle from top (12 o'clock) going clockwise
 	float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(DX, -DY));
 	if (AngleDeg < 0.0f) AngleDeg += 360.0f;
 
 	int32 NumCats = Categories.Num();
 	float CatAngle = 360.0f / NumCats;
 
-	// --- Inner ring: category selection ---
+	// Inner ring: category selection
 	if (Dist >= ScaledInnerI && Dist < ScaledInnerO)
 	{
 		int32 NewCat = FMath::Clamp((int32)(AngleDeg / CatAngle), 0, NumCats - 1);
@@ -278,33 +270,36 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 			PieceHoverScales.Empty();
 		}
 	}
-	// --- Outer ring: piece selection within active category ---
-	else if (Dist >= ScaledOuterI && Dist <= ScaledOuterO + 20.0f * Scale && HighlightedCategory >= 0)
+	// Outer ring: piece card detection (closest card by angle)
+	else if (Dist >= ScaledOuterI - 20.0f * Scale && Dist <= ScaledOuterO + 30.0f * Scale && HighlightedCategory >= 0)
 	{
 		const TArray<int32>& Pieces = Categories[HighlightedCategory].PieceIndices;
 		int32 NumPieces = Pieces.Num();
 		if (NumPieces > 0)
 		{
-			float CatStartDeg = HighlightedCategory * CatAngle;
-			float PieceAngle = CatAngle / NumPieces;
-
-			float RelAngle = AngleDeg - CatStartDeg;
-			if (RelAngle < 0.0f) RelAngle += 360.0f;
-			if (RelAngle > CatAngle) RelAngle -= 360.0f;
-
-			if (RelAngle >= 0.0f && RelAngle <= CatAngle)
+			float CatMidDeg = (HighlightedCategory + 0.5f) * CatAngle;
+			float BestAngDist = 999.0f;
+			int32 BestSlot = -1;
+			for (int32 p = 0; p < NumPieces; p++)
 			{
-				int32 PieceSlot = FMath::Clamp((int32)(RelAngle / PieceAngle), 0, NumPieces - 1);
-				HighlightedPieceSlot = PieceSlot;
+				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				float AngDist = FMath::Abs(AngleDeg - PieceDeg);
+				if (AngDist > 180.0f) AngDist = 360.0f - AngDist;
+				if (AngDist < BestAngDist)
+				{
+					BestAngDist = AngDist;
+					BestSlot = p;
+				}
 			}
+			if (BestSlot >= 0 && BestAngDist < CatAngle * 0.6f)
+				HighlightedPieceSlot = BestSlot;
 		}
 	}
 	else if (Dist < ScaledDead)
 	{
-		// Dead zone: keep current selection
+		// Dead zone: keep selection
 	}
 
-	// Play hover sound on change
 	if (HighlightedCategory != PrevHighlightedCategory ||
 		HighlightedPieceSlot != PrevHighlightedPieceSlot)
 	{
@@ -313,7 +308,7 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		PrevHighlightedPieceSlot = HighlightedPieceSlot;
 	}
 
-	// --- Interpolate hover scales for smooth glow transitions ---
+	// Interpolate hover scales
 	if (CategoryHoverScales.Num() != NumCats)
 		CategoryHoverScales.Init(0.0f, NumCats);
 	for (int32 i = 0; i < NumCats; i++)
@@ -336,7 +331,7 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 }
 
 // ---------------------------------------------------------------------------
-// Paint — Cyan Glow Sci-fi Radial Menu (matched to React prototype)
+// Paint — Exact match to React SVG prototype
 // ---------------------------------------------------------------------------
 int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,
 	const FSlateRect& MyCullingRect, FSlateWindowElementList& OutDrawElements,
@@ -348,7 +343,6 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FVector2D LocalSize = AllottedGeometry.GetLocalSize();
 	FVector2D Center = LocalSize / 2.0f;
 
-	// Scale all radii to 65% of screen height
 	float MenuDiameter = LocalSize.Y * 0.65f;
 	float Scale = MenuDiameter / (OuterRingOuter * 2.0f);
 
@@ -361,30 +355,50 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	float CatAngle = 360.0f / NumCats;
 	float GapHalf = WedgeGapDeg / 2.0f;
 
-	// Glow pulse: slow sine 0.7..1.0
+	// Pulse: slow sine for glow animations
 	float Pulse = 0.85f + 0.15f * FMath::Sin(GlowPulseTime * 1.8f);
+	// Center hub pulse (separate, slower)
+	float CenterPulse = 0.3f + 0.4f * (0.5f + 0.5f * FMath::Sin(GlowPulseTime * 1.05f));
 
 	TSharedRef<FSlateFontMeasure> FontMeasure =
 		FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 
-	int32 CatFontSize        = FMath::Clamp(FMath::RoundToInt(14.0f * Scale), 10, 18);
+	int32 CatFontSize        = FMath::Clamp(FMath::RoundToInt(13.0f * Scale), 9, 17);
 	int32 CatIconFontSize    = FMath::Clamp(FMath::RoundToInt(20.0f * Scale), 14, 26);
-	int32 PieceNameFontSize  = FMath::Clamp(FMath::RoundToInt(11.0f * Scale), 8, 14);
-	int32 PieceDimFontSize   = FMath::Clamp(FMath::RoundToInt(9.0f * Scale), 7, 12);
-	int32 CenterNameFontSize = FMath::Clamp(FMath::RoundToInt(16.0f * Scale), 12, 22);
-	int32 CenterSubFontSize  = FMath::Clamp(FMath::RoundToInt(11.0f * Scale), 9, 15);
+	int32 PieceNameFontSize  = FMath::Clamp(FMath::RoundToInt(10.0f * Scale), 7, 13);
+	int32 PieceDimFontSize   = FMath::Clamp(FMath::RoundToInt(8.0f * Scale), 6, 11);
+	int32 CenterNameFontSize = FMath::Clamp(FMath::RoundToInt(14.0f * Scale), 10, 20);
+	int32 CenterSubFontSize  = FMath::Clamp(FMath::RoundToInt(10.0f * Scale), 8, 14);
+	int32 CenterIconFontSize = FMath::Clamp(FMath::RoundToInt(26.0f * Scale), 18, 34);
 
 	FSlateFontInfo CatFont        = FCoreStyle::GetDefaultFontStyle("Bold", CatFontSize);
 	FSlateFontInfo CatIconFont    = FCoreStyle::GetDefaultFontStyle("Regular", CatIconFontSize);
-	FSlateFontInfo PieceNameFont  = FCoreStyle::GetDefaultFontStyle("Regular", PieceNameFontSize);
+	FSlateFontInfo PieceNameFont  = FCoreStyle::GetDefaultFontStyle("Bold", PieceNameFontSize);
 	FSlateFontInfo PieceDimFont   = FCoreStyle::GetDefaultFontStyle("Regular", PieceDimFontSize);
 	FSlateFontInfo CenterNameFont = FCoreStyle::GetDefaultFontStyle("Bold", CenterNameFontSize);
 	FSlateFontInfo CenterSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", CenterSubFontSize);
-
-	// No background disc — game world stays fully visible behind the menu
+	FSlateFontInfo CenterIconFont = FCoreStyle::GetDefaultFontStyle("Regular", CenterIconFontSize);
+	FSlateFontInfo BuildFont      = FCoreStyle::GetDefaultFontStyle("Bold",
+		FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 16));
+	FSlateFontInfo BuildSubFont   = FCoreStyle::GetDefaultFontStyle("Regular",
+		FMath::Clamp(FMath::RoundToInt(8.0f * Scale), 6, 11));
 
 	// =================================================================
-	// LAYER 2: Inner ring — category wedges with glow
+	// LAYER 1: Category ring dark base circle
+	// React: <circle ... stroke="#060a10" strokeWidth={CATEGORY_RING_OUTER - INNER_RADIUS}/>
+	// =================================================================
+	{
+		float BaseR = (sInnerI + sInnerO) / 2.0f;
+		float BaseW = sInnerO - sInnerI;
+		FLinearColor BaseColor(0.024f, 0.039f, 0.063f, 0.95f); // #060a10
+		BaseColor.A *= FadeAlpha;
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			BaseR, -90.0f, 270.0f, BaseColor, BaseW);
+	}
+	LayerId++;
+
+	// =================================================================
+	// LAYER 2: Category wedges with dual-layer cyan glow borders
 	// =================================================================
 	for (int32 i = 0; i < NumCats; i++)
 	{
@@ -393,159 +407,179 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		float EndDeg   = (i + 1) * CatAngle - 90.0f - GapHalf;
 		bool bActive = (i == HighlightedCategory);
 
-		// Wedge fill: dark navy, brighter on hover/active
+		// glowIntensity: active=1, hovered=0.6*HoverT, default=0.25
+		float GlowI = bActive ? FMath::Lerp(0.25f, 1.0f, HoverT) : 0.25f;
+
+		// Wedge fill
 		FLinearColor FillCol = bActive
 			? FMath::Lerp(DarkWedge, ActiveWedgeFill, HoverT)
-			: DarkWedge;
+			: FMath::Lerp(DarkWedge, DarkHover, HoverT * 0.5f);
 		DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
 			sInnerI, sInnerO, StartDeg, EndDeg, Faded(FillCol));
 
-		// Glow layer underneath: soft cyan bloom for hovered wedge
-		if (HoverT > 0.01f)
+		// Active wedge inner glow overlay (CYAN at ~3%)
+		if (bActive && HoverT > 0.01f)
 		{
-			FLinearColor GlowCol = WithAlpha(CyanDim, CyanDim.A * HoverT * Pulse * FadeAlpha);
-			// Draw slightly expanded arc as "bloom"
+			FLinearColor InnerGlow = WithAlpha(Cyan, 0.03f * HoverT * FadeAlpha);
 			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-				sInnerI - 2.0f * Scale, sInnerO + 2.0f * Scale,
-				StartDeg - 0.3f, EndDeg + 0.3f, GlowCol, 32);
+				sInnerI, sInnerO, StartDeg, EndDeg, InnerGlow);
+		}
+
+		// --- Outer arc: blur layer (thick, dim) + crisp layer (thin, bright) ---
+		float OuterBlurW = bActive ? 2.5f * Scale : 1.5f * Scale;
+		float OuterCrispW = bActive ? 1.5f : 0.8f;
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			sInnerO, StartDeg, EndDeg,
+			WithAlpha(Cyan, GlowI * Pulse * FadeAlpha), OuterBlurW);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			sInnerO, StartDeg, EndDeg,
+			WithAlpha(Cyan, GlowI * 1.2f * Pulse * FadeAlpha), OuterCrispW);
+
+		// --- Inner arc: blur + crisp ---
+		float InnerBlurW = bActive ? 2.0f * Scale : 1.0f * Scale;
+		float InnerCrispW = bActive ? 1.0f : 0.5f;
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			sInnerI, StartDeg, EndDeg,
+			WithAlpha(Cyan, GlowI * 0.8f * Pulse * FadeAlpha), InnerBlurW);
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			sInnerI, StartDeg, EndDeg,
+			WithAlpha(Cyan, GlowI * Pulse * FadeAlpha), InnerCrispW);
+
+		// --- Split lines (dividers): blur + crisp ---
+		float SplitStartRad = FMath::DegreesToRadians(StartDeg);
+		float SplitEndRad   = FMath::DegreesToRadians(EndDeg);
+		for (float Rad : {SplitStartRad, SplitEndRad})
+		{
+			FVector2D Dir(FMath::Cos(Rad), FMath::Sin(Rad));
+			FVector2D Inner = Center + Dir * sInnerI;
+			FVector2D Outer = Center + Dir * sInnerO;
+			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
+				Inner, Outer, WithAlpha(Cyan, GlowI * 0.7f * Pulse * FadeAlpha), 1.0f * Scale);
+			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
+				Inner, Outer, WithAlpha(Cyan, GlowI * Pulse * FadeAlpha), 0.5f);
 		}
 	}
 	LayerId++;
 
 	// =================================================================
-	// LAYER 3: Inner ring cyan borders — dividers + inner/outer arcs
+	// LAYER 3: 72 tick marks around category ring outer edge
+	// React: every 5°, major every 20° (i%4==0)
+	// Major: from sInnerO+4 to +14, strokeWidth 1.5, opacity 0.3
+	// Minor: from sInnerO+4 to +8,  strokeWidth 0.5, opacity 0.12
 	// =================================================================
 	{
-		// Outer arc of inner ring (full circle)
-		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			sInnerO, -90.0f, 270.0f, Faded(WithAlpha(CyanDim, CyanDim.A * Pulse)), 1.5f);
-
-		// Inner arc of inner ring (full circle — hub border)
-		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			sInnerI, -90.0f, 270.0f, Faded(WithAlpha(CyanDim, CyanDim.A * 0.7f * Pulse)), 1.0f);
-
-		// Divider lines between category wedges (cyan)
-		for (int32 i = 0; i < NumCats; i++)
+		for (int32 t = 0; t < 72; t++)
 		{
-			float AngleRad = FMath::DegreesToRadians(i * CatAngle - 90.0f);
-			FVector2D Radial(FMath::Cos(AngleRad), FMath::Sin(AngleRad));
-			FVector2D Inner = Center + Radial * sInnerI;
-			FVector2D Outer = Center + Radial * sInnerO;
+			float AngleDeg = t * 5.0f - 90.0f;
+			float AngleRad = FMath::DegreesToRadians(AngleDeg);
+			FVector2D Dir(FMath::Cos(AngleRad), FMath::Sin(AngleRad));
+
+			bool bMajor = (t % 4 == 0);
+			float TickStart = sInnerO + 4.0f * Scale;
+			float TickEnd   = sInnerO + (bMajor ? 14.0f : 8.0f) * Scale;
+			float Alpha     = bMajor ? 0.3f : 0.12f;
+			float Width     = bMajor ? 1.5f : 0.5f;
+
 			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-				Inner, Outer, Faded(WithAlpha(CyanDim, CyanDim.A * Pulse)), 1.0f);
-		}
-
-		// Tick marks on outer edge of inner ring (small radial ticks at each wedge boundary)
-		for (int32 i = 0; i < NumCats; i++)
-		{
-			float AngleRad = FMath::DegreesToRadians(i * CatAngle - 90.0f);
-			FVector2D Radial(FMath::Cos(AngleRad), FMath::Sin(AngleRad));
-			FVector2D TickInner = Center + Radial * (sInnerO - 4.0f * Scale);
-			FVector2D TickOuter = Center + Radial * (sInnerO + 4.0f * Scale);
-			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-				TickInner, TickOuter, Faded(WithAlpha(CyanMid, CyanMid.A * Pulse)), 2.0f);
-		}
-
-		// Active category gets a bright cyan outer arc highlight
-		if (HighlightedCategory >= 0)
-		{
-			float HoverT = CategoryHoverScales.IsValidIndex(HighlightedCategory) ? CategoryHoverScales[HighlightedCategory] : 0.0f;
-			float StartDeg = HighlightedCategory * CatAngle - 90.0f + GapHalf;
-			float EndDeg   = (HighlightedCategory + 1) * CatAngle - 90.0f - GapHalf;
-			FLinearColor ArcGlow = WithAlpha(CyanGlow, CyanGlow.A * HoverT * Pulse * FadeAlpha);
-			DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-				sInnerO, StartDeg, EndDeg, ArcGlow, 2.5f);
+				Center + Dir * TickStart, Center + Dir * TickEnd,
+				WithAlpha(Cyan, Alpha * Pulse * FadeAlpha), Width);
 		}
 	}
 	LayerId++;
 
 	// =================================================================
-	// LAYER 4: Category names + icons centered in each wedge
+	// LAYER 4: Category labels (name + icon centered in each wedge)
+	// React: name at midAngle y-8, icon at y+14
 	// =================================================================
 	{
-		float TextR = (sInnerI + sInnerO) / 2.0f + 5.0f * Scale;
-		float IconR = (sInnerI + sInnerO) / 2.0f - 12.0f * Scale;
-
+		float LabelR = (sInnerI + sInnerO) / 2.0f;
 		for (int32 i = 0; i < NumCats; i++)
 		{
 			float MidAngleDeg = (i + 0.5f) * CatAngle - 90.0f;
 			float MidAngleRad = FMath::DegreesToRadians(MidAngleDeg);
 			FVector2D Dir(FMath::Cos(MidAngleRad), FMath::Sin(MidAngleRad));
+			FVector2D LabelCenter = Center + Dir * LabelR;
 
 			float HoverT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
 			bool bActive = (i == HighlightedCategory);
 
-			// Category icon (Unicode character)
+			// Category name (uppercase, above center of wedge)
+			FLinearColor NameTint;
+			if (bActive)
+				NameTint = FMath::Lerp(TextDimmed, Cyan, HoverT);
+			else
+				NameTint = FMath::Lerp(TextDimmed, FLinearColor(0.557f, 0.847f, 0.910f, 1.0f), HoverT); // #8ed8e8
+			NameTint.A *= FadeAlpha;
+
+			FVector2D NameSize = FontMeasure->Measure(Categories[i].Name, CatFont);
+			FVector2D NamePos = LabelCenter - FVector2D(NameSize.X / 2.0f, NameSize.Y + 2.0f * Scale);
+			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
+				Categories[i].Name, CatFont, ESlateDrawEffect::None, NameTint);
+
+			// Category icon (below name)
 			if (!Categories[i].Icon.IsEmpty())
 			{
-				FVector2D IconCenter = Center + Dir * IconR;
-				FLinearColor IconTint = bActive
-					? FMath::Lerp(CyanDim, Cyan, HoverT)
-					: CyanDim;
+				FLinearColor IconTint;
+				if (bActive)
+					IconTint = FMath::Lerp(FLinearColor(0.165f, 0.243f, 0.290f, 1.0f), Cyan, HoverT);
+				else
+					IconTint = FMath::Lerp(FLinearColor(0.165f, 0.243f, 0.290f, 1.0f),
+						FLinearColor(0.369f, 0.722f, 0.784f, 1.0f), HoverT); // #5eb8c8
 				IconTint.A *= FadeAlpha;
 
 				FVector2D IconSize = FontMeasure->Measure(Categories[i].Icon, CatIconFont);
-				FVector2D IconPos = IconCenter - IconSize / 2.0f;
+				FVector2D IconPos = LabelCenter + FVector2D(-IconSize.X / 2.0f, 4.0f * Scale);
 				FGeometry IconGeo = AllottedGeometry.MakeChild(IconSize, FSlateLayoutTransform(IconPos));
 				FSlateDrawElement::MakeText(OutDrawElements, LayerId, IconGeo.ToPaintGeometry(),
 					Categories[i].Icon, CatIconFont, ESlateDrawEffect::None, IconTint);
 			}
-
-			// Category name
-			FVector2D LabelCenter = Center + Dir * TextR;
-			FLinearColor TextTint = bActive
-				? FMath::Lerp(TextDimmed, TextWhite, HoverT)
-				: TextDimmed;
-			TextTint.A *= FadeAlpha;
-
-			FVector2D TextSize = FontMeasure->Measure(Categories[i].Name, CatFont);
-			FVector2D TextPos = LabelCenter - TextSize / 2.0f;
-			FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
-			FSlateDrawElement::MakeText(OutDrawElements, LayerId, TextGeo.ToPaintGeometry(),
-				Categories[i].Name, CatFont, ESlateDrawEffect::None, TextTint);
 		}
 	}
 	LayerId++;
 
 	// =================================================================
-	// LAYER 5: Connector lines from active category to outer ring
+	// LAYER 5: Active category — outer ring tracks + connector lines
 	// =================================================================
 	if (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory))
 	{
-		float CatStartDeg = HighlightedCategory * CatAngle - 90.0f;
-		float CatEndDeg   = CatStartDeg + CatAngle;
-		float CatMidDeg   = (CatStartDeg + CatEndDeg) / 2.0f;
-
-		// Two connector lines from the edges of the active category wedge
-		// extending outward to the outer ring boundaries
-		float StartRad = FMath::DegreesToRadians(CatStartDeg + GapHalf);
-		float EndRad   = FMath::DegreesToRadians(CatEndDeg - GapHalf);
-
-		FVector2D StartDir(FMath::Cos(StartRad), FMath::Sin(StartRad));
-		FVector2D EndDir(FMath::Cos(EndRad), FMath::Sin(EndRad));
-
-		FVector2D ConnStart1 = Center + StartDir * sInnerO;
-		FVector2D ConnEnd1   = Center + StartDir * sOuterI;
-		FVector2D ConnStart2 = Center + EndDir * sInnerO;
-		FVector2D ConnEnd2   = Center + EndDir * sOuterI;
-
+		const FCategoryInfo& Cat = Categories[HighlightedCategory];
+		int32 NumPieces = Cat.PieceIndices.Num();
+		float CatMidDeg = (HighlightedCategory + 0.5f) * CatAngle;
 		float HoverT = CategoryHoverScales.IsValidIndex(HighlightedCategory) ? CategoryHoverScales[HighlightedCategory] : 0.0f;
-		FLinearColor ConnColor = WithAlpha(CyanDim, CyanDim.A * HoverT * Pulse * FadeAlpha);
-		DrawLine(OutDrawElements, LayerId, AllottedGeometry, ConnStart1, ConnEnd1, ConnColor, 1.0f);
-		DrawLine(OutDrawElements, LayerId, AllottedGeometry, ConnStart2, ConnEnd2, ConnColor, 1.0f);
 
-		// Dashed center connector (dimmer)
-		float MidRad = FMath::DegreesToRadians(CatMidDeg);
-		FVector2D MidDir(FMath::Cos(MidRad), FMath::Sin(MidRad));
-		FVector2D MidStart = Center + MidDir * sInnerO;
-		FVector2D MidEnd   = Center + MidDir * sOuterI;
-		FLinearColor MidConnColor = WithAlpha(CyanDim, CyanDim.A * 0.4f * HoverT * Pulse * FadeAlpha);
-		DrawLine(OutDrawElements, LayerId, AllottedGeometry, MidStart, MidEnd, MidConnColor, 0.5f);
+		if (NumPieces > 0)
+		{
+			// Inner ring track (PIECE_RING_INNER - 5)
+			DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+				sOuterI - 5.0f * Scale, -90.0f, 270.0f,
+				WithAlpha(Cyan, 0.2f * HoverT * Pulse * FadeAlpha), 1.0f);
+
+			// Outer ring track (PIECE_RING_OUTER + 5)
+			DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+				sOuterO + 5.0f * Scale, -90.0f, 270.0f,
+				WithAlpha(Cyan, 0.1f * HoverT * Pulse * FadeAlpha), 0.5f);
+
+			// Connector lines from category outer edge to each piece card
+			for (int32 p = 0; p < NumPieces; p++)
+			{
+				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				float PieceRad = FMath::DegreesToRadians(PieceDeg - 90.0f);
+				FVector2D Dir(FMath::Cos(PieceRad), FMath::Sin(PieceRad));
+
+				FVector2D ConnInner = Center + Dir * (sInnerO + 2.0f * Scale);
+				FVector2D ConnOuter = Center + Dir * (sOuterI - 8.0f * Scale);
+
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry,
+					ConnInner, ConnOuter,
+					WithAlpha(Cyan, 0.2f * HoverT * Pulse * FadeAlpha), 0.8f);
+			}
+		}
 	}
 	LayerId++;
 
 	// =================================================================
-	// LAYER 6: Outer ring — piece cards with cyan glow borders
+	// LAYER 6 + 7: Piece cards — rectangular cards at polar coordinates
 	// =================================================================
 	if (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory))
 	{
@@ -553,173 +587,114 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 		int32 NumPieces = Cat.PieceIndices.Num();
 		if (NumPieces > 0)
 		{
-			float CatStartDeg = HighlightedCategory * CatAngle - 90.0f;
-			float PieceAngle = CatAngle / NumPieces;
-			float CardGapDeg = WedgeGapDeg;
+			float CatMidDeg = (HighlightedCategory + 0.5f) * CatAngle;
+			float CardR = (sOuterI + sOuterO) / 2.0f;
+			float CardW = 92.0f * Scale;
+			float CardH = 82.0f * Scale;
 
-			// --- Card fills ---
 			for (int32 p = 0; p < NumPieces; p++)
 			{
 				int32 GlobalIdx = Cat.PieceIndices[p];
 				bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
 				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
 
-				float StartDeg = CatStartDeg + p * PieceAngle + CardGapDeg;
-				float EndDeg   = CatStartDeg + (p + 1) * PieceAngle - CardGapDeg;
+				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				float PieceRad = FMath::DegreesToRadians(PieceDeg - 90.0f);
+				FVector2D CardCenter = Center + FVector2D(FMath::Cos(PieceRad), FMath::Sin(PieceRad)) * CardR;
 
-				// Card fill: dark, slightly brighter on hover
-				FLinearColor CardFill;
-				if (!bAvailable)
-				{
-					CardFill = WithAlpha(DarkCard, DarkCard.A * 0.5f);
-				}
-				else
-				{
-					CardFill = FMath::Lerp(DarkCard, DarkHover, HoverT * 0.7f);
-				}
-				DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-					sOuterI, sOuterO, StartDeg, EndDeg, Faded(CardFill));
+				float DrawW = CardW * (1.0f + 0.1f * HoverT);
+				float DrawH = CardH * (1.0f + 0.1f * HoverT);
+				FVector2D TL = CardCenter - FVector2D(DrawW / 2.0f, DrawH / 2.0f);
 
-				// Glow bloom underneath hovered card
-				if (HoverT > 0.01f && bAvailable)
-				{
-					FLinearColor BloomCol = WithAlpha(Cyan, 0.08f * HoverT * Pulse * FadeAlpha);
-					DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-						sOuterI - 1.0f * Scale, sOuterO + 1.0f * Scale,
-						StartDeg - 0.2f, EndDeg + 0.2f, BloomCol, 24);
-				}
-			}
-			LayerId++;
+				// Card fill
+				FLinearColor FillCol = bAvailable
+					? FMath::Lerp(DarkCard, FLinearColor(0.051f, 0.118f, 0.176f, 0.92f), HoverT * 0.5f)
+					: WithAlpha(DarkCard, DarkCard.A * 0.5f);
+				DrawFilledRect(OutDrawElements, LayerId, AllottedGeometry,
+					TL, DrawW, DrawH, Faded(FillCol));
 
-			// --- Cyan borders on each card ---
-			for (int32 p = 0; p < NumPieces; p++)
-			{
-				int32 GlobalIdx = Cat.PieceIndices[p];
-				bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
-				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
-
-				float StartDeg = CatStartDeg + p * PieceAngle + CardGapDeg;
-				float EndDeg   = CatStartDeg + (p + 1) * PieceAngle - CardGapDeg;
-
-				// Border intensity: dim default, bright on hover
+				// Card border (cyan, brighter on hover)
 				float BorderAlpha = bAvailable
-					? FMath::Lerp(0.18f, 0.85f, HoverT) * Pulse
+					? FMath::Lerp(0.27f, 1.0f, HoverT) * Pulse
 					: 0.08f;
 				FLinearColor BorderCol = WithAlpha(Cyan, BorderAlpha * FadeAlpha);
+				float BW = FMath::Lerp(1.0f, 1.5f, HoverT);
+				FVector2D TR(TL.X + DrawW, TL.Y);
+				FVector2D BL(TL.X, TL.Y + DrawH);
+				FVector2D BR(TL.X + DrawW, TL.Y + DrawH);
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, TR, BorderCol, BW); // top
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, BR, BL, BorderCol, BW); // bottom
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TL, BL, BorderCol, BW); // left
+				DrawLine(OutDrawElements, LayerId, AllottedGeometry, TR, BR, BorderCol, BW); // right
 
-				// Outer arc border
-				DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-					sOuterO - 0.5f, StartDeg, EndDeg, BorderCol, FMath::Lerp(1.0f, 2.5f, HoverT));
-
-				// Inner arc border
-				DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-					sOuterI + 0.5f, StartDeg, EndDeg, BorderCol, FMath::Lerp(1.0f, 2.0f, HoverT));
-
-				// Side borders (radial lines)
-				float Rad1 = FMath::DegreesToRadians(StartDeg);
-				float Rad2 = FMath::DegreesToRadians(EndDeg);
-				FVector2D Dir1(FMath::Cos(Rad1), FMath::Sin(Rad1));
-				FVector2D Dir2(FMath::Cos(Rad2), FMath::Sin(Rad2));
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-					Center + Dir1 * sOuterI, Center + Dir1 * sOuterO,
-					BorderCol, FMath::Lerp(0.5f, 1.5f, HoverT));
-				DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-					Center + Dir2 * sOuterI, Center + Dir2 * sOuterO,
-					BorderCol, FMath::Lerp(0.5f, 1.5f, HoverT));
-			}
-			LayerId++;
-
-			// --- Piece icons centered in each card ---
-			{
-				float IconR = (sOuterI + sOuterO) / 2.0f - 5.0f * Scale;
-				float ScaledIconSize = SegmentIconSize * Scale;
-
-				for (int32 p = 0; p < NumPieces; p++)
+				// Hover glow bloom behind card
+				if (HoverT > 0.01f && bAvailable)
 				{
-					int32 GlobalIdx = Cat.PieceIndices[p];
-					float MidAngle = FMath::DegreesToRadians(CatStartDeg + (p + 0.5f) * PieceAngle);
-					FVector2D IconCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * IconR;
-
-					bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
-					float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
-
-					if (IconBrushes.IsValidIndex(GlobalIdx) && IconBrushes[GlobalIdx].GetResourceObject())
-					{
-						float DrawSize = ScaledIconSize * (1.0f + 0.08f * HoverT);
-						FVector2D TexSize(DrawSize, DrawSize);
-						FVector2D TexPos = IconCenter - TexSize / 2.0f;
-						FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
-
-						FLinearColor IconTint;
-						if (!bAvailable)
-							IconTint = FLinearColor(0.20f, 0.25f, 0.30f, FadeAlpha * 0.4f);
-						else
-							IconTint = FMath::Lerp(
-								FLinearColor(0.70f, 0.82f, 0.90f, FadeAlpha),
-								FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha),
-								HoverT);
-
-						FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
-							IconGeo.ToPaintGeometry(), &IconBrushes[GlobalIdx],
-							ESlateDrawEffect::None, IconTint);
-					}
+					float GlowExpand = 4.0f * Scale;
+					DrawFilledRect(OutDrawElements, LayerId - 1, AllottedGeometry,
+						TL - FVector2D(GlowExpand, GlowExpand),
+						DrawW + GlowExpand * 2, DrawH + GlowExpand * 2,
+						WithAlpha(Cyan, 0.06f * HoverT * Pulse * FadeAlpha));
 				}
 			}
 			LayerId++;
 
-			// --- Piece names below icons ---
+			// --- Card content: icons, names, dimensions ---
+			for (int32 p = 0; p < NumPieces; p++)
 			{
-				float NameR = sOuterI + (sOuterO - sOuterI) * 0.20f;
-				for (int32 p = 0; p < NumPieces; p++)
+				int32 GlobalIdx = Cat.PieceIndices[p];
+				bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
+				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
+
+				float PieceDeg = GetPieceAngleDeg(p, NumPieces, CatMidDeg, CatAngle);
+				float PieceRad = FMath::DegreesToRadians(PieceDeg - 90.0f);
+				FVector2D CardCenter = Center + FVector2D(FMath::Cos(PieceRad), FMath::Sin(PieceRad)) * CardR;
+
+				// Icon (texture)
+				float ScaledIcon = SegmentIconSize * Scale * 0.65f;
+				if (IconBrushes.IsValidIndex(GlobalIdx) && IconBrushes[GlobalIdx].GetResourceObject())
 				{
-					int32 GlobalIdx = Cat.PieceIndices[p];
-					FString Name = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].DisplayName : TEXT("");
-					if (Name.IsEmpty()) continue;
-
-					bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
-					float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
-
-					float MidAngle = FMath::DegreesToRadians(CatStartDeg + (p + 0.5f) * PieceAngle);
-					FVector2D LabelCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * NameR;
-
-					FLinearColor Tint;
-					if (!bAvailable) Tint = TextUnavailable;
-					else Tint = FMath::Lerp(TextDimmed, TextWhite, HoverT);
-					Tint.A *= FadeAlpha;
-
-					FVector2D TextSize = FontMeasure->Measure(Name, PieceNameFont);
-					FVector2D TextPos = LabelCenter - TextSize / 2.0f;
-					FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
-					FSlateDrawElement::MakeText(OutDrawElements, LayerId, TextGeo.ToPaintGeometry(),
-						Name, PieceNameFont, ESlateDrawEffect::None, Tint);
+					float DrawSize = ScaledIcon * (1.0f + 0.08f * HoverT);
+					FVector2D TexSize(DrawSize, DrawSize);
+					FVector2D TexPos = CardCenter - FVector2D(DrawSize / 2.0f, DrawSize / 2.0f + 10.0f * Scale);
+					FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
+					FLinearColor IconTint = bAvailable
+						? FMath::Lerp(FLinearColor(0.60f, 0.75f, 0.85f, FadeAlpha),
+							FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha), HoverT)
+						: FLinearColor(0.20f, 0.25f, 0.30f, FadeAlpha * 0.4f);
+					FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
+						IconGeo.ToPaintGeometry(), &IconBrushes[GlobalIdx],
+						ESlateDrawEffect::None, IconTint);
 				}
-			}
-			LayerId++;
 
-			// --- Piece dimensions (cyan subtitle) below name ---
-			{
-				float DimR = sOuterI + (sOuterO - sOuterI) * 0.08f;
-				for (int32 p = 0; p < NumPieces; p++)
+				// Piece name
+				FString Name = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].DisplayName : TEXT("");
+				if (!Name.IsEmpty())
 				{
-					int32 GlobalIdx = Cat.PieceIndices[p];
-					FString Dims = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].Subtitle : TEXT("");
-					if (Dims.IsEmpty()) continue;
+					FLinearColor NameTint = bAvailable
+						? FMath::Lerp(FLinearColor(0.557f, 0.667f, 0.733f, 1.0f), TextWhite, HoverT)
+						: TextUnavailable;
+					NameTint.A *= FadeAlpha;
+					FVector2D NameSize = FontMeasure->Measure(Name, PieceNameFont);
+					FVector2D NamePos = CardCenter + FVector2D(-NameSize.X / 2.0f, 8.0f * Scale);
+					FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
+					FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
+						Name, PieceNameFont, ESlateDrawEffect::None, NameTint);
+				}
 
-					bool bAvailable = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].bAvailable : true;
-
-					float MidAngle = FMath::DegreesToRadians(CatStartDeg + (p + 0.5f) * PieceAngle);
-					FVector2D LabelCenter = Center + FVector2D(FMath::Cos(MidAngle), FMath::Sin(MidAngle)) * DimR;
-
-					FLinearColor Tint;
-					if (!bAvailable) Tint = TextUnavailable;
-					else Tint = WithAlpha(Cyan, 0.8f);
-					Tint.A *= FadeAlpha;
-
-					FVector2D TextSize = FontMeasure->Measure(Dims, PieceDimFont);
-					FVector2D TextPos = LabelCenter - TextSize / 2.0f;
-					FGeometry TextGeo = AllottedGeometry.MakeChild(TextSize, FSlateLayoutTransform(TextPos));
-					FSlateDrawElement::MakeText(OutDrawElements, LayerId, TextGeo.ToPaintGeometry(),
-						Dims, PieceDimFont, ESlateDrawEffect::None, Tint);
+				// Dimension text (cyan)
+				FString Dims = AllPieceInfos.IsValidIndex(GlobalIdx) ? AllPieceInfos[GlobalIdx].Subtitle : TEXT("");
+				if (!Dims.IsEmpty())
+				{
+					FLinearColor DimTint = bAvailable
+						? WithAlpha(Cyan, FMath::Lerp(0.5f, 0.9f, HoverT))
+						: TextUnavailable;
+					DimTint.A *= FadeAlpha;
+					FVector2D DimSize = FontMeasure->Measure(Dims, PieceDimFont);
+					FVector2D DimPos = CardCenter + FVector2D(-DimSize.X / 2.0f, 22.0f * Scale);
+					FGeometry DimGeo = AllottedGeometry.MakeChild(DimSize, FSlateLayoutTransform(DimPos));
+					FSlateDrawElement::MakeText(OutDrawElements, LayerId, DimGeo.ToPaintGeometry(),
+						Dims, PieceDimFont, ESlateDrawEffect::None, DimTint);
 				}
 			}
 			LayerId++;
@@ -727,129 +702,107 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	}
 
 	// =================================================================
-	// LAYER 7: Outer ring border (full circle, dim cyan)
-	// =================================================================
-	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		sOuterO, -90.0f, 270.0f, Faded(WithAlpha(CyanDim, CyanDim.A * 0.5f * Pulse)), 1.0f);
-	DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-		sOuterI, -90.0f, 270.0f, Faded(WithAlpha(CyanDim, CyanDim.A * 0.4f * Pulse)), 1.0f);
-	LayerId++;
-
-	// =================================================================
-	// LAYER 8: Center hub — dark circle with cyan border + crosshair/content
+	// LAYER 8: Center hub
 	// =================================================================
 	{
-		// Hub fill
+		float HubR = sHub - 6.0f * Scale; // React: INNER_RADIUS - 6
+
+		// Outer glow ring (pulsing)
+		float GlowR = sHub - 4.0f * Scale; // React: INNER_RADIUS - 4
+		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
+			GlowR, -90.0f, 270.0f,
+			WithAlpha(Cyan, CenterPulse * Pulse * FadeAlpha), 2.0f * Scale);
+
+		// Hub dark fill
 		DrawCircleFill(OutDrawElements, LayerId, AllottedGeometry, Center,
-			sHub, Faded(DarkBg));
+			HubR, Faded(DarkBg));
 
-		// Hub border (bright cyan, pulsing)
+		// Hub border
+		bool bCatActive = (HighlightedCategory >= 0);
+		float BorderOpacity = bCatActive ? 0.6f : 0.25f;
 		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			sHub, -90.0f, 270.0f, Faded(WithAlpha(CyanMid, CyanMid.A * Pulse)), 2.0f);
+			HubR, -90.0f, 270.0f,
+			WithAlpha(Cyan, BorderOpacity * Pulse * FadeAlpha), 1.5f);
 
-		// Subtle outer glow ring around hub
+		// Inner pulse ring
+		float PulseR = HubR + (4.0f * Scale * (0.5f + 0.5f * FMath::Sin(GlowPulseTime * 0.785f)));
 		DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-			sHub + 2.0f, -90.0f, 270.0f, Faded(WithAlpha(CyanDim, CyanDim.A * 0.3f * Pulse)), 4.0f);
+			PulseR, -90.0f, 270.0f,
+			WithAlpha(Cyan, 0.15f * FadeAlpha), 1.0f);
 	}
 	LayerId++;
 
 	// =================================================================
-	// LAYER 9: Center hub content — crosshair when idle, piece info when active
+	// LAYER 9: Center content — crosshair or category info
 	// =================================================================
 	{
-		int32 GlobalIdx = GetHighlightedIndex();
-		bool bHasSelection = (GlobalIdx >= 0 && AllPieceInfos.IsValidIndex(GlobalIdx));
+		bool bCatActive = (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory));
 
-		if (bHasSelection)
+		if (bCatActive)
 		{
-			const FPieceTypeInfo& Info = AllPieceInfos[GlobalIdx];
+			const FCategoryInfo& ActiveCat = Categories[HighlightedCategory];
+			int32 NumPieces = ActiveCat.PieceIndices.Num();
 
-			// Icon
-			float ScaledCenterIcon = CenterIconSize * Scale * 0.75f;
-			if (IconBrushes.IsValidIndex(GlobalIdx) && IconBrushes[GlobalIdx].GetResourceObject())
+			// Category icon (large, cyan, at y-16)
+			if (!ActiveCat.Icon.IsEmpty())
 			{
-				FVector2D TexSize(ScaledCenterIcon, ScaledCenterIcon);
-				FVector2D TexPos = Center - FVector2D(ScaledCenterIcon / 2.0f, ScaledCenterIcon / 2.0f + 12.0f * Scale);
-				FGeometry IconGeo = AllottedGeometry.MakeChild(TexSize, FSlateLayoutTransform(TexPos));
-				FLinearColor CenterIconTint = Info.bAvailable
-					? FLinearColor(0.85f, 0.95f, 1.00f, FadeAlpha)
-					: FLinearColor(0.25f, 0.30f, 0.35f, FadeAlpha * 0.4f);
-				FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
-					IconGeo.ToPaintGeometry(), &IconBrushes[GlobalIdx],
-					ESlateDrawEffect::None, CenterIconTint);
+				FVector2D IconSize = FontMeasure->Measure(ActiveCat.Icon, CenterIconFont);
+				FVector2D IconPos = Center - FVector2D(IconSize.X / 2.0f, IconSize.Y / 2.0f + 16.0f * Scale);
+				FGeometry IconGeo = AllottedGeometry.MakeChild(IconSize, FSlateLayoutTransform(IconPos));
+				FSlateDrawElement::MakeText(OutDrawElements, LayerId, IconGeo.ToPaintGeometry(),
+					ActiveCat.Icon, CenterIconFont, ESlateDrawEffect::None, Faded(Cyan));
 			}
 
-			// Name
-			FLinearColor NameColor = Info.bAvailable ? TextWhite : TextUnavailable;
-			FVector2D NameSize = FontMeasure->Measure(Info.DisplayName, CenterNameFont);
-			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, ScaledCenterIcon / 2.0f - 8.0f * Scale);
+			// Category name (white, uppercase, at y+8)
+			FVector2D NameSize = FontMeasure->Measure(ActiveCat.Name, CenterNameFont);
+			FVector2D NamePos = Center + FVector2D(-NameSize.X / 2.0f, 8.0f * Scale - NameSize.Y / 2.0f);
 			FGeometry NameGeo = AllottedGeometry.MakeChild(NameSize, FSlateLayoutTransform(NamePos));
 			FSlateDrawElement::MakeText(OutDrawElements, LayerId, NameGeo.ToPaintGeometry(),
-				Info.DisplayName, CenterNameFont, ESlateDrawEffect::None, Faded(NameColor));
+				ActiveCat.Name, CenterNameFont, ESlateDrawEffect::None, Faded(TextWhite));
 
-			// Subtitle (cyan)
-			if (!Info.Subtitle.IsEmpty())
-			{
-				FLinearColor SubColor = Info.bAvailable ? Cyan : TextUnavailable;
-				FVector2D SubSize = FontMeasure->Measure(Info.Subtitle, CenterSubFont);
-				FVector2D SubPos = NamePos + FVector2D((NameSize.X - SubSize.X) / 2.0f, NameSize.Y + 2.0f);
-				FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
-				FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
-					Info.Subtitle, CenterSubFont, ESlateDrawEffect::None, Faded(SubColor));
-			}
-
-			// Lock message (orange)
-			if (!Info.bAvailable)
-			{
-				FString LockMsg = TEXT("LOCKED");
-				if (AConstructionPhaseManager::Instance)
-				{
-					FString PrereqMsg = AConstructionPhaseManager::Instance->GetPrerequisiteMessage(Info.PieceType);
-					if (!PrereqMsg.IsEmpty()) LockMsg = PrereqMsg;
-				}
-				FSlateFontInfo LockFont = FCoreStyle::GetDefaultFontStyle("Bold",
-					FMath::Clamp(FMath::RoundToInt(10.0f * Scale), 8, 13));
-				FLinearColor LockColor(1.0f, 0.6f, 0.1f, 1.0f);
-				FVector2D LockSize = FontMeasure->Measure(LockMsg, LockFont);
-				float SubOffset = Info.Subtitle.IsEmpty() ? 0.0f
-					: FontMeasure->Measure(Info.Subtitle, CenterSubFont).Y + 4.0f;
-				FVector2D LockPos = NamePos + FVector2D(
-					(NameSize.X - LockSize.X) / 2.0f, NameSize.Y + SubOffset + 4.0f);
-				FGeometry LockGeo = AllottedGeometry.MakeChild(LockSize, FSlateLayoutTransform(LockPos));
-				FSlateDrawElement::MakeText(OutDrawElements, LayerId, LockGeo.ToPaintGeometry(),
-					LockMsg, LockFont, ESlateDrawEffect::None, Faded(LockColor));
-			}
+			// Piece count (cyan, dim, at y+26)
+			FString CountText = FString::Printf(TEXT("%d piece%s"), NumPieces, NumPieces != 1 ? TEXT("s") : TEXT(""));
+			FVector2D CountSize = FontMeasure->Measure(CountText, CenterSubFont);
+			FVector2D CountPos = Center + FVector2D(-CountSize.X / 2.0f, 26.0f * Scale - CountSize.Y / 2.0f);
+			FGeometry CountGeo = AllottedGeometry.MakeChild(CountSize, FSlateLayoutTransform(CountPos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, CountGeo.ToPaintGeometry(),
+				CountText, CenterSubFont, ESlateDrawEffect::None,
+				WithAlpha(Cyan, 0.6f * FadeAlpha));
 		}
 		else
 		{
-			// No selection — draw crosshair in center hub
-			float CrossLen = sHub * 0.4f;
-			FLinearColor CrossColor = Faded(WithAlpha(CyanDim, CyanDim.A * Pulse));
+			// Crosshair with gaps (React: lines from ±8 to ±20, gap in center)
+			float GapR = 8.0f * Scale;
+			float ArmR = 20.0f * Scale;
+			FLinearColor CrossCol = WithAlpha(Cyan, 0.4f * Pulse * FadeAlpha);
 
-			// Horizontal line
+			// Horizontal arms
 			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-				Center - FVector2D(CrossLen, 0.0f),
-				Center + FVector2D(CrossLen, 0.0f),
-				CrossColor, 1.0f);
-			// Vertical line
+				Center - FVector2D(ArmR, 0.0f), Center - FVector2D(GapR, 0.0f), CrossCol, 1.0f);
 			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
-				Center - FVector2D(0.0f, CrossLen),
-				Center + FVector2D(0.0f, CrossLen),
-				CrossColor, 1.0f);
+				Center + FVector2D(GapR, 0.0f), Center + FVector2D(ArmR, 0.0f), CrossCol, 1.0f);
+			// Vertical arms
+			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
+				Center - FVector2D(0.0f, ArmR), Center - FVector2D(0.0f, GapR), CrossCol, 1.0f);
+			DrawLine(OutDrawElements, LayerId, AllottedGeometry,
+				Center + FVector2D(0.0f, GapR), Center + FVector2D(0.0f, ArmR), CrossCol, 1.0f);
 
-			// Small circle at center
-			DrawArcOutline(OutDrawElements, LayerId, AllottedGeometry, Center,
-				4.0f * Scale, -90.0f, 270.0f, CrossColor, 1.0f);
+			// "BUILD" text (at y-3)
+			FString BuildText = TEXT("BUILD");
+			FVector2D BuildSize = FontMeasure->Measure(BuildText, BuildFont);
+			FVector2D BuildPos = Center + FVector2D(-BuildSize.X / 2.0f, -3.0f * Scale - BuildSize.Y / 2.0f);
+			FGeometry BuildGeo = AllottedGeometry.MakeChild(BuildSize, FSlateLayoutTransform(BuildPos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, BuildGeo.ToPaintGeometry(),
+				BuildText, BuildFont, ESlateDrawEffect::None, Faded(Cyan));
 
-			// "Select" text
-			FString Prompt = TEXT("SELECT");
-			FSlateFontInfo PromptFont = FCoreStyle::GetDefaultFontStyle("Bold",
-				FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 16));
-			FVector2D PromptSize = FontMeasure->Measure(Prompt, PromptFont);
-			FVector2D PromptPos = Center + FVector2D(-PromptSize.X / 2.0f, CrossLen + 4.0f * Scale);
-			FGeometry PromptGeo = AllottedGeometry.MakeChild(PromptSize, FSlateLayoutTransform(PromptPos));
-			FSlateDrawElement::MakeText(OutDrawElements, LayerId, PromptGeo.ToPaintGeometry(),
-				Prompt, PromptFont, ESlateDrawEffect::None, Faded(TextDimmed));
+			// "select category" (at y+14)
+			FString SubText = TEXT("select category");
+			FVector2D SubSize = FontMeasure->Measure(SubText, BuildSubFont);
+			FVector2D SubPos = Center + FVector2D(-SubSize.X / 2.0f, 14.0f * Scale - SubSize.Y / 2.0f);
+			FGeometry SubGeo = AllottedGeometry.MakeChild(SubSize, FSlateLayoutTransform(SubPos));
+			FSlateDrawElement::MakeText(OutDrawElements, LayerId, SubGeo.ToPaintGeometry(),
+				SubText, BuildSubFont, ESlateDrawEffect::None,
+				WithAlpha(Cyan, 0.35f * FadeAlpha));
 		}
 	}
 	LayerId++;
@@ -911,7 +864,7 @@ void URadialPieceMenu::DrawArcOutline(FSlateWindowElementList& OutDrawElements, 
 }
 
 // ---------------------------------------------------------------------------
-// DrawCircleFill — filled circle as a full-sweep filled arc
+// DrawCircleFill — filled circle
 // ---------------------------------------------------------------------------
 void URadialPieceMenu::DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 	const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const
@@ -932,4 +885,28 @@ void URadialPieceMenu::DrawLine(FSlateWindowElementList& OutDrawElements, int32 
 	Points.Add(B);
 	FSlateDrawElement::MakeLines(OutDrawElements, LayerId, Geo.ToPaintGeometry(),
 		Points, ESlateDrawEffect::None, Color, true, Thickness);
+}
+
+// ---------------------------------------------------------------------------
+// DrawFilledRect — filled rectangle using horizontal line strokes
+// ---------------------------------------------------------------------------
+void URadialPieceMenu::DrawFilledRect(FSlateWindowElementList& OutDrawElements, int32 LayerId,
+	const FGeometry& Geo, FVector2D TopLeft, float Width, float Height, FLinearColor Color) const
+{
+	if (Color.A < 0.001f || Width < 1.0f || Height < 1.0f) return;
+
+	int32 NumLines = FMath::Max(4, FMath::CeilToInt(Height / 3.0f));
+	float LineSpacing = Height / (float)NumLines;
+	float LineWidth = LineSpacing * 2.1f;
+	FPaintGeometry PG = Geo.ToPaintGeometry();
+
+	for (int32 r = 0; r < NumLines; r++)
+	{
+		float Y = TopLeft.Y + LineSpacing * (r + 0.5f);
+		TArray<FVector2D> Points;
+		Points.Add(FVector2D(TopLeft.X, Y));
+		Points.Add(FVector2D(TopLeft.X + Width, Y));
+		FSlateDrawElement::MakeLines(OutDrawElements, LayerId, PG,
+			Points, ESlateDrawEffect::None, Color, false, LineWidth);
+	}
 }

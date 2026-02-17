@@ -131,8 +131,14 @@ private:
 	void DrawLine(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 		const FGeometry& Geo, FVector2D A, FVector2D B, FLinearColor Color, float Thickness) const;
 
+	void DrawFilledRect(FSlateWindowElementList& OutDrawElements, int32 LayerId,
+		const FGeometry& Geo, FVector2D TopLeft, float Width, float Height, FLinearColor Color) const;
+
 	FLinearColor Faded(FLinearColor Color) const;
 	FLinearColor WithAlpha(FLinearColor Color, float Alpha) const;
+
+	// Compute the angle (in 0-360 from top, clockwise) for a piece card
+	float GetPieceAngleDeg(int32 PieceIndex, int32 NumPieces, float CatMidDeg, float CatSweepDeg) const;
 
 	// Build the 4 categories from the piece info list
 	void BuildCategories();
