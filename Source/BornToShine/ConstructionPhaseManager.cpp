@@ -55,7 +55,13 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
 
 	case EPieceType::RidgePost:
-		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 1;
+		// Both first and double top plates are placed as ATopPlate actors
+		// (PieceType::TopPlate). DoubleTopPlate cycle count is only incremented
+		// by the RectangleBuilder suggestion system. To handle manual placement,
+		// save/load, and edge cases, also accept a TopPlate count that implies
+		// both layers are partially done (4 first + at least 1 double = 5).
+		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 1
+			|| GetCyclePieceCount(EPieceType::TopPlate) >= 5;
 
 	case EPieceType::RidgeBoard:
 		return GetCyclePieceCount(EPieceType::RidgePost) >= 1;
@@ -103,7 +109,12 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 		return TEXT("Place top plates first");
 
 	case EPieceType::RidgePost:
-		return TEXT("Place double top plates first");
+	{
+		int32 DblCount = GetCyclePieceCount(EPieceType::DoubleTopPlate);
+		int32 TopCount = GetCyclePieceCount(EPieceType::TopPlate);
+		return FString::Printf(TEXT("Place double top plates first (TopPlate: %d, DoubleTopPlate: %d)"),
+			TopCount, DblCount);
+	}
 
 	case EPieceType::RidgeBoard:
 		return TEXT("Place ridge posts first");

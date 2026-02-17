@@ -58,10 +58,7 @@ void ARidgePost::BeginPlay()
 
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{
-		// Keep mesh at 1,1,1 — NEVER scale Z (distorts the pocket notch)
-		MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
-
-		// Capture original mesh dimensions for David's reference
+		// Capture original mesh height ONCE — used for Z-scale calculations
 		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
 		OriginalMeshHeight = Bounds.BoxExtent.Z * 2.0f;
 
@@ -73,16 +70,21 @@ void ARidgePost::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("RidgePost: POCKET TOP should be at mesh Max.Z=%.2f, pocket starts at Z=%.2f (%.2fcm below top)"),
 			MeshBox.Max.Z, MeshBox.Max.Z - PocketDepth, PocketDepth);
 
-		// Set PostHeight to match the actual mesh height (no scaling)
-		PostHeight = OriginalMeshHeight;
+		// Initialize PostHeight to match the mesh (default starting height).
+		// Constructor already set PostHeight = 60.96cm (24"), but if the mesh
+		// is a different height, match it. Scroll wheel adjusts from here.
+		if (PostHeight < 1.0f)
+		{
+			PostHeight = OriginalMeshHeight;
+		}
 	}
 
-	// Adjust sockets to real mesh bounds (no scaling)
-	AdjustSocketsToMeshBounds();
+	// Apply Z-scale and bottom-anchor the mesh, then align sockets
 	UpdateMeshScale();
+	AdjustSocketsToMeshBounds();
 
-	UE_LOG(LogTemp, Log, TEXT("RidgePost: BeginPlay - Height=%.1fcm (%.1fin), Pitch=%s, Sockets=%d"),
-		PostHeight, GetPostHeightInches(), *GetPitchDisplayString(), Sockets.Num());
+	UE_LOG(LogTemp, Log, TEXT("RidgePost: BeginPlay - Height=%.1fcm (%.1fin), Pitch=%s, MeshHeight=%.1fcm, Sockets=%d"),
+		PostHeight, GetPostHeightInches(), *GetPitchDisplayString(), OriginalMeshHeight, Sockets.Num());
 }
 
 void ARidgePost::InitializeSockets()
@@ -181,13 +183,25 @@ void ARidgePost::SetBuildingHalfWidth(float HalfWidthCm)
 
 void ARidgePost::ScalePiece(float ScaleDelta)
 {
-	// Scroll wheel disabled until split meshes are provided.
-	// When David provides PocketMesh + PostMesh, scroll wheel will
-	// adjust PostMesh Z-scale while PocketMesh stays at 1,1,1.
-	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
-	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+	if (OriginalMeshHeight < 1.0f) return;
 
+	// Scroll wheel adjusts PostHeight by HeightIncrementCm (1 inch) per tick.
+	// Z-scales the mesh while anchoring the bottom to the double top plate.
+	// Pocket geometry distorts proportionally — acceptable until David provides
+	// split meshes (PocketMesh + PostMesh).
+	float NewHeight = PostHeight + (ScaleDelta > 0.0f ? HeightIncrementCm : -HeightIncrementCm);
+	NewHeight = FMath::Clamp(NewHeight, MinPostHeight, MaxPostHeight);
+
+	if (FMath::IsNearlyEqual(NewHeight, PostHeight, 0.01f)) return;
+
+	PostHeight = NewHeight;
+	UpdateMeshScale();
+	RegenerateSockets();
 	DisplayPitchInfo();
+
+	UE_LOG(LogTemp, Log, TEXT("RidgePost: ScalePiece - Height=%.1fcm (%.1fin), %s"),
+		PostHeight, GetPostHeightInches(), *GetPitchDisplayString());
 }
 
 void ARidgePost::RegenerateSockets()
@@ -206,26 +220,25 @@ void ARidgePost::RegenerateSockets()
 void ARidgePost::UpdateMeshScale()
 {
 	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+	if (OriginalMeshHeight < 1.0f) return;
 
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float UnscaledHeight = Bounds.BoxExtent.Z * 2.0f;
 
-	if (UnscaledHeight < 1.0f) return;
+	// Z-scale the mesh to match the desired PostHeight.
+	// X and Y stay at 1.0 — only vertical scaling.
+	// Pocket notch distorts proportionally; acceptable until David provides
+	// split meshes (PocketMesh at 1,1,1 + PostMesh Z-scaled).
+	float ZScale = PostHeight / OriginalMeshHeight;
+	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, ZScale));
 
-	// DO NOT SCALE Z — scaling distorts the pocket notch geometry.
-	// The mesh stays at 1,1,1. PostHeight is clamped to the mesh's actual height.
-	// When David provides split meshes (PocketMesh + PostMesh), only PostMesh
-	// will be Z-scaled while PocketMesh stays at 1,1,1.
-	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+	// ANCHOR BOTTOM at Z=0: the mesh bottom in scaled local space is
+	// (Origin.Z - Extent.Z) * ZScale. Push the mesh up so that lands at 0.
+	float MeshBottomScaled = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ZScale;
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshBottomScaled));
 
-	// ANCHOR BOTTOM: position mesh so its bottom sits at Z=0
-	float MeshBottomLocal = Bounds.Origin.Z - Bounds.BoxExtent.Z;
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshBottomLocal));
-
-	// PostHeight = actual mesh height (no scaling)
-	PostHeight = UnscaledHeight;
-
-	// Recompute socket positions
+	// Recompute socket positions to match new height.
+	// Pocket socket uses the ORIGINAL (un-distorted) pocket depth so the
+	// ridge beam seat stays at the correct 7.25" dimension.
 	float BottomZ = 0.0f;
 	float TopZ = PostHeight;
 	float PocketCenterZ = TopZ - (PocketDepth / 2.0f);
@@ -242,8 +255,12 @@ void ARidgePost::UpdateMeshScale()
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RidgePost: NO Z-SCALE, mesh height=%.1fcm, bottom=%.1f top=%.1f pocket=%.1f"),
-		PostHeight, BottomZ, TopZ, PocketCenterZ);
+	// Keep actor scale at 1,1,1 — only the mesh component scales
+	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
+	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+
+	UE_LOG(LogTemp, Log, TEXT("RidgePost: Z-scale=%.3f, PostHeight=%.1fcm, bottom=%.1f top=%.1f pocket=%.1f"),
+		ZScale, PostHeight, BottomZ, TopZ, PocketCenterZ);
 }
 
 void ARidgePost::AdjustSocketsToMeshBounds()
