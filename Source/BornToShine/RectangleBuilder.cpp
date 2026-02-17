@@ -2011,13 +2011,15 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
 
     // --- Create suggestions for each gable end ---
     // FLUSH ALIGNMENT: The ridge post outer face must be flush with the
-    // gable end wall's outer face (same as studs on bottom plate).
-    // Wall members (plates, studs) are 3.5" (8.89cm) deep.  Ridge post
-    // width (3 laminated 2x6s) is 4.5" (11.43cm).  Inset the post so
-    // its outer face aligns with the wall outer face.
-    const float PlateThicknessCm = 8.89f;  // 2x4 depth = 3.5"
-    const float PostWidthCm = 11.43f;      // 3 x 1.5" = 4.5"
-    const float FlushInsetCm = (PostWidthCm - PlateThicknessCm) / 2.0f; // 1.27cm = 0.5"
+    // gable end wall's outer face (double top plate outer edge).
+    // The post is oriented with its face width (5.5" = 13.97cm, mesh X)
+    // along the ridge line toward the gable end.  The gable end wall
+    // plates are 3.5" (8.89cm) deep in the ridge direction.
+    // Inset = half the difference so the post's outer face aligns with
+    // the plate's outer face.
+    const float PlateThicknessCm = 8.89f;   // 2x4 depth = 3.5"
+    const float PostFaceWidthCm = 13.97f;   // 5.5" = face width along ridge (NOT 4.5" thickness)
+    const float FlushInsetCm = (PostFaceWidthCm - PlateThicknessCm) / 2.0f; // 2.54cm = 1"
 
     ARimBoard* EndBoards[2] = { EndBoardA, EndBoardB };
 

@@ -1,4 +1,9 @@
-// Born To Shine - Two-Tier Radial Piece Selection Menu (Sci-fi holographic style)
+// Born To Shine - Two-Tier Radial Piece Selection Menu (Cyan Glow Sci-fi)
+//
+// Rebuilt to match the React prototype: dark background (#0a0e17),
+// cyan glow (#00e5ff) on all edges/splits/borders, two-tier layout
+// (inner categories + outer piece cards), center hub with crosshair,
+// connector lines, tick marks, smooth animations.
 
 #pragma once
 
@@ -8,25 +13,6 @@
 #include "Styling/SlateBrush.h"
 #include "RadialPieceMenu.generated.h"
 
-/**
- * Two-tier radial menu for piece selection:
- *   Inner ring: 4 categories (Foundation, Floor, Walls, Roof)
- *   Outer ring: pieces within the highlighted category
- *
- * Hold Tab to open, move mouse to highlight, release to select.
- *
- * Visual design (sci-fi holographic blueprint):
- *   - Dark navy/charcoal backdrop (75% opacity)
- *   - Inner ring: category segments with icons
- *   - Outer ring: expands to show pieces in hovered category
- *   - Selected segment: bright turquoise/cyan highlight
- *   - Center hub: piece name + subtitle + lock message
- *   - Smooth fade-in, per-segment hover interpolation, breathing glow pulse
- *   - Unavailable pieces dimmed out
- *
- * All rendering in C++ NativePaint.
- */
-
 /** Category definition for the inner ring */
 USTRUCT()
 struct FCategoryInfo
@@ -34,6 +20,7 @@ struct FCategoryInfo
 	GENERATED_BODY()
 
 	FString Name;
+	FString Icon; // Unicode icon character
 	TArray<int32> PieceIndices; // Indices into the full FPieceTypeInfo array
 };
 
@@ -75,41 +62,59 @@ private:
 	int32 HighlightedPieceSlot;    // Index within the category's PieceIndices (-1 = none)
 	int32 PrevHighlightedPieceSlot;
 
-	// --- Geometry (pixels) ---
-	float InnerRingInner;   // Inner edge of category ring
-	float InnerRingOuter;   // Outer edge of category ring
-	float OuterRingInner;   // Inner edge of piece ring
-	float OuterRingOuter;   // Outer edge of piece ring
-	float CenterHubRadius;
-	float DeadZone;
+	// --- Geometry (unscaled reference pixels; actual size is 65% of screen height) ---
+	float CenterHubRadius;  // 70
+	float InnerRingInner;   // 70 (flush with hub)
+	float InnerRingOuter;   // 155
+	float OuterRingInner;   // 175
+	float OuterRingOuter;   // 290
+	float DeadZone;         // 50
 
 	// --- Animation ---
 	float FadeAlpha;
 	float FadeSpeed;
 	mutable float GlowPulseTime;
-	mutable TArray<float> CategoryHoverScales;
-	mutable TArray<float> PieceHoverScales;
+	mutable TArray<float> CategoryHoverScales;  // 0→1 interp per category
+	mutable TArray<float> PieceHoverScales;     // 0→1 interp per piece slot
 
 	// --- Icon cache (one per piece in AllPieceInfos) ---
 	TArray<FSlateBrush> IconBrushes;
 	float SegmentIconSize;
 	float CenterIconSize;
 
-	// --- Color palette ---
-	FLinearColor BgOverlayColor;
+	// --- Color palette (matched to React prototype) ---
+	// Background
+	FLinearColor DarkBg;              // #0a0e17
+	FLinearColor BgOverlayColor;      // dark vignette overlay
+
+	// Cyan glow family
+	FLinearColor Cyan;                // #00e5ff full brightness
+	FLinearColor CyanDim;             // #00e5ff at ~27% alpha
+	FLinearColor CyanMid;             // #00e5ff at ~53% alpha
+	FLinearColor CyanGlow;            // #00e5ff at ~80% alpha
+
+	// Wedge / card fills
+	FLinearColor DarkWedge;           // #0f1520
+	FLinearColor DarkHover;           // #141e2d
+	FLinearColor DarkCard;            // #0d1219
+	FLinearColor ActiveWedgeFill;     // #0c1a2a
+
+	// Text
+	FLinearColor TextWhite;
+	FLinearColor TextDimmed;          // #4a6575
+	FLinearColor TextUnavailable;     // #2a3e4a
+	FLinearColor SubtitleColor;       // = Cyan
+
+	// Legacy aliases (kept for code that still references them)
 	FLinearColor SegmentFillColor;
 	FLinearColor SegmentHoverFillColor;
-	FLinearColor SegmentHoverGlowColor;
 	FLinearColor SegmentUnavailableColor;
-	FLinearColor DividerColor;
-	FLinearColor BorderAccentColor;
 	FLinearColor CenterFillColor;
 	FLinearColor CenterBorderColor;
-	FLinearColor TextWhite;
-	FLinearColor TextDimmed;
-	FLinearColor TextUnavailable;
-	FLinearColor SubtitleColor;
-	FLinearColor CategoryTextColor;
+	FLinearColor BorderAccentColor;
+
+	// --- Gap between wedges (degrees) ---
+	float WedgeGapDeg; // 0.6
 
 	// --- Drawing helpers ---
 	void DrawFilledArc(FSlateWindowElementList& OutDrawElements, int32 LayerId,
@@ -123,7 +128,11 @@ private:
 	void DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const;
 
+	void DrawLine(FSlateWindowElementList& OutDrawElements, int32 LayerId,
+		const FGeometry& Geo, FVector2D A, FVector2D B, FLinearColor Color, float Thickness) const;
+
 	FLinearColor Faded(FLinearColor Color) const;
+	FLinearColor WithAlpha(FLinearColor Color, float Alpha) const;
 
 	// Build the 4 categories from the piece info list
 	void BuildCategories();

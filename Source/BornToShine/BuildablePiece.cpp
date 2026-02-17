@@ -942,6 +942,46 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
+			// Rafter ridge end snaps to ridge board side:
+			// Orient the rafter PERPENDICULAR to the ridge board.
+			// Player look direction determines which side of the ridge.
+			// The rafter geometry has pitch built into the vertices (slope
+			// in local XZ), so Pitch/Roll stay 0 — only Yaw changes.
+			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
+				TgtSocketType == EConstructionSocketType::RidgeBoard_Side &&
+				TargetPiece)
+			{
+				FRotator TargetRotation = TargetPiece->GetActorRotation();
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+
+				// Ridge board's right vector = perpendicular to ridge line
+				FVector RidgeRight = TargetRotation.RotateVector(FVector::RightVector);
+
+				FVector PlayerLookDir = FVector::ForwardVector;
+				if (UWorld* World = GetWorld())
+				{
+					APlayerController* PC = World->GetFirstPlayerController();
+					if (PC)
+					{
+						FVector CamLoc;
+						FRotator CamRot;
+						PC->GetPlayerViewPoint(CamLoc, CamRot);
+						PlayerLookDir = CamRot.Vector();
+					}
+				}
+
+				// Rafter +X = horizontal toward tail (from ridge toward wall).
+				// Dot > 0 → player is looking toward the right side of the ridge,
+				// so orient rafter facing right (+90° from ridge yaw).
+				float DotResult = FVector::DotProduct(PlayerLookDir, RidgeRight);
+				CandidateRotation.Yaw = TargetRotation.Yaw + (DotResult > 0.0f ? 90.0f : -90.0f);
+
+				UE_LOG(LogTemp, Log,
+					TEXT("Rafter snap: RidgeYaw=%.1f Dot=%.2f → RafterYaw=%.1f"),
+					TargetRotation.Yaw, DotResult, CandidateRotation.Yaw);
+			}
+
 			// Calculate final actor position from socket alignment
 			FVector SocketLocalOffset = Socket.LocalPosition;
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
