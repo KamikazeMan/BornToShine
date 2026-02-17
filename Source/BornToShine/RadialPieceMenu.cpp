@@ -258,8 +258,8 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 
 			if (RelAngle >= 0.0f && RelAngle <= CatAngle)
 			{
-				int32 Slot = FMath::Clamp((int32)(RelAngle / PieceAngle), 0, NumPieces - 1);
-				HighlightedPieceSlot = Slot;
+				int32 PieceSlot = FMath::Clamp((int32)(RelAngle / PieceAngle), 0, NumPieces - 1);
+				HighlightedPieceSlot = PieceSlot;
 			}
 		}
 	}
