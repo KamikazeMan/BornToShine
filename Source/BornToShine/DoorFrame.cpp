@@ -13,7 +13,7 @@ ADoorFrame::ADoorFrame()
 	// Default dimensions — overridden by actual mesh bounds in BeginPlay
 	FrameHeight = 235.27f;       // 92-5/8" (standard 8ft wall stud height)
 	RoughOpeningWidth = 91.44f;  // 36" rough opening (gap between trimmers)
-	FrameOverallWidth = 91.44f;  // Full mesh footprint (king studs + trimmers + opening)
+	FrameOverallWidth = 106.68f; // 42" = opening(36") + 2 king studs(3") + 2 trimmers(3")
 	RoughOpeningHeight = 205.74f; // 81" (standard 6'8" door trimmer height)
 
 	// SceneRoot decouples mesh scale from actor transform
@@ -26,27 +26,34 @@ ADoorFrame::ADoorFrame()
 	// set it to QueryOnly + Block(All), which creates a physics body from the
 	// shared BodySetup.  The door frame mesh's convex hull covers the door
 	// opening, so ANY collision on the mesh will block the player.
-	// Setting NoCollision here means no FBodyInstance is ever allocated.
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	MeshComponent->SetGenerateOverlapEvents(false);
+	MeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
 
-	// Collision boxes for the frame structure (posts + header).
+	// THREE separate collision boxes — one per framing member.
 	// These are the ONLY collision primitives on the door frame.
+	// The door opening between them must have ZERO collision.
 	LeftPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("LeftPostCollision"));
 	LeftPostCollision->SetupAttachment(SceneRoot);
 	LeftPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	LeftPostCollision->SetHiddenInGame(true);
+	LeftPostCollision->SetHiddenInGame(false);
+	LeftPostCollision->ShapeColor = FColor::Cyan;
+	LeftPostCollision->SetLineThickness(2.0f);
 
 	RightPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("RightPostCollision"));
 	RightPostCollision->SetupAttachment(SceneRoot);
 	RightPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	RightPostCollision->SetHiddenInGame(true);
+	RightPostCollision->SetHiddenInGame(false);
+	RightPostCollision->ShapeColor = FColor::Yellow;
+	RightPostCollision->SetLineThickness(2.0f);
 
 	HeaderCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("HeaderCollision"));
 	HeaderCollision->SetupAttachment(SceneRoot);
 	HeaderCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	HeaderCollision->SetHiddenInGame(true);
+	HeaderCollision->SetHiddenInGame(false);
+	HeaderCollision->ShapeColor = FColor::Magenta;
+	HeaderCollision->SetLineThickness(2.0f);
 
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
@@ -61,6 +68,12 @@ void ADoorFrame::BeginPlay()
 
 	// Mesh stays at (1,1,1) — pre-modeled in Rhino at real-world scale
 	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+
+	// AGGRESSIVELY kill mesh collision.  The base class BeginPlay may have
+	// called UpdateVisualFeedback() which can re-enable mesh collision.
+	// The mesh's convex hull covers the door opening — ANY collision from
+	// the mesh creates a single invisible wall blocking the opening.
+	KillMeshCollision();
 
 	// Align sockets to actual mesh extents
 	AdjustSocketsToMeshBounds();
@@ -169,13 +182,8 @@ bool ADoorFrame::TryPlace()
 	// Now that the door frame is registered and positioned, remove overlaps
 	AutoDeleteOverlappingPieces();
 
-	// Force mesh to NoCollision (convex hull covers opening).
-	// Box collisions handle pawn blocking + visibility line traces.
-	if (MeshComponent)
-	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-	}
+	// Enable the 3 separate collision boxes (posts + header).
+	// This also re-kills mesh collision as a safeguard.
 	EnableDoorCollision(true);
 
 	// --- Diagnostic: scan ALL placed door frames for collision corruption ---
@@ -194,10 +202,9 @@ bool ADoorFrame::TryPlace()
 				if (CE != ECollisionEnabled::NoCollision)
 				{
 					UE_LOG(LogTemp, Error,
-						TEXT("COLLISION CORRUPTION: DoorFrame [%s] mesh has CollisionEnabled=%d (expected 0=NoCollision). Forcing NoCollision."),
+						TEXT("COLLISION CORRUPTION: DoorFrame [%s] mesh has CollisionEnabled=%d (expected 0=NoCollision). Force-killing."),
 						*DF->GetName(), (int32)CE);
-					M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-					M->SetCollisionResponseToAllChannels(ECR_Ignore);
+					DF->KillMeshCollision();
 				}
 			}
 		}
@@ -213,15 +220,10 @@ void ADoorFrame::SetPreviewMode(bool bIsPreview)
 {
 	Super::SetPreviewMode(bIsPreview);
 
-	// ALWAYS force mesh back to NoCollision after the parent runs.
 	// Super::SetPreviewMode sets QueryOnly (preview) or QueryAndPhysics (placed)
-	// on the mesh, which creates physics from the shared BodySetup and can
-	// re-enable the convex hull that covers the door opening.
-	if (MeshComponent)
-	{
-		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-	}
+	// on the mesh, which creates physics from the shared BodySetup and
+	// re-enables the convex hull that covers the door opening.  Kill it.
+	KillMeshCollision();
 
 	if (!bIsPreview)
 	{
@@ -243,8 +245,8 @@ void ADoorFrame::SetupCollisionBoxes()
 {
 	if (!LeftPostCollision || !RightPostCollision || !HeaderCollision) return;
 
-	// Mesh depth (through-wall direction)
-	float MeshDepth = 8.89f; // default 3.5" (2x4 depth)
+	// Mesh depth (through-wall direction) — 2x4 depth = 3.5" = 8.89cm
+	float MeshDepth = 8.89f;
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{
 		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
@@ -261,24 +263,33 @@ void ADoorFrame::SetupCollisionBoxes()
 		else if (S.SocketName == FName("FrameTop")) TopZ = S.LocalPosition.Z;
 	}
 
-	// Side post width = (overall frame - rough opening) / 2
+	// Each side of the frame has a king stud (1.5") + trimmer (1.5") = 3" = 7.62cm.
+	// Compute SideWidth from (OverallWidth - RoughOpening) / 2, but enforce a
+	// minimum of 7.62cm (king + trimmer) so the posts are never paper-thin.
+	const float KingPlusTrimmer = 7.62f; // 3" = king stud + trimmer stud face widths
 	float SideWidth = (FrameOverallWidth - RoughOpeningWidth) / 2.0f;
-	if (SideWidth < 1.0f) SideWidth = 3.81f; // fallback: one 2x4 width (1.5")
+	if (SideWidth < KingPlusTrimmer)
+	{
+		SideWidth = KingPlusTrimmer;
+		// Recalculate FrameOverallWidth to match
+		FrameOverallWidth = RoughOpeningWidth + SideWidth * 2.0f;
+	}
 
+	float PostHeight = TopZ - BottomZ;
 	float PostCenterZ = (BottomZ + TopZ) / 2.0f;
-	float PostHalfHeight = FrameHeight / 2.0f;
+	float PostHalfHeight = PostHeight / 2.0f;
 
-	// Left post
+	// === LEFT POST (king stud + trimmer on the left side) ===
 	float LeftX = -(FrameOverallWidth / 2.0f) + (SideWidth / 2.0f);
 	LeftPostCollision->SetBoxExtent(FVector(SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight));
 	LeftPostCollision->SetRelativeLocation(FVector(LeftX, 0.0f, PostCenterZ));
 
-	// Right post
+	// === RIGHT POST (king stud + trimmer on the right side) ===
 	float RightX = (FrameOverallWidth / 2.0f) - (SideWidth / 2.0f);
 	RightPostCollision->SetBoxExtent(FVector(SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight));
 	RightPostCollision->SetRelativeLocation(FVector(RightX, 0.0f, PostCenterZ));
 
-	// Header + cripples (band above the opening)
+	// === HEADER + CRIPPLES (band above the opening, spans full width) ===
 	float OpeningTopZ = BottomZ + RoughOpeningHeight;
 	if (OpeningTopZ > TopZ) OpeningTopZ = TopZ;
 
@@ -289,17 +300,61 @@ void ADoorFrame::SetupCollisionBoxes()
 		HeaderCollision->SetBoxExtent(FVector(FrameOverallWidth / 2.0f, MeshDepth / 2.0f, TopBandHeight / 2.0f));
 		HeaderCollision->SetRelativeLocation(FVector(0.0f, 0.0f, TopBandCenterZ));
 	}
+	else
+	{
+		// No header band — hide the component
+		HeaderCollision->SetBoxExtent(FVector::ZeroVector);
+	}
 
-	UE_LOG(LogTemp, Log,
-		TEXT("DoorFrame: Collision boxes set — SideWidth=%.1f MeshDepth=%.1f OpeningH=%.1f TopBand=%.1f"),
-		SideWidth, MeshDepth, RoughOpeningHeight, TopBandHeight);
+	UE_LOG(LogTemp, Warning,
+		TEXT("DoorFrame COLLISION BOXES:"
+		     "\n  FrameOverall=%.1fcm  RoughOpening=%.1fcm  SideWidth=%.1fcm  MeshDepth=%.1fcm"
+		     "\n  LEFT  post: X=%.1f  extent=(%.1f, %.1f, %.1f)"
+		     "\n  RIGHT post: X=%.1f  extent=(%.1f, %.1f, %.1f)"
+		     "\n  HEADER:     Z=%.1f  extent=(%.1f, %.1f, %.1f)  band=%.1fcm"
+		     "\n  OPENING GAP: X=[%.1f to %.1f] = %.1fcm wide, Z=[%.1f to %.1f]"),
+		FrameOverallWidth, RoughOpeningWidth, SideWidth, MeshDepth,
+		LeftX, SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight,
+		RightX, SideWidth / 2.0f, MeshDepth / 2.0f, PostHalfHeight,
+		OpeningTopZ + TopBandHeight / 2.0f,
+		FrameOverallWidth / 2.0f, MeshDepth / 2.0f, TopBandHeight / 2.0f, TopBandHeight,
+		LeftX + SideWidth / 2.0f, RightX - SideWidth / 2.0f,
+		RoughOpeningWidth,
+		BottomZ, OpeningTopZ);
 }
 
 // ---------------------------------------------------------------------------
-// EnableDoorCollision — toggles the collision boxes on/off
+// KillMeshCollision — completely disable mesh collision so the convex hull
+// (which covers the door opening) never blocks the player.
+// ---------------------------------------------------------------------------
+void ADoorFrame::KillMeshCollision()
+{
+	if (!MeshComponent) return;
+
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MeshComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	MeshComponent->SetGenerateOverlapEvents(false);
+	MeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
+
+	// Destroy any physics body that was created from the mesh's BodySetup.
+	// Without this, UE5 may keep a physics body alive from the shared
+	// BodySetup even though the component says NoCollision.
+	if (MeshComponent->IsPhysicsStateCreated())
+	{
+		MeshComponent->DestroyPhysicsState();
+	}
+}
+
+// ---------------------------------------------------------------------------
+// EnableDoorCollision — toggles the three separate collision boxes on/off.
+// Also re-kills mesh collision as a safeguard every time this is called.
 // ---------------------------------------------------------------------------
 void ADoorFrame::EnableDoorCollision(bool bEnable)
 {
+	// ALWAYS re-kill mesh collision — defence against any code path
+	// that might have re-enabled it (base class SetPreviewMode, etc.)
+	KillMeshCollision();
+
 	auto SetBox = [bEnable](UBoxComponent* Box)
 	{
 		if (!Box) return;
@@ -320,6 +375,14 @@ void ADoorFrame::EnableDoorCollision(bool bEnable)
 	SetBox(LeftPostCollision);
 	SetBox(RightPostCollision);
 	SetBox(HeaderCollision);
+
+	if (bEnable)
+	{
+		UE_LOG(LogTemp, Log, TEXT("DoorFrame: Collision ENABLED — 3 separate boxes (Left=%s Right=%s Header=%s), mesh=NoCollision"),
+			LeftPostCollision ? TEXT("ON") : TEXT("null"),
+			RightPostCollision ? TEXT("ON") : TEXT("null"),
+			HeaderCollision ? TEXT("ON") : TEXT("null"));
+	}
 }
 
 // ---------------------------------------------------------------------------

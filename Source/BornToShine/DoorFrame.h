@@ -75,6 +75,11 @@ private:
 	void SetupCollisionBoxes();
 	void EnableDoorCollision(bool bEnable);
 
+	/** Aggressively disable ALL collision on MeshComponent.
+	 *  The mesh's convex hull covers the door opening; if any collision
+	 *  remains on it, the opening is blocked by an invisible wall. */
+	void KillMeshCollision();
+
 	UPROPERTY()
 	UBoxComponent* LeftPostCollision;
 
