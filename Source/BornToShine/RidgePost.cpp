@@ -187,9 +187,7 @@ void ARidgePost::ScalePiece(float ScaleDelta)
 	if (OriginalMeshHeight < 1.0f) return;
 
 	// Scroll wheel adjusts PostHeight by HeightIncrementCm (1 inch) per tick.
-	// Z-scales the mesh while anchoring the bottom to the double top plate.
-	// Pocket geometry distorts proportionally — acceptable until David provides
-	// split meshes (PocketMesh + PostMesh).
+	// Mesh stays at 1,1,1 scale — only repositioned at the top of PostHeight.
 	float NewHeight = PostHeight + (ScaleDelta > 0.0f ? HeightIncrementCm : -HeightIncrementCm);
 	NewHeight = FMath::Clamp(NewHeight, MinPostHeight, MaxPostHeight);
 
@@ -222,23 +220,24 @@ void ARidgePost::UpdateMeshScale()
 	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
 	if (OriginalMeshHeight < 1.0f) return;
 
-	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	// NEVER scale the mesh — it distorts the pocket notch.
+	// Instead, position the mesh at the TOP of the desired height
+	// so the pocket is always at the correct size.
+	// The mesh stays at scale 1,1,1.
+	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
 
-	// Z-scale the mesh to match the desired PostHeight.
-	// X and Y stay at 1.0 — only vertical scaling.
-	// Pocket notch distorts proportionally; acceptable until David provides
-	// split meshes (PocketMesh at 1,1,1 + PostMesh Z-scaled).
-	float ZScale = PostHeight / OriginalMeshHeight;
-	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, ZScale));
+	// Position the mesh so its TOP is at PostHeight and its bottom
+	// is at PostHeight - OriginalMeshHeight.
+	// The mesh center is at origin in Rhino, so mesh center Z = PostHeight - OriginalMeshHeight/2
+	float MeshCenterZ = PostHeight - (OriginalMeshHeight / 2.0f);
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, MeshCenterZ));
 
-	// ANCHOR BOTTOM at Z=0: the mesh bottom in scaled local space is
-	// (Origin.Z - Extent.Z) * ZScale. Push the mesh up so that lands at 0.
-	float MeshBottomScaled = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ZScale;
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshBottomScaled));
+	// The gap below the mesh (from Z=0 to Z=PostHeight-OriginalMeshHeight)
+	// is empty. For now this is acceptable — the pocket at the top is correct.
+	// TODO: David will model a separate column mesh for the lower portion,
+	// or we add a simple procedural box to fill the gap.
 
-	// Recompute socket positions to match new height.
-	// Pocket socket uses the ORIGINAL (un-distorted) pocket depth so the
-	// ridge beam seat stays at the correct 7.25" dimension.
+	// Update socket positions
 	float BottomZ = 0.0f;
 	float TopZ = PostHeight;
 	float PocketCenterZ = TopZ - (PocketDepth / 2.0f);
@@ -255,12 +254,11 @@ void ARidgePost::UpdateMeshScale()
 		}
 	}
 
-	// Keep actor scale at 1,1,1 — only the mesh component scales
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Log, TEXT("RidgePost: Z-scale=%.3f, PostHeight=%.1fcm, bottom=%.1f top=%.1f pocket=%.1f"),
-		ZScale, PostHeight, BottomZ, TopZ, PocketCenterZ);
+	UE_LOG(LogTemp, Log, TEXT("RidgePost: NO Z-scale, mesh at center Z=%.1f, PostHeight=%.1fcm, pocket=%.1f"),
+		MeshCenterZ, PostHeight, PocketCenterZ);
 }
 
 void ARidgePost::AdjustSocketsToMeshBounds()

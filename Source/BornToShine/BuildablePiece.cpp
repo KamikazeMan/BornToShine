@@ -1351,11 +1351,26 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FinalRotation.Roll = 0.0f;
 	}
 
+	// Rafter: pitch is baked into the procedural mesh vertices.
+	// Actor must NEVER have pitch/roll — only yaw to face the correct wall.
+	if (PieceType == EPieceType::Rafter)
+	{
+		FinalRotation.Pitch = 0.0f;
+		FinalRotation.Roll = 0.0f;
+	}
+
 	SetActorRotation(FinalRotation);
 
 	// Corner joints: boards stay at centerline positions (centered on foundation).
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
+
+	// Rafter placement diagnostics
+	if (PieceType == EPieceType::Rafter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Rafter placed at Pos=%s Rot=%s"),
+			*FinalLocation.ToString(), *FinalRotation.ToString());
+	}
 
 	// Debug: Log final Z for plywood placements
 	if (PieceType == EPieceType::Plywood)
