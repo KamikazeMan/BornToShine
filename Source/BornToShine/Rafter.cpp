@@ -258,225 +258,111 @@ void ARafter::BuildRafterGeometry(
 	TArray<FVector2D>& UVs)
 {
 	// ===================================================================
-	// Rafter profile in local space:
+	// SIMPLE RECTANGULAR 2x6 PRISM tilted at pitch angle.
+	// No birdsmouth or plumb cuts — get the basic shape rendering first.
+	// Cuts will be added incrementally once this renders correctly.
 	//
-	// The rafter origin is at the RIDGE END (where it meets the ridge board).
-	// The rafter slopes downward from origin toward positive X.
-	//
-	// Local X = horizontal distance from ridge (increasing toward tail)
-	// Local Y = across the rafter thickness (width = 1.5")
-	// Local Z = vertical (positive = up)
-	//
-	// The rafter is essentially a 2x6 board tilted at the pitch angle,
-	// with three modifications:
-	//   1. Plumb cut at ridge end (vertical cut face)
-	//   2. Birdsmouth cut at the top plate (notch)
-	//   3. Tail cut at overhang end (plumb or vertical cut)
+	// Local space:
+	//   Origin = ridge end (top of slope)
+	//   Slope runs from origin downward toward +X
+	//   Y = rafter thickness (+-HalfWidth)
+	//   Z = vertical
 	// ===================================================================
 
 	float PitchAngle = GetPitchAngleRadians();
 	float CosA = FMath::Cos(PitchAngle);
 	float SinA = FMath::Sin(PitchAngle);
 
-	float HalfWidth = RafterWidth / 2.0f;  // 1.905cm
-	float Depth = RafterDepth;              // 13.97cm
-
-	// Rise and run
-	float TotalRise = (PitchRatio / 12.0f) * RunDistanceCm;
-	float TotalHoriz = RunDistanceCm + OverhangCm;
-	float TotalTailRise = (PitchRatio / 12.0f) * TotalHoriz;
-
-	// Birdsmouth parameters
-	float BirdsmouthSeatDepth = Depth * BirdsmouthSeatFraction; // How deep the seat cut is
-	float BirdsmouthHeelHeight = Depth - BirdsmouthSeatDepth;    // Remaining heel height
+	float HalfW = RafterWidth / 2.0f;  // 1.905cm
+	float D     = RafterDepth;          // 13.97cm
 
 	// Along-slope direction vectors
-	FVector SlopeDir(CosA, 0.0f, -SinA);    // Direction along the slope (downhill)
-	FVector SlopePerp(-SinA, 0.0f, -CosA);  // Perpendicular to slope (into the rafter depth)
+	FVector SlopeDir(CosA, 0.0f, -SinA);     // Downhill along the slope
+	FVector SlopePerp(-SinA, 0.0f, -CosA);   // Perpendicular into rafter depth
 
-	// Key points along the rafter (all in local space, origin at ridge):
-	//
-	// Point layout (side view, exaggerated):
-	//
-	//   Ridge  (plumb cut face)
-	//     |\
-	//     | \  <- rafter top edge
-	//     |  \
-	//     |   \  birdsmouth
-	//     |    |_|  <- seat cut
-	//     |    |     \
-	//     |    |      \  <- tail
-	//     plumb        tail cut
-	//     cut
+	// Total slope length from ridge to tail (including overhang)
+	float TotalHoriz = RunDistanceCm + OverhangCm;
+	float SlopeLen = TotalHoriz / CosA;
 
-	// --- Ridge end (plumb cut) ---
-	// Plumb cut is a vertical face at X=0. The rafter top edge and bottom edge
-	// meet this vertical plane.
-	// Top of rafter at ridge: origin + offset along slope perpendicular
-	FVector RidgeTop = FVector(0.0f, 0.0f, 0.0f); // Top edge of rafter at ridge
-	FVector RidgeBot = RidgeTop + SlopePerp * Depth; // Bottom edge at ridge
-
-	// --- Birdsmouth location ---
-	// Horizontal distance from ridge to wall line = RunDistanceCm
-	// Along slope distance = RunDistanceCm / CosA
-	float SlopeDistToWall = RunDistanceCm / CosA;
-	FVector WallTopEdge = RidgeTop + SlopeDir * SlopeDistToWall;
-	FVector WallBotEdge = WallTopEdge + SlopePerp * Depth;
-
-	// Birdsmouth seat cut: a horizontal cut at the bottom of the rafter
-	// where it sits on the top plate. The seat is horizontal, cutting into
-	// the bottom edge by BirdsmouthSeatDepth (measured perpendicular to rafter).
-	//
-	// In world coordinates:
-	// - Seat cut start: point on bottom edge at the wall line
-	// - Seat cut goes horizontal (level) for the plate width
-	// - Heel cut goes vertical from the seat up to the rafter bottom edge
-
-	// The birdsmouth is at the wall line. The seat cut is horizontal.
-	// Calculate the birdsmouth geometry:
-	float BmSeatCutLen = BirdsmouthSeatDepth / SinA; // Horizontal length of the seat cut
-	// Actually, the seat cut depth perpendicular to the rafter = BirdsmouthSeatDepth
-	// This translates to a vertical drop = BirdsmouthSeatDepth * CosA
-	// and a horizontal offset = BirdsmouthSeatDepth * SinA
-
-	// Point where the heel cut meets the rafter bottom edge (before birdsmouth)
-	FVector BmHeelTop = WallBotEdge; // Bottom edge of rafter at wall line
-
-	// Point at the bottom of the birdsmouth (where it sits on the plate)
-	// This is straight down (vertical) from the rafter bottom edge
-	float BmVerticalDrop = BirdsmouthSeatDepth * CosA;
-	float BmHorizontalShift = BirdsmouthSeatDepth * SinA;
-	FVector BmSeatInner = BmHeelTop + FVector(BmHorizontalShift, 0.0f, -BmVerticalDrop);
-
-	// Seat cut extends horizontally (level) toward the outside of the building
-	float SeatHorizLen = BirdsmouthSeatDepth / FMath::Tan(PitchAngle);
-	FVector BmSeatOuter = BmSeatInner + FVector(SeatHorizLen, 0.0f, 0.0f);
-
-	// The outer seat point connects back to the rafter bottom edge
-	// at a point further along the slope
-	// Actually, for simplicity, the birdsmouth is:
-	// 1. Heel cut: vertical line from rafter bottom at wall to seat level
-	// 2. Seat cut: horizontal line from heel to where it meets rafter bottom again
-	// The seat cut continues until it intersects the rafter's bottom edge line
-
-	// --- Tail end ---
-	float SlopeDistToTail = TotalHoriz / CosA;
-	FVector TailTop = RidgeTop + SlopeDir * SlopeDistToTail;
-	FVector TailBot = TailTop + SlopePerp * Depth;
-
-	// Tail cut is a plumb (vertical) cut at the tail end
-	// The tail cut face is vertical, similar to the ridge plumb cut
+	// Four profile corners (side view, XZ plane):
+	//   RidgeTop ---slope---> TailTop
+	//      |                     |
+	//   RidgeBot --slope---> TailBot
+	FVector RidgeTop = FVector::ZeroVector;
+	FVector RidgeBot = RidgeTop + SlopePerp * D;
+	FVector TailTop  = RidgeTop + SlopeDir * SlopeLen;
+	FVector TailBot  = RidgeBot + SlopeDir * SlopeLen;
 
 	// ===================================================================
-	// Build the 3D mesh as an extruded profile along Y axis (width)
-	// Each face of the rafter is a quad (2 triangles).
-	// We define the 2D profile (side view) then extrude along Y.
+	// Build the box: 6 faces, each with 4 unique vertices (for correct
+	// per-face flat normals).  Total = 24 vertices, 12 triangles.
 	// ===================================================================
 
-	// Define the 2D profile points (side view in XZ plane)
-	// Going clockwise from the ridge top:
-	TArray<FVector> Profile;
-
-	// 1. Ridge top (plumb cut top)
-	Profile.Add(RidgeTop);
-
-	// 2. Rafter top edge at birdsmouth location (just before the wall)
-	Profile.Add(WallTopEdge);
-
-	// 3. Rafter top edge at tail
-	Profile.Add(TailTop);
-
-	// 4. Tail bottom (plumb cut at tail)
-	Profile.Add(TailBot);
-
-	// 5. Rafter bottom edge just past birdsmouth (after seat cut)
-	// The rafter bottom resumes after the birdsmouth
-	Profile.Add(BmSeatOuter);
-
-	// 6. Birdsmouth seat inner point (horizontal seat)
-	Profile.Add(BmSeatInner);
-
-	// 7. Birdsmouth heel (bottom edge at wall, before heel cut)
-	// Actually the heel is where the vertical cut meets the rafter bottom
-	// coming from the ridge side
-	Profile.Add(BmHeelTop);
-
-	// 8. Ridge bottom (plumb cut bottom)
-	Profile.Add(RidgeBot);
-
-	int32 NumProfilePts = Profile.Num();
-
-	// Extrude along Y for both faces (left face at -HalfWidth, right face at +HalfWidth)
-	// Left face profile
-	for (int32 i = 0; i < NumProfilePts; i++)
+	// Helper: add a quad with correct outward normal.
+	// Vertices A-B-C-D in CCW order when viewed from outside (UE5 front face).
+	auto AddFace = [&](FVector A, FVector B, FVector C, FVector Dpt, FVector Normal)
 	{
-		Vertices.Add(FVector(Profile[i].X, -HalfWidth, Profile[i].Z));
-	}
-	// Right face profile
-	for (int32 i = 0; i < NumProfilePts; i++)
-	{
-		Vertices.Add(FVector(Profile[i].X, HalfWidth, Profile[i].Z));
-	}
-
-	// --- Generate triangles for each face ---
-
-	// Helper lambda to add a quad (two triangles) from 4 vertex indices
-	auto AddQuad = [&Triangles](int32 V0, int32 V1, int32 V2, int32 V3)
-	{
-		// Triangle 1: V0, V1, V2
-		Triangles.Add(V0); Triangles.Add(V1); Triangles.Add(V2);
-		// Triangle 2: V0, V2, V3
-		Triangles.Add(V0); Triangles.Add(V2); Triangles.Add(V3);
+		int32 Base = Vertices.Num();
+		Vertices.Add(A); Normals.Add(Normal); UVs.Add(FVector2D(0, 0));
+		Vertices.Add(B); Normals.Add(Normal); UVs.Add(FVector2D(1, 0));
+		Vertices.Add(C); Normals.Add(Normal); UVs.Add(FVector2D(1, 1));
+		Vertices.Add(Dpt); Normals.Add(Normal); UVs.Add(FVector2D(0, 1));
+		// Two CCW triangles: A-B-C and A-C-D
+		Triangles.Add(Base + 0); Triangles.Add(Base + 1); Triangles.Add(Base + 2);
+		Triangles.Add(Base + 0); Triangles.Add(Base + 2); Triangles.Add(Base + 3);
 	};
 
-	int32 L = 0;           // Left face offset
-	int32 R = NumProfilePts; // Right face offset
+	FVector Y = FVector(0.0f, HalfW, 0.0f);
 
-	// Side faces (connecting left and right profiles)
-	for (int32 i = 0; i < NumProfilePts; i++)
-	{
-		int32 Next = (i + 1) % NumProfilePts;
+	// 8 box corners (L = -Y side, R = +Y side)
+	FVector RTL = RidgeTop - Y;  // Ridge Top Left
+	FVector RTR = RidgeTop + Y;  // Ridge Top Right
+	FVector RBL = RidgeBot - Y;  // Ridge Bottom Left
+	FVector RBR = RidgeBot + Y;  // Ridge Bottom Right
+	FVector TTL = TailTop - Y;   // Tail Top Left
+	FVector TTR = TailTop + Y;   // Tail Top Right
+	FVector TBL = TailBot - Y;   // Tail Bottom Left
+	FVector TBR = TailBot + Y;   // Tail Bottom Right
 
-		// Outer face (left side, viewed from left)
-		AddQuad(L + i, L + Next, R + Next, R + i);
-	}
+	// Face normals
+	FVector NormTop    = -SlopePerp;                  // Top face (roof surface side)
+	FVector NormBot    = SlopePerp;                   // Bottom face (ceiling side)
+	FVector NormLeft   = FVector(0.0f, -1.0f, 0.0f); // Left face (-Y)
+	FVector NormRight  = FVector(0.0f, 1.0f, 0.0f);  // Right face (+Y)
+	FVector NormRidge  = -SlopeDir;                   // Ridge end face
+	FVector NormTail   = SlopeDir;                    // Tail end face
 
-	// Left face (cap) - triangulate as a fan from vertex 0
-	for (int32 i = 1; i < NumProfilePts - 1; i++)
-	{
-		Triangles.Add(L + 0);
-		Triangles.Add(L + i + 1);
-		Triangles.Add(L + i);
-	}
+	// Top face: RTL -> RTR -> TTR -> TTL  (viewed from above the roof)
+	AddFace(RTL, RTR, TTR, TTL, NormTop);
 
-	// Right face (cap) - triangulate as a fan from vertex 0 (reverse winding)
-	for (int32 i = 1; i < NumProfilePts - 1; i++)
-	{
-		Triangles.Add(R + 0);
-		Triangles.Add(R + i);
-		Triangles.Add(R + i + 1);
-	}
+	// Bottom face: TBL -> TBR -> RBR -> RBL  (viewed from below)
+	AddFace(TBL, TBR, RBR, RBL, NormBot);
 
-	// --- Generate normals (flat shading approximation) ---
-	Normals.SetNum(Vertices.Num());
-	for (int32 i = 0; i < NumProfilePts; i++)
-	{
-		// Left side normals point left
-		Normals[L + i] = FVector(0.0f, -1.0f, 0.0f);
-		// Right side normals point right
-		Normals[R + i] = FVector(0.0f, 1.0f, 0.0f);
-	}
+	// Left face (-Y): RTL -> TTL -> TBL -> RBL
+	AddFace(RTL, TTL, TBL, RBL, NormLeft);
 
-	// Recalculate normals from triangles for better results
-	// For now, use flat normals (procedural mesh will auto-calculate if needed)
+	// Right face (+Y): TTR -> RTR -> RBR -> TBR
+	AddFace(TTR, RTR, RBR, TBR, NormRight);
 
-	// --- Generate UVs ---
-	UVs.SetNum(Vertices.Num());
-	float SlopeLen = GetSlopeLengthCm();
-	for (int32 i = 0; i < NumProfilePts; i++)
-	{
-		float U = FVector::Dist(Profile[i], Profile[0]) / FMath::Max(SlopeLen, 1.0f);
-		UVs[L + i] = FVector2D(U, 0.0f);
-		UVs[R + i] = FVector2D(U, 1.0f);
-	}
+	// Ridge end face: RTR -> RTL -> RBL -> RBR
+	AddFace(RTR, RTL, RBL, RBR, NormRidge);
+
+	// Tail end face: TTL -> TTR -> TBR -> TBL
+	AddFace(TTL, TTR, TBR, TBL, NormTail);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("Rafter MESH DEBUG:"
+		     "\n  pitch=%.1f/12 (%.1fdeg) slopeLen=%.1fcm run=%.1fcm overhang=%.1fcm"
+		     "\n  SlopeDir=(%.3f, %.3f, %.3f)  SlopePerp=(%.3f, %.3f, %.3f)"
+		     "\n  RidgeTop=(%.1f, %.1f, %.1f)  RidgeBot=(%.1f, %.1f, %.1f)"
+		     "\n  TailTop=(%.1f, %.1f, %.1f)   TailBot=(%.1f, %.1f, %.1f)"
+		     "\n  Verts=%d  Tris=%d"),
+		PitchRatio, GetPitchAngleDegrees(), SlopeLen, RunDistanceCm, OverhangCm,
+		SlopeDir.X, SlopeDir.Y, SlopeDir.Z,
+		SlopePerp.X, SlopePerp.Y, SlopePerp.Z,
+		RidgeTop.X, RidgeTop.Y, RidgeTop.Z,
+		RidgeBot.X, RidgeBot.Y, RidgeBot.Z,
+		TailTop.X, TailTop.Y, TailTop.Z,
+		TailBot.X, TailBot.Y, TailBot.Z,
+		Vertices.Num(), Triangles.Num() / 3);
 }

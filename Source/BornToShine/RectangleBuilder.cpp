@@ -2005,10 +2005,20 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             DoubleTopPlateTopZ);
     }
 
-    // Ridge post center Z = DTP top + half the default post height
-    float PostCenterZ = DoubleTopPlateTopZ + DefaultPostHeight / 2.0f;
+    // Ridge post is bottom-anchored: actor Z = DTP top surface
+    // (the post grows upward from there)
+    float PostBaseZ = DoubleTopPlateTopZ;
 
     // --- Create suggestions for each gable end ---
+    // FLUSH ALIGNMENT: The ridge post outer face must be flush with the
+    // gable end wall's outer face (same as studs on bottom plate).
+    // Wall members (plates, studs) are 3.5" (8.89cm) deep.  Ridge post
+    // width (3 laminated 2x6s) is 4.5" (11.43cm).  Inset the post so
+    // its outer face aligns with the wall outer face.
+    const float PlateThicknessCm = 8.89f;  // 2x4 depth = 3.5"
+    const float PostWidthCm = 11.43f;      // 3 x 1.5" = 4.5"
+    const float FlushInsetCm = (PostWidthCm - PlateThicknessCm) / 2.0f; // 1.27cm = 0.5"
+
     ARimBoard* EndBoards[2] = { EndBoardA, EndBoardB };
 
     for (int32 i = 0; i < 2; i++)
@@ -2018,10 +2028,16 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         // Project end board center onto the building center line
         FVector EndCenter = EndBoards[i]->GetActorLocation();
         float ProjectionDist = FVector::DotProduct(EndCenter - BuildingCenter2D, RidgeFwd);
-        FVector PostXY = BuildingCenter2D + RidgeFwd * ProjectionDist;
+
+        // Outward direction = from building center toward this gable end
+        FVector OutwardDir = (ProjectionDist >= 0.0f) ? RidgeFwd : -RidgeFwd;
+
+        // Position at building center (width) at the gable end wall,
+        // then inset toward building interior for flush alignment
+        FVector PostXY = BuildingCenter2D + RidgeFwd * ProjectionDist - OutwardDir * FlushInsetCm;
 
         FRidgePostSuggestion Sug;
-        Sug.Position = FVector(PostXY.X, PostXY.Y, PostCenterZ);
+        Sug.Position = FVector(PostXY.X, PostXY.Y, PostBaseZ);
         Sug.Rotation = RidgeRotation;
         Sug.PostHeightCm = DefaultPostHeight;
         Sug.BuildingHalfWidthCm = HalfWidth;
@@ -2029,10 +2045,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         Sug.bIsValid = true;
         RidgePostSuggestions.Add(Sug);
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: RidgePost[%d] Pos=(%.1f, %.1f, %.1f) Rot=%.1f Height=%.1fcm HalfWidth=%.1fcm Pitch=%.1f/12"),
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: RidgePost[%d] Pos=(%.1f, %.1f, %.1f) Rot=%.1f Height=%.1fcm HalfWidth=%.1fcm Pitch=%.1f/12 FlushInset=%.2fcm"),
             i, Sug.Position.X, Sug.Position.Y, Sug.Position.Z,
             Sug.Rotation.Yaw, DefaultPostHeight, HalfWidth,
-            (DefaultPostHeight / HalfWidth) * 12.0f);
+            (DefaultPostHeight / HalfWidth) * 12.0f, FlushInsetCm);
     }
 
     UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, default pitch=6/12)"),

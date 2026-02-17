@@ -77,12 +77,12 @@ void ARidgePost::InitializeSockets()
 
 void ARidgePost::CreateBottomSocket()
 {
-	// Bottom socket at the base of the post
+	// Bottom socket at the base of the post (Z = 0, bottom-anchored)
 	// Snaps to DoubleTopPlate_End or DoubleTopPlate top face
 	FConstructionSocket BottomSocket;
 	BottomSocket.SocketName = FName(TEXT("RidgePostBottom"));
 	BottomSocket.SocketType = EConstructionSocketType::RidgePost_Bottom;
-	BottomSocket.LocalPosition = FVector(0.0f, 0.0f, -PostHeight / 2.0f);
+	BottomSocket.LocalPosition = FVector(0.0f, 0.0f, 0.0f);
 	BottomSocket.LocalRotation = FRotator(90.0f, 0.0f, 0.0f); // Facing downward
 	BottomSocket.Orientation = ESocketOrientation::Vertical;
 	BottomSocket.bIsOccupied = false;
@@ -91,10 +91,9 @@ void ARidgePost::CreateBottomSocket()
 
 void ARidgePost::CreatePocketSocket()
 {
-	// Pocket socket at the top of the post
+	// Pocket socket at the top of the post (bottom-anchored: top = PostHeight)
 	// The pocket is PocketDepth below the top of the outer boards
-	// Ridge board center sits at: top - PocketDepth/2
-	float PocketCenterZ = (PostHeight / 2.0f) - (PocketDepth / 2.0f);
+	float PocketCenterZ = PostHeight - (PocketDepth / 2.0f);
 
 	FConstructionSocket PocketSocket;
 	PocketSocket.SocketName = FName(TEXT("RidgePostPocket"));
@@ -199,19 +198,25 @@ void ARidgePost::UpdateMeshScale()
 	FVector CurrentMeshScale = MeshComponent->GetRelativeScale3D();
 	MeshComponent->SetRelativeScale3D(FVector(CurrentMeshScale.X, CurrentMeshScale.Y, ScaleZ));
 
-	// Recompute socket positions for the scaled mesh
-	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
-	float NewBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ScaleZ + MeshRelLoc.Z;
-	float NewTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) * ScaleZ + MeshRelLoc.Z;
+	// ANCHOR BOTTOM: The post must grow UPWARD from a fixed base.
+	// After scaling, the mesh center shifts.  Offset the mesh so its
+	// bottom stays at the actor's bottom (local Z = 0).
+	// Unscaled mesh center is at Bounds.Origin.Z, bottom at Origin.Z - Extent.Z
+	// After scale: center at Origin.Z * ScaleZ, bottom at (Origin.Z - Extent.Z) * ScaleZ
+	// We want the bottom at Z = 0, so offset = -(Origin.Z - Extent.Z) * ScaleZ
+	float ScaledBottomOffset = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ScaleZ;
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -ScaledBottomOffset));
 
-	float ActualHeight = NewTopZ - NewBottomZ;
-	float PocketCenterZ = NewTopZ - (PocketDepth / 2.0f);
+	// Recompute socket positions.  With bottom anchored at Z=0:
+	float BottomZ = 0.0f;
+	float TopZ = PostHeight;
+	float PocketCenterZ = TopZ - (PocketDepth / 2.0f);
 
 	for (FConstructionSocket& Socket : Sockets)
 	{
 		if (Socket.SocketName == FName("RidgePostBottom"))
 		{
-			Socket.LocalPosition.Z = NewBottomZ;
+			Socket.LocalPosition.Z = BottomZ;
 		}
 		else if (Socket.SocketName == FName("RidgePostPocket"))
 		{
@@ -219,37 +224,24 @@ void ARidgePost::UpdateMeshScale()
 		}
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RidgePost: Scaled mesh Z by %.4f -> height %.1fcm, bottom=%.1f top=%.1f pocket=%.1f"),
-		ScaleZ, ActualHeight, NewBottomZ, NewTopZ, PocketCenterZ);
+	UE_LOG(LogTemp, Log, TEXT("RidgePost: Scaled Z=%.4f -> height %.1fcm, bottom=%.1f top=%.1f pocket=%.1f"),
+		ScaleZ, PostHeight, BottomZ, TopZ, PocketCenterZ);
 }
 
 void ARidgePost::AdjustSocketsToMeshBounds()
 {
-	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
-
-	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
-	FVector MeshScale = MeshComponent->GetRelativeScale3D();
-
-	float MeshBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * MeshScale.Z + MeshRelLoc.Z;
-	float MeshTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) * MeshScale.Z + MeshRelLoc.Z;
-	float ActualHeight = MeshTopZ - MeshBottomZ;
-
-	if (ActualHeight < 1.0f)
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("RidgePost: Mesh height too small (%.2fcm) - skipping socket adjustment"),
-			ActualHeight);
-		return;
-	}
-
-	float PocketCenterZ = MeshTopZ - (PocketDepth / 2.0f);
+	// Bottom-anchored: bottom is always at Z=0, top at PostHeight.
+	// UpdateMeshScale already handles mesh positioning, so just
+	// make sure sockets match the current PostHeight.
+	float BottomZ = 0.0f;
+	float TopZ = PostHeight;
+	float PocketCenterZ = TopZ - (PocketDepth / 2.0f);
 
 	for (FConstructionSocket& Socket : Sockets)
 	{
 		if (Socket.SocketName == FName("RidgePostBottom"))
 		{
-			Socket.LocalPosition.Z = MeshBottomZ;
+			Socket.LocalPosition.Z = BottomZ;
 		}
 		else if (Socket.SocketName == FName("RidgePostPocket"))
 		{
@@ -258,8 +250,8 @@ void ARidgePost::AdjustSocketsToMeshBounds()
 	}
 
 	UE_LOG(LogTemp, Log,
-		TEXT("RidgePost: AdjustSockets - MeshZ=[%.2f, %.2f] height=%.2fcm, pocket=%.2f"),
-		MeshBottomZ, MeshTopZ, ActualHeight, PocketCenterZ);
+		TEXT("RidgePost: AdjustSockets - bottom=%.1f top=%.1f pocket=%.1f"),
+		BottomZ, TopZ, PocketCenterZ);
 }
 
 void ARidgePost::DisplayPitchInfo() const

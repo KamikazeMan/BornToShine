@@ -1,4 +1,4 @@
-// Born To Shine - Radial Piece Selection Menu (Sci-fi holographic style)
+// Born To Shine - Two-Tier Radial Piece Selection Menu (Sci-fi holographic style)
 
 #pragma once
 
@@ -9,21 +9,34 @@
 #include "RadialPieceMenu.generated.h"
 
 /**
- * Production-quality radial wheel menu for selecting construction piece types.
- * Hold Tab to open, move mouse to highlight segment, release to select.
+ * Two-tier radial menu for piece selection:
+ *   Inner ring: 4 categories (Foundation, Floor, Walls, Roof)
+ *   Outer ring: pieces within the highlighted category
+ *
+ * Hold Tab to open, move mouse to highlight, release to select.
  *
  * Visual design (sci-fi holographic blueprint):
  *   - Dark navy/charcoal backdrop (75% opacity)
- *   - Large prominent icons per segment
- *   - Piece name + size subtitle under each icon
- *   - Selected segment: bright turquoise/cyan highlight with UE5-style glow
- *   - Center hub: dark with soft turquoise glow ring
- *   - 3D metallic beveled outer ring with turquoise accents
+ *   - Inner ring: category segments with icons
+ *   - Outer ring: expands to show pieces in hovered category
+ *   - Selected segment: bright turquoise/cyan highlight
+ *   - Center hub: piece name + subtitle + lock message
  *   - Smooth fade-in, per-segment hover interpolation, breathing glow pulse
- *   - Unavailable segments dimmed out
+ *   - Unavailable pieces dimmed out
  *
- * All rendering in C++ NativePaint — no Blueprint widgets.
+ * All rendering in C++ NativePaint.
  */
+
+/** Category definition for the inner ring */
+USTRUCT()
+struct FCategoryInfo
+{
+	GENERATED_BODY()
+
+	FString Name;
+	TArray<int32> PieceIndices; // Indices into the full FPieceTypeInfo array
+};
+
 UCLASS()
 class BORNTOSHINE_API URadialPieceMenu : public UUserWidget
 {
@@ -32,13 +45,12 @@ class BORNTOSHINE_API URadialPieceMenu : public UUserWidget
 public:
 	URadialPieceMenu(const FObjectInitializer& ObjectInitializer);
 
-	/** Populate segments from FPieceTypeInfo; CurrentIndex pre-highlights that segment */
+	/** Populate from FPieceTypeInfo; CurrentIndex pre-highlights that piece */
 	void InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 CurrentIndex);
 
-	/** Which segment is the mouse over (-1 = none) */
-	int32 GetHighlightedIndex() const { return HighlightedIndex; }
+	/** Final selected piece index (-1 = none) in the full PieceTypeInfos array */
+	int32 GetHighlightedIndex() const;
 
-	// Sound effect hooks (stubs — wire up audio later)
 	void PlaySoundOpen();
 	void PlaySoundClose();
 	void PlaySoundHover();
@@ -51,28 +63,37 @@ protected:
 		int32 LayerId, const FWidgetStyle& InWidgetStyle, bool bParentEnabled) const override;
 
 private:
-	// --- Segment data ---
-	TArray<FPieceTypeInfo> SegmentInfos;
-	int32 HighlightedIndex;
-	int32 PrevHighlightedIndex;
-	int32 NumSegments;
+	// --- Full piece data ---
+	TArray<FPieceTypeInfo> AllPieceInfos;
 
-	// --- Geometry (pixels) — doubled from original ---
-	float OuterRadius;
-	float InnerRadius;
-	float DeadZone;
+	// --- Categories (inner ring) ---
+	TArray<FCategoryInfo> Categories;
+	int32 HighlightedCategory;     // -1 = none
+	int32 PrevHighlightedCategory;
+
+	// --- Pieces in active category (outer ring) ---
+	int32 HighlightedPieceSlot;    // Index within the category's PieceIndices (-1 = none)
+	int32 PrevHighlightedPieceSlot;
+
+	// --- Geometry (pixels) ---
+	float InnerRingInner;   // Inner edge of category ring
+	float InnerRingOuter;   // Outer edge of category ring
+	float OuterRingInner;   // Inner edge of piece ring
+	float OuterRingOuter;   // Outer edge of piece ring
 	float CenterHubRadius;
+	float DeadZone;
 
 	// --- Animation ---
 	float FadeAlpha;
 	float FadeSpeed;
-	mutable float GlowPulseTime;             // Accumulated time for breathing glow
-	mutable TArray<float> SegmentHoverScales; // Per-segment 0→1 hover interpolation
+	mutable float GlowPulseTime;
+	mutable TArray<float> CategoryHoverScales;
+	mutable TArray<float> PieceHoverScales;
 
-	// --- Icon brush cache ---
+	// --- Icon cache (one per piece in AllPieceInfos) ---
 	TArray<FSlateBrush> IconBrushes;
-	float SegmentIconSize;        // Icon size in radial segments (64+)
-	float CenterIconSize;         // Enlarged icon in center hub
+	float SegmentIconSize;
+	float CenterIconSize;
 
 	// --- Color palette ---
 	FLinearColor BgOverlayColor;
@@ -88,6 +109,7 @@ private:
 	FLinearColor TextDimmed;
 	FLinearColor TextUnavailable;
 	FLinearColor SubtitleColor;
+	FLinearColor CategoryTextColor;
 
 	// --- Drawing helpers ---
 	void DrawFilledArc(FSlateWindowElementList& OutDrawElements, int32 LayerId,
@@ -101,6 +123,11 @@ private:
 	void DrawCircleFill(FSlateWindowElementList& OutDrawElements, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const;
 
-	// Multiply color alpha by FadeAlpha
 	FLinearColor Faded(FLinearColor Color) const;
+
+	// Build the 4 categories from the piece info list
+	void BuildCategories();
+
+	// Given a global piece index, find which category it belongs to
+	int32 FindCategoryForPieceIndex(int32 PieceIndex) const;
 };
