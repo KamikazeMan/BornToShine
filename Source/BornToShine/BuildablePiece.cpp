@@ -1,6 +1,7 @@
 // Born To Shine - Base class for all buildable construction pieces
 
 #include "BuildablePiece.h"
+#include "ProceduralMeshComponent.h"
 #include "RimBoard.h"
 #include "CornerPost.h"
 #include "BottomPlate.h"
@@ -13,7 +14,6 @@
 #include "GameFramework/PlayerController.h"
 #include "SnapRuleTable.h"
 #include "RectangleBuilder.h"
-#include "ProceduralMeshComponent.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -148,9 +148,6 @@ bool ABuildablePiece::GetSocketByNameSafe(FName SocketName, FConstructionSocket&
 
 void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 {
-	// Check for procedural mesh (rafter uses this instead of static mesh)
-	UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
-
 	if (bIsPreview)
 	{
 		PieceState = EPieceState::Preview;
@@ -168,9 +165,14 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			}
 		}
 
-		// Also apply preview material to procedural mesh
+		// Also apply preview material to ProceduralMesh (rafters)
+		UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
 		if (ProcMesh && DynamicMaterial)
 		{
+			if (!OriginalMeshMaterial)
+			{
+				OriginalMeshMaterial = ProcMesh->GetMaterial(0);
+			}
 			ProcMesh->SetMaterial(0, DynamicMaterial);
 		}
 	}
@@ -191,7 +193,8 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			}
 		}
 
-		// Restore procedural mesh material when placed
+		// Restore material on ProceduralMesh (rafters)
+		UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
 		if (ProcMesh && OriginalMeshMaterial)
 		{
 			ProcMesh->SetMaterial(0, OriginalMeshMaterial);
@@ -1132,74 +1135,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
 			}
 
-			// Ridge post flush alignment: shift post perpendicular to plate
-			// so the outer face of the 3-ply 2x6 assembly (11.43cm) is flush
-			// with the outer face of the double top plate (8.89cm).
-			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
-				TargetPiece)
-			{
-				const float PostHalfWidth = 11.43f / 2.0f;  // 5.715cm — half of 3×2x6
-				const float PlateHalfDepth = 8.89f / 2.0f;  // 4.445cm — half of 2x4 depth
-				const float FlushShift = PostHalfWidth - PlateHalfDepth; // 1.27cm
-
-				// The plate's local Y (right vector) is the through-wall direction.
-				// Find building center from rim boards to determine "inward".
-				FVector FrameCenter = FVector::ZeroVector;
-				int32 RimCount = 0;
-				for (ABuildablePiece* P : NearbyPieces)
-				{
-					if (P && P->GetPieceType() == EPieceType::RimBoard)
-					{
-						FrameCenter += P->GetActorLocation();
-						RimCount++;
-					}
-				}
-				if (RimCount > 0)
-				{
-					FrameCenter /= RimCount;
-					FVector PlateRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
-					FVector ToCenter = FrameCenter - CandidateLocation;
-					ToCenter.Z = 0.0f;
-					float DotY = FVector::DotProduct(ToCenter, PlateRight);
-					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
-					{
-						// Shift post inward so its outer face aligns with plate outer face
-						CandidateLocation += PlateRight * FMath::Sign(DotY) * FlushShift;
-					}
-				}
-
-				UE_LOG(LogTemp, Log,
-					TEXT("RidgePost flush: shifted %.2fcm inward to align outer face with plate"),
-					FlushShift);
-			}
-
-			// Rafter ridge end → ridge board side socket:
-			// Orient the rafter perpendicular to the ridge board, facing away from it.
-			// Left side sockets (_L) face -90° from ridge yaw, right side (_R) face +90°.
-			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
-				TgtSocketType == EConstructionSocketType::RidgeBoard_Side &&
-				TargetPiece)
-			{
-				CandidateRotation.Pitch = 0.0f;
-				CandidateRotation.Roll = 0.0f;
-
-				FRotator RidgeRot = TargetPiece->GetActorRotation();
-				FString TargetSocketStr = TargetSocketName.ToString();
-				if (TargetSocketStr.Contains(TEXT("_L")))
-				{
-					CandidateRotation.Yaw = RidgeRot.Yaw - 90.0f;
-				}
-				else
-				{
-					CandidateRotation.Yaw = RidgeRot.Yaw + 90.0f;
-				}
-
-				UE_LOG(LogTemp, Log,
-					TEXT("Rafter snap: ridge=%s side=%s → yaw=%.1f"),
-					*TargetPiece->GetName(), *TargetSocketStr, CandidateRotation.Yaw);
-			}
-
 			// Plywood XY alignment: apply pre-computed slot position
 			// (computed once before the loop using frame centroid as origin)
 			if (bHavePlywoodSlot &&
@@ -1684,8 +1619,9 @@ void ABuildablePiece::SetPreviewColor(const FLinearColor& Color)
 
 void ABuildablePiece::UpdateVisualFeedback()
 {
-	// Allow pieces with only a ProceduralMeshComponent (like rafters)
+	// Find ProceduralMesh for pieces that use it (e.g. rafters)
 	UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
+
 	if (!MeshComponent && !ProcMesh) return;
 
 	switch (PieceState)
@@ -1697,19 +1633,12 @@ void ABuildablePiece::UpdateVisualFeedback()
 		FLinearColor TargetColor = IsPlacementValid() ? ValidPlacementColor : InvalidPlacementColor;
 
 		// Set color on preview MID — engine default material responds to "BaseColor"
-		// Translucent user materials may use other parameter names too
 		DynamicMaterial->SetVectorParameterValue(FName("BaseColor"), TargetColor);
 		DynamicMaterial->SetVectorParameterValue(FName("Base Color"), TargetColor);
 		DynamicMaterial->SetVectorParameterValue(FName("Color"), TargetColor);
-		// Try setting opacity for translucent preview materials
 		DynamicMaterial->SetScalarParameterValue(FName("Opacity"), TargetColor.A);
 
-		if (MeshComponent)
-		{
-			MeshComponent->SetRenderCustomDepth(true);
-		}
-
-		// Also apply preview material to ProceduralMeshComponent (rafter)
+		if (MeshComponent) MeshComponent->SetRenderCustomDepth(true);
 		if (ProcMesh)
 		{
 			ProcMesh->SetMaterial(0, DynamicMaterial);
@@ -1720,28 +1649,33 @@ void ABuildablePiece::UpdateVisualFeedback()
 
 	case EPieceState::Placed:
 	{
-		// Placed: restore original material, show with custom depth outline
-		if (OriginalMeshMaterial)
+		if (MeshComponent)
 		{
-			MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+			if (OriginalMeshMaterial) MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+			MeshComponent->SetRenderCustomDepth(true);
 		}
-		MeshComponent->SetRenderCustomDepth(true);
+		if (ProcMesh)
+		{
+			if (OriginalMeshMaterial) ProcMesh->SetMaterial(0, OriginalMeshMaterial);
+			ProcMesh->SetRenderCustomDepth(true);
+		}
 		break;
 	}
 
 	case EPieceState::Nailed:
 	{
-		// Nailed: swap to final material (NailedMaterial or original)
-		if (NailedMaterial)
+		UMaterialInterface* FinalMat = NailedMaterial ? NailedMaterial : OriginalMeshMaterial;
+		if (MeshComponent)
 		{
-			MeshComponent->SetMaterial(0, NailedMaterial);
+			if (FinalMat) MeshComponent->SetMaterial(0, FinalMat);
+			MeshComponent->SetRenderCustomDepth(false);
 		}
-		else if (OriginalMeshMaterial)
+		if (ProcMesh)
 		{
-			MeshComponent->SetMaterial(0, OriginalMeshMaterial);
+			if (FinalMat) ProcMesh->SetMaterial(0, FinalMat);
+			ProcMesh->SetRenderCustomDepth(false);
 		}
 		DynamicMaterial = nullptr;
-		MeshComponent->SetRenderCustomDepth(false);
 		break;
 	}
 
