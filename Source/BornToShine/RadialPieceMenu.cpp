@@ -381,26 +381,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 	FSlateFontInfo CenterNameFont = FCoreStyle::GetDefaultFontStyle("Bold", CenterNameFontSize);
 	FSlateFontInfo CenterSubFont  = FCoreStyle::GetDefaultFontStyle("Regular", CenterSubFontSize);
 
-	// =================================================================
-	// LAYER 1: Dark background — radial gradient from center outward
-	// =================================================================
-	{
-		float MaxBgR = sOuterO + 30.0f * Scale;
-		int32 GradientRings = 16;
-		for (int32 r = 0; r < GradientRings; r++)
-		{
-			float T = (float)r / GradientRings;
-			float RingInner = MaxBgR * T;
-			float RingOuter = MaxBgR * (T + 1.0f / GradientRings);
-			// Darker at center, fading at edges
-			float Alpha = BgOverlayColor.A * (1.0f - T * 0.6f);
-			FLinearColor RingColor = DarkBg;
-			RingColor.A = Alpha * FadeAlpha;
-			DrawFilledArc(OutDrawElements, LayerId, AllottedGeometry, Center,
-				RingInner, RingOuter, -90.0f, 270.0f, RingColor, 48);
-		}
-	}
-	LayerId++;
+	// No background disc — game world stays fully visible behind the menu
 
 	// =================================================================
 	// LAYER 2: Inner ring — category wedges with glow
