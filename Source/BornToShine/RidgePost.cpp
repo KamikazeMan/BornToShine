@@ -226,14 +226,18 @@ void ARidgePost::UpdateMeshScale()
 	// The mesh stays at scale 1,1,1.
 	MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
 
-	// Position the mesh so its TOP is at PostHeight and its bottom
-	// is at PostHeight - OriginalMeshHeight.
-	// The mesh center is at origin in Rhino, so mesh center Z = PostHeight - OriginalMeshHeight/2
-	float MeshCenterZ = PostHeight - (OriginalMeshHeight / 2.0f);
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, MeshCenterZ));
+	// Use actual mesh bounds to position correctly, regardless of mesh origin.
+	// The mesh origin in Rhino might be at the center, bottom, or elsewhere.
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	float MeshLocalTopZ = Bounds.Origin.Z + Bounds.BoxExtent.Z;
 
-	// The gap below the mesh (from Z=0 to Z=PostHeight-OriginalMeshHeight)
-	// is empty. For now this is acceptable — the pocket at the top is correct.
+	// Position the mesh so its TOP is at PostHeight:
+	//   RelativeZ + MeshLocalTopZ = PostHeight
+	//   RelativeZ = PostHeight - MeshLocalTopZ
+	float MeshRelZ = PostHeight - MeshLocalTopZ;
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, MeshRelZ));
+
+	// The gap below the mesh (from Z=0 to mesh bottom) is empty.
 	// TODO: David will model a separate column mesh for the lower portion,
 	// or we add a simple procedural box to fill the gap.
 
@@ -257,8 +261,16 @@ void ARidgePost::UpdateMeshScale()
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Log, TEXT("RidgePost: NO Z-scale, mesh at center Z=%.1f, PostHeight=%.1fcm, pocket=%.1f"),
-		MeshCenterZ, PostHeight, PocketCenterZ);
+	// Verify pocket socket matches actual mesh pocket position
+	float MeshLocalMinZ = Bounds.Origin.Z - Bounds.BoxExtent.Z;
+	float MeshActualBottomZ = MeshRelZ + MeshLocalMinZ;
+	float PocketActualZ = MeshRelZ + (MeshLocalTopZ - PocketDepth / 2.0f);
+	UE_LOG(LogTemp, Warning, TEXT("RidgePost: mesh RelZ=%.1f, MeshLocalTop=%.1f, MeshLocalBot=%.1f, "
+		"MeshActualTop=%.1f, MeshActualBot=%.1f, PostHeight=%.1f, "
+		"PocketSocket=%.1f, PocketActual=%.1f, diff=%.2f"),
+		MeshRelZ, MeshLocalTopZ, MeshLocalMinZ,
+		PostHeight, MeshActualBottomZ, PostHeight,
+		PocketCenterZ, PocketActualZ, PocketCenterZ - PocketActualZ);
 }
 
 void ARidgePost::AdjustSocketsToMeshBounds()

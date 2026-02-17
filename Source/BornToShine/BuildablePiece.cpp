@@ -14,6 +14,8 @@
 #include "GameFramework/PlayerController.h"
 #include "SnapRuleTable.h"
 #include "RectangleBuilder.h"
+#include "RidgeBoard.h"
+#include "Rafter.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -943,43 +945,35 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			}
 
 			// Rafter ridge end snaps to ridge board side:
-			// Orient the rafter PERPENDICULAR to the ridge board.
-			// Player look direction determines which side of the ridge.
-			// The rafter geometry has pitch built into the vertices (slope
-			// in local XZ), so Pitch/Roll stay 0 — only Yaw changes.
+			// The RidgeBoard_Side socket already encodes which side the rafter faces:
+			//   Left sockets (RidgeBoardSide_L*) have LocalRotation.Yaw = -90
+			//   Right sockets (RidgeBoardSide_R*) have LocalRotation.Yaw = +90
+			// Use the socket's rotation directly — no player look direction needed.
+			// Pitch/Roll stay 0 because the rafter geometry has slope baked into vertices.
 			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
 				TgtSocketType == EConstructionSocketType::RidgeBoard_Side &&
 				TargetPiece)
 			{
-				FRotator TargetRotation = TargetPiece->GetActorRotation();
+				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
 
-				// Ridge board's right vector = perpendicular to ridge line
-				FVector RidgeRight = TargetRotation.RotateVector(FVector::RightVector);
-
-				FVector PlayerLookDir = FVector::ForwardVector;
-				if (UWorld* World = GetWorld())
+				// Get the target socket's local rotation to determine facing direction
+				FConstructionSocket TgtSocket;
+				float SocketYawOffset = 90.0f; // fallback
+				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
 				{
-					APlayerController* PC = World->GetFirstPlayerController();
-					if (PC)
-					{
-						FVector CamLoc;
-						FRotator CamRot;
-						PC->GetPlayerViewPoint(CamLoc, CamRot);
-						PlayerLookDir = CamRot.Vector();
-					}
+					SocketYawOffset = TgtSocket.LocalRotation.Yaw;
 				}
 
 				// Rafter +X = horizontal toward tail (from ridge toward wall).
-				// Dot > 0 → player is looking toward the right side of the ridge,
-				// so orient rafter facing right (+90° from ridge yaw).
-				float DotResult = FVector::DotProduct(PlayerLookDir, RidgeRight);
-				CandidateRotation.Yaw = TargetRotation.Yaw + (DotResult > 0.0f ? 90.0f : -90.0f);
+				// Socket yaw -90 = rafter faces left, +90 = rafter faces right.
+				CandidateRotation.Yaw = TargetActorRotation.Yaw + SocketYawOffset;
 
 				UE_LOG(LogTemp, Log,
-					TEXT("Rafter snap: RidgeYaw=%.1f Dot=%.2f → RafterYaw=%.1f"),
-					TargetRotation.Yaw, DotResult, CandidateRotation.Yaw);
+					TEXT("Rafter snap: RidgeYaw=%.1f SocketYaw=%.1f → RafterYaw=%.1f (socket=%s)"),
+					TargetActorRotation.Yaw, SocketYawOffset, CandidateRotation.Yaw,
+					*TargetSocketName.ToString());
 			}
 
 			// Calculate final actor position from socket alignment
@@ -1370,6 +1364,30 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Rafter placed at Pos=%s Rot=%s"),
 			*FinalLocation.ToString(), *FinalRotation.ToString());
+
+		// Verify rafter Z = ridge board top surface
+		if (Candidate.TargetPiece)
+		{
+			ARidgeBoard* RidgeBd = Cast<ARidgeBoard>(Candidate.TargetPiece);
+			if (RidgeBd)
+			{
+				// Ridge board top Z = actor Z + half board height
+				float RidgeBoardTopZ = RidgeBd->GetActorLocation().Z + RidgeBd->BoardHeight / 2.0f;
+				UE_LOG(LogTemp, Warning, TEXT("Ridge board top Z = %.1f, Rafter placed at Z = %.1f, difference = %.1f"),
+					RidgeBoardTopZ, FinalLocation.Z, FinalLocation.Z - RidgeBoardTopZ);
+			}
+		}
+
+		// Verify birdsmouth lands on double top plate
+		ARafter* RafterActor = Cast<ARafter>(this);
+		if (RafterActor)
+		{
+			float Rise = (RafterActor->PitchRatio / 12.0f) * RafterActor->RunDistanceCm;
+			FVector BirdsmouthLocal(RafterActor->RunDistanceCm, 0.0f, -Rise);
+			FVector BirdsmouthWorld = GetActorTransform().TransformPosition(BirdsmouthLocal);
+			UE_LOG(LogTemp, Warning, TEXT("Birdsmouth world pos = %s (Z=%.1f)"),
+				*BirdsmouthWorld.ToString(), BirdsmouthWorld.Z);
+		}
 	}
 
 	// Debug: Log final Z for plywood placements

@@ -578,23 +578,53 @@ void ARafter::BuildRafterGeometry(
 	// --- RIDGE PLUMB CUT FACE: P6 to P0 (vertical) ---
 	AddFace(Prof[6] - Y, Prof[6] + Y, Prof[0] + Y, Prof[0] - Y, NormPlumbRidge);
 
-	// --- LEFT SIDE FACE (-Y): polygon with 7 vertices ---
-	// Triangulate as a fan from Prof[0]
-	for (int32 i = 1; i < 6; i++)
+	// --- LEFT SIDE FACE (-Y): 7-point polygon with shared vertices ---
+	// Using indexed triangulation eliminates gaps between triangles
 	{
-		AddTri(Prof[0] - Y, Prof[i] - Y, Prof[i + 1] - Y, NormLeft);
+		int32 Base = Vertices.Num();
+		for (int32 i = 0; i < 7; i++)
+		{
+			Vertices.Add(Prof[i] - Y);
+			Normals.Add(NormLeft);
+			UVs.Add(FVector2D(Prof[i].X / 200.0f, Prof[i].Z / 200.0f));
+		}
+		// Fan triangulation from vertex 0
+		for (int32 i = 1; i < 6; i++)
+		{
+			Triangles.Add(Base + 0);
+			Triangles.Add(Base + i);
+			Triangles.Add(Base + i + 1);
+		}
 	}
 
-	// --- RIGHT SIDE FACE (+Y): polygon with 7 vertices (reversed winding) ---
-	for (int32 i = 1; i < 6; i++)
+	// --- RIGHT SIDE FACE (+Y): 7-point polygon with shared vertices (reversed winding) ---
 	{
-		AddTri(Prof[0] + Y, Prof[i + 1] + Y, Prof[i] + Y, NormRight);
+		int32 Base = Vertices.Num();
+		for (int32 i = 0; i < 7; i++)
+		{
+			Vertices.Add(Prof[i] + Y);
+			Normals.Add(NormRight);
+			UVs.Add(FVector2D(Prof[i].X / 200.0f, Prof[i].Z / 200.0f));
+		}
+		// Fan triangulation from vertex 0 (reversed winding)
+		for (int32 i = 1; i < 6; i++)
+		{
+			Triangles.Add(Base + 0);
+			Triangles.Add(Base + i + 1);
+			Triangles.Add(Base + i);
+		}
 	}
 
 	// No component rotation needed — pitch is in the vertices
 	if (ProceduralMesh)
 	{
 		ProceduralMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	}
+
+	// Log all 7 profile points for verification
+	for (int32 i = 0; i < 7; i++)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("  Prof[%d] = (%.4f, %.4f, %.4f)"), i, Prof[i].X, Prof[i].Y, Prof[i].Z);
 	}
 
 	UE_LOG(LogTemp, Log,
