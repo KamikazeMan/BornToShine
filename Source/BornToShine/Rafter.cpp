@@ -258,48 +258,39 @@ void ARafter::BuildRafterGeometry(
 	TArray<FVector2D>& UVs)
 {
 	// ===================================================================
-	// SIMPLE RECTANGULAR 2x6 PRISM tilted at pitch angle.
-	// No birdsmouth or plumb cuts — get the basic shape rendering first.
-	// Cuts will be added incrementally once this renders correctly.
+	// 2x6 box with pitch BAKED into vertex positions.
+	// The mesh slopes from origin down to (TotalHoriz, 0, -TotalRise).
+	// This matches the socket coordinate system exactly:
+	//   RidgeSocket at (0, 0, 0)
+	//   BirdsmouthSocket at (RunDistanceCm, 0, -Rise)
+	//   TailSocket at (TotalHoriz, 0, -TailRise)
 	//
 	// Local space:
-	//   Origin = ridge end (top of slope)
-	//   Slope runs from origin downward toward +X
-	//   Y = rafter thickness (+-HalfWidth)
-	//   Z = vertical
+	//   Origin = ridge end (center of cross-section at ridge)
+	//   +X = horizontal toward wall/tail
+	//   -Z = downward (gravity)
+	//   Y  = rafter thickness (1.5" = 3.81cm)
+	//
+	// Cross-section is perpendicular to the slope direction.
 	// ===================================================================
+
+	float HalfW = RafterWidth / 2.0f;  // 1.905cm (thickness)
+	float HalfD = RafterDepth / 2.0f;  // 6.985cm (depth)
 
 	float PitchAngle = GetPitchAngleRadians();
 	float CosA = FMath::Cos(PitchAngle);
 	float SinA = FMath::Sin(PitchAngle);
 
-	float HalfW = RafterWidth / 2.0f;  // 1.905cm
-	float D     = RafterDepth;          // 13.97cm
+	// Direction vectors in the XZ plane
+	FVector SlopeDir(CosA, 0.0f, -SinA);    // Along the slope (ridge toward tail)
+	FVector SlopePerp(SinA, 0.0f, CosA);    // Perpendicular to slope (toward roof surface)
+	FVector YDir(0.0f, 1.0f, 0.0f);         // Thickness direction
 
-	// Along-slope direction vectors
-	FVector SlopeDir(CosA, 0.0f, -SinA);     // Downhill along the slope
-	FVector SlopePerp(-SinA, 0.0f, -CosA);   // Perpendicular into rafter depth
-
-	// Total slope length from ridge to tail (including overhang)
+	// Slope length from ridge to tail (including overhang)
 	float TotalHoriz = RunDistanceCm + OverhangCm;
 	float SlopeLen = TotalHoriz / CosA;
 
-	// Four profile corners (side view, XZ plane):
-	//   RidgeTop ---slope---> TailTop
-	//      |                     |
-	//   RidgeBot --slope---> TailBot
-	FVector RidgeTop = FVector::ZeroVector;
-	FVector RidgeBot = RidgeTop + SlopePerp * D;
-	FVector TailTop  = RidgeTop + SlopeDir * SlopeLen;
-	FVector TailBot  = RidgeBot + SlopeDir * SlopeLen;
-
-	// ===================================================================
-	// Build the box: 6 faces, each with 4 unique vertices (for correct
-	// per-face flat normals).  Total = 24 vertices, 12 triangles.
-	// ===================================================================
-
-	// Helper: add a quad with correct outward normal.
-	// Vertices A-B-C-D in CCW order when viewed from outside (UE5 front face).
+	// Helper: add a quad with correct outward normal
 	auto AddFace = [&](FVector A, FVector B, FVector C, FVector Dpt, FVector Normal)
 	{
 		int32 Base = Vertices.Num();
@@ -307,62 +298,42 @@ void ARafter::BuildRafterGeometry(
 		Vertices.Add(B); Normals.Add(Normal); UVs.Add(FVector2D(1, 0));
 		Vertices.Add(C); Normals.Add(Normal); UVs.Add(FVector2D(1, 1));
 		Vertices.Add(Dpt); Normals.Add(Normal); UVs.Add(FVector2D(0, 1));
-		// Two CCW triangles: A-B-C and A-C-D
 		Triangles.Add(Base + 0); Triangles.Add(Base + 1); Triangles.Add(Base + 2);
 		Triangles.Add(Base + 0); Triangles.Add(Base + 2); Triangles.Add(Base + 3);
 	};
 
-	FVector Y = FVector(0.0f, HalfW, 0.0f);
+	// 8 box corners built from slope-aligned cross-section
+	FVector RidgeCenter = FVector::ZeroVector;
+	FVector TailCenter = SlopeDir * SlopeLen;
 
-	// 8 box corners (L = -Y side, R = +Y side)
-	FVector RTL = RidgeTop - Y;  // Ridge Top Left
-	FVector RTR = RidgeTop + Y;  // Ridge Top Right
-	FVector RBL = RidgeBot - Y;  // Ridge Bottom Left
-	FVector RBR = RidgeBot + Y;  // Ridge Bottom Right
-	FVector TTL = TailTop - Y;   // Tail Top Left
-	FVector TTR = TailTop + Y;   // Tail Top Right
-	FVector TBL = TailBot - Y;   // Tail Bottom Left
-	FVector TBR = TailBot + Y;   // Tail Bottom Right
+	// Ridge end corners
+	FVector v0 = RidgeCenter - YDir * HalfW - SlopePerp * HalfD; // bottom-left
+	FVector v3 = RidgeCenter + YDir * HalfW - SlopePerp * HalfD; // bottom-right
+	FVector v4 = RidgeCenter - YDir * HalfW + SlopePerp * HalfD; // top-left
+	FVector v7 = RidgeCenter + YDir * HalfW + SlopePerp * HalfD; // top-right
 
-	// Face normals
-	FVector NormTop    = -SlopePerp;                  // Top face (roof surface side)
-	FVector NormBot    = SlopePerp;                   // Bottom face (ceiling side)
-	FVector NormLeft   = FVector(0.0f, -1.0f, 0.0f); // Left face (-Y)
-	FVector NormRight  = FVector(0.0f, 1.0f, 0.0f);  // Right face (+Y)
-	FVector NormRidge  = -SlopeDir;                   // Ridge end face
-	FVector NormTail   = SlopeDir;                    // Tail end face
+	// Tail end corners
+	FVector v1 = TailCenter - YDir * HalfW - SlopePerp * HalfD;
+	FVector v2 = TailCenter + YDir * HalfW - SlopePerp * HalfD;
+	FVector v5 = TailCenter - YDir * HalfW + SlopePerp * HalfD;
+	FVector v6 = TailCenter + YDir * HalfW + SlopePerp * HalfD;
 
-	// Top face: RTL -> RTR -> TTR -> TTL  (viewed from above the roof)
-	AddFace(RTL, RTR, TTR, TTL, NormTop);
+	// 6 faces with slope-aligned normals
+	AddFace(v4, v5, v6, v7, SlopePerp);      // Top (roof surface)
+	AddFace(v1, v0, v3, v2, -SlopePerp);     // Bottom
+	AddFace(v0, v1, v5, v4, -YDir);          // Left (-Y)
+	AddFace(v2, v3, v7, v6, YDir);           // Right (+Y)
+	AddFace(v3, v0, v4, v7, -SlopeDir);      // Ridge end
+	AddFace(v1, v2, v6, v5, SlopeDir);       // Tail end
 
-	// Bottom face: TBL -> TBR -> RBR -> RBL  (viewed from below)
-	AddFace(TBL, TBR, RBR, RBL, NormBot);
+	// No component rotation needed — pitch is in the vertices
+	if (ProceduralMesh)
+	{
+		ProceduralMesh->SetRelativeRotation(FRotator::ZeroRotator);
+	}
 
-	// Left face (-Y): RTL -> TTL -> TBL -> RBL
-	AddFace(RTL, TTL, TBL, RBL, NormLeft);
-
-	// Right face (+Y): TTR -> RTR -> RBR -> TBR
-	AddFace(TTR, RTR, RBR, TBR, NormRight);
-
-	// Ridge end face: RTR -> RTL -> RBL -> RBR
-	AddFace(RTR, RTL, RBL, RBR, NormRidge);
-
-	// Tail end face: TTL -> TTR -> TBR -> TBL
-	AddFace(TTL, TTR, TBR, TBL, NormTail);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("Rafter MESH DEBUG:"
-		     "\n  pitch=%.1f/12 (%.1fdeg) slopeLen=%.1fcm run=%.1fcm overhang=%.1fcm"
-		     "\n  SlopeDir=(%.3f, %.3f, %.3f)  SlopePerp=(%.3f, %.3f, %.3f)"
-		     "\n  RidgeTop=(%.1f, %.1f, %.1f)  RidgeBot=(%.1f, %.1f, %.1f)"
-		     "\n  TailTop=(%.1f, %.1f, %.1f)   TailBot=(%.1f, %.1f, %.1f)"
-		     "\n  Verts=%d  Tris=%d"),
+	UE_LOG(LogTemp, Log,
+		TEXT("Rafter mesh: pitch=%.1f/12 (%.1fdeg) slopeLen=%.1fcm run=%.1fcm overhang=%.1fcm Verts=%d Tris=%d"),
 		PitchRatio, GetPitchAngleDegrees(), SlopeLen, RunDistanceCm, OverhangCm,
-		SlopeDir.X, SlopeDir.Y, SlopeDir.Z,
-		SlopePerp.X, SlopePerp.Y, SlopePerp.Z,
-		RidgeTop.X, RidgeTop.Y, RidgeTop.Z,
-		RidgeBot.X, RidgeBot.Y, RidgeBot.Z,
-		TailTop.X, TailTop.Y, TailTop.Z,
-		TailBot.X, TailBot.Y, TailBot.Z,
 		Vertices.Num(), Triangles.Num() / 3);
 }

@@ -49,7 +49,7 @@ ADoorFrame::ADoorFrame()
 	LeftPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("LeftPostCollision"));
 	LeftPostCollision->SetupAttachment(SceneRoot);
 	LeftPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	LeftPostCollision->SetHiddenInGame(false);
+	LeftPostCollision->SetHiddenInGame(true);
 	LeftPostCollision->ShapeColor = FColor::Cyan;
 	LeftPostCollision->SetLineThickness(2.0f);
 	LeftPostCollision->SetBoxExtent(FVector(DefSideWidth / 2.0f, DefDepth / 2.0f, DefHalfH));
@@ -58,7 +58,7 @@ ADoorFrame::ADoorFrame()
 	RightPostCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("RightPostCollision"));
 	RightPostCollision->SetupAttachment(SceneRoot);
 	RightPostCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	RightPostCollision->SetHiddenInGame(false);
+	RightPostCollision->SetHiddenInGame(true);
 	RightPostCollision->ShapeColor = FColor::Yellow;
 	RightPostCollision->SetLineThickness(2.0f);
 	RightPostCollision->SetBoxExtent(FVector(DefSideWidth / 2.0f, DefDepth / 2.0f, DefHalfH));
@@ -67,13 +67,13 @@ ADoorFrame::ADoorFrame()
 	HeaderCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("HeaderCollision"));
 	HeaderCollision->SetupAttachment(SceneRoot);
 	HeaderCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	HeaderCollision->SetHiddenInGame(false);
+	HeaderCollision->SetHiddenInGame(true);
 	HeaderCollision->ShapeColor = FColor::Magenta;
 	HeaderCollision->SetLineThickness(2.0f);
 	HeaderCollision->SetBoxExtent(FVector(FrameOverallWidth / 2.0f, DefDepth / 2.0f, DefBandH / 2.0f));
 	HeaderCollision->SetRelativeLocation(FVector(0.0f, 0.0f, DefBandCtrZ));
 
-	bAutoSizeCollisionBoxes = true;
+	bAutoSizeCollisionBoxes = false;
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 }

@@ -13,6 +13,7 @@
 #include "GameFramework/PlayerController.h"
 #include "SnapRuleTable.h"
 #include "RectangleBuilder.h"
+#include "ProceduralMeshComponent.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -147,6 +148,9 @@ bool ABuildablePiece::GetSocketByNameSafe(FName SocketName, FConstructionSocket&
 
 void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 {
+	// Check for procedural mesh (rafter uses this instead of static mesh)
+	UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
+
 	if (bIsPreview)
 	{
 		PieceState = EPieceState::Preview;
@@ -162,6 +166,12 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			{
 				MeshComponent->SetMaterial(0, DynamicMaterial);
 			}
+		}
+
+		// Also apply preview material to procedural mesh
+		if (ProcMesh && DynamicMaterial)
+		{
+			ProcMesh->SetMaterial(0, DynamicMaterial);
 		}
 	}
 	else
@@ -179,6 +189,12 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			{
 				MeshComponent->SetMaterial(0, OriginalMeshMaterial);
 			}
+		}
+
+		// Restore procedural mesh material when placed
+		if (ProcMesh && OriginalMeshMaterial)
+		{
+			ProcMesh->SetMaterial(0, OriginalMeshMaterial);
 		}
 	}
 
@@ -1116,6 +1132,74 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
 			}
 
+			// Ridge post flush alignment: shift post perpendicular to plate
+			// so the outer face of the 3-ply 2x6 assembly (11.43cm) is flush
+			// with the outer face of the double top plate (8.89cm).
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
+				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
+				TargetPiece)
+			{
+				const float PostHalfWidth = 11.43f / 2.0f;  // 5.715cm — half of 3×2x6
+				const float PlateHalfDepth = 8.89f / 2.0f;  // 4.445cm — half of 2x4 depth
+				const float FlushShift = PostHalfWidth - PlateHalfDepth; // 1.27cm
+
+				// The plate's local Y (right vector) is the through-wall direction.
+				// Find building center from rim boards to determine "inward".
+				FVector FrameCenter = FVector::ZeroVector;
+				int32 RimCount = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenter += P->GetActorLocation();
+						RimCount++;
+					}
+				}
+				if (RimCount > 0)
+				{
+					FrameCenter /= RimCount;
+					FVector PlateRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
+					FVector ToCenter = FrameCenter - CandidateLocation;
+					ToCenter.Z = 0.0f;
+					float DotY = FVector::DotProduct(ToCenter, PlateRight);
+					if (FMath::Abs(DotY) > KINDA_SMALL_NUMBER)
+					{
+						// Shift post inward so its outer face aligns with plate outer face
+						CandidateLocation += PlateRight * FMath::Sign(DotY) * FlushShift;
+					}
+				}
+
+				UE_LOG(LogTemp, Log,
+					TEXT("RidgePost flush: shifted %.2fcm inward to align outer face with plate"),
+					FlushShift);
+			}
+
+			// Rafter ridge end → ridge board side socket:
+			// Orient the rafter perpendicular to the ridge board, facing away from it.
+			// Left side sockets (_L) face -90° from ridge yaw, right side (_R) face +90°.
+			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
+				TgtSocketType == EConstructionSocketType::RidgeBoard_Side &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+
+				FRotator RidgeRot = TargetPiece->GetActorRotation();
+				FString TargetSocketStr = TargetSocketName.ToString();
+				if (TargetSocketStr.Contains(TEXT("_L")))
+				{
+					CandidateRotation.Yaw = RidgeRot.Yaw - 90.0f;
+				}
+				else
+				{
+					CandidateRotation.Yaw = RidgeRot.Yaw + 90.0f;
+				}
+
+				UE_LOG(LogTemp, Log,
+					TEXT("Rafter snap: ridge=%s side=%s → yaw=%.1f"),
+					*TargetPiece->GetName(), *TargetSocketStr, CandidateRotation.Yaw);
+			}
+
 			// Plywood XY alignment: apply pre-computed slot position
 			// (computed once before the loop using frame centroid as origin)
 			if (bHavePlywoodSlot &&
@@ -1600,7 +1684,9 @@ void ABuildablePiece::SetPreviewColor(const FLinearColor& Color)
 
 void ABuildablePiece::UpdateVisualFeedback()
 {
-	if (!MeshComponent) return;
+	// Allow pieces with only a ProceduralMeshComponent (like rafters)
+	UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
+	if (!MeshComponent && !ProcMesh) return;
 
 	switch (PieceState)
 	{
@@ -1618,7 +1704,17 @@ void ABuildablePiece::UpdateVisualFeedback()
 		// Try setting opacity for translucent preview materials
 		DynamicMaterial->SetScalarParameterValue(FName("Opacity"), TargetColor.A);
 
-		MeshComponent->SetRenderCustomDepth(true);
+		if (MeshComponent)
+		{
+			MeshComponent->SetRenderCustomDepth(true);
+		}
+
+		// Also apply preview material to ProceduralMeshComponent (rafter)
+		if (ProcMesh)
+		{
+			ProcMesh->SetMaterial(0, DynamicMaterial);
+			ProcMesh->SetRenderCustomDepth(true);
+		}
 		break;
 	}
 
