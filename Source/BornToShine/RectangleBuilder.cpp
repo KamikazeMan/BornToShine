@@ -2038,6 +2038,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             if (!DTP) continue;
 
             float PlateTopZ = Piece->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
+            UE_LOG(LogTemp, Error, TEXT(">>> DTP Z CALC: DTP [%s] actorZ=%.2f, BoardHeight=%.2f, topZ=%.2f"),
+                *DTP->GetName(), Piece->GetActorLocation().Z, DTP->BoardHeight, PlateTopZ);
             if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
             {
                 DoubleTopPlateTopZ = PlateTopZ;
@@ -2171,19 +2173,18 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     // Set default height (player can adjust with scroll wheel before placing)
     Post->SetPostHeightCm(Suggestion.PostHeightCm);
 
-    // Position: Use snap pipeline XY (includes flush offset from DetectSnapCandidates)
-    // but suggestion Z (correctly computed from DTP top surface).
-    // The snap pipeline's Z may be wrong (DTP_End socket at Z=0 = mesh center,
-    // not top), while the suggestion Z accounts for the actual DTP top.
+    // Position: Use snap pipeline position (includes flush offset from
+    // DetectSnapCandidates AND correct DTP surface Z from the snap system).
+    // The suggestion Z was computed incorrectly (7.6cm too high), while
+    // the snap system already found the correct DTP top surface.
     if (Post->IsPlacementValid())
     {
-        // Keep snap pipeline XY (flush offset preserved), use suggestion Z
+        // Keep full snap position — XY has flush offset, Z is correct DTP surface
         FVector SnappedPos = Post->GetActorLocation();
-        Post->SetActorLocation(FVector(SnappedPos.X, SnappedPos.Y, Suggestion.Position.Z));
         Post->SetActorRotation(Suggestion.Rotation);
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post SNAP XY (%.1f, %.1f) + SUGGESTION Z (%.1f) — snap Z was %.1f"),
-            SnappedPos.X, SnappedPos.Y, Suggestion.Position.Z, SnappedPos.Z);
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SNAP position (%.1f, %.1f, %.1f) — suggestion Z was %.1f"),
+            SnappedPos.X, SnappedPos.Y, SnappedPos.Z, Suggestion.Position.Z);
     }
     else
     {
