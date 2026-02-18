@@ -1179,9 +1179,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
 				TargetPiece)
 			{
-				const float PostWidth = 11.43f;  // 3 x 1.5" = 4.5"
-				const float PlateWidth = 8.89f;   // 3.5" (2x4 face)
-				const float FlushOffset = (PostWidth - PlateWidth) / 2.0f; // 1.27cm
+				const float PostWidthVal = 11.43f;  // 3 x 1.5" = 4.5"
+				const float PlateWidthVal = 8.89f;   // 3.5" (2x4 face)
+				const float FlushOffset = (PostWidthVal - PlateWidthVal) / 2.0f; // 1.27cm
 
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
@@ -1200,14 +1200,26 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					ToCenter.Z = 0.0f;
 					FVector PostRight = CandidateRotation.RotateVector(FVector::RightVector);
 					float DotPerp = FVector::DotProduct(ToCenter, PostRight);
+
+					FVector BeforeFlush = CandidateLocation;
+
 					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
 					{
-						CandidateLocation += PostRight * FMath::Sign(DotPerp) * FlushOffset;
+						// Sign FLIPPED: negative sign shifts post INWARD (toward building center)
+						// so the outer face (away from center) aligns with the DTP outer face.
+						CandidateLocation -= PostRight * FMath::Sign(DotPerp) * FlushOffset;
 					}
 
-					UE_LOG(LogTemp, Log,
-						TEXT("RidgePost flush: shifted %.2fcm toward center (DotPerp=%.2f)"),
-						FlushOffset, DotPerp);
+					UE_LOG(LogTemp, Warning,
+						TEXT("RidgePost flush: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
+						     "FrameCenter=(%.1f,%.1f) PostRight=(%.2f,%.2f) DotPerp=%.2f FlushOffset=%.2f RimCount=%d"),
+						*TargetPiece->GetName(),
+						TargetPiece->GetActorLocation().X, TargetPiece->GetActorLocation().Y, TargetPiece->GetActorLocation().Z,
+						BeforeFlush.X, BeforeFlush.Y, BeforeFlush.Z,
+						CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z,
+						FrameCenter.X, FrameCenter.Y,
+						PostRight.X, PostRight.Y,
+						DotPerp, FlushOffset, RimCount);
 				}
 			}
 
@@ -1393,6 +1405,12 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	{
 		FinalRotation.Roll = 0.0f;
 
+		UE_LOG(LogTemp, Error, TEXT(">>> RAFTER APPLYSNAP ENTERED: TargetPiece=%s TargetSocket=%s SourceSocket=%s Rot=P%.1f Y%.1f"),
+			Candidate.TargetPiece ? *Candidate.TargetPiece->GetName() : TEXT("null"),
+			*Candidate.TargetSocketName.ToString(),
+			*Candidate.SourceSocketName.ToString(),
+			FinalRotation.Pitch, FinalRotation.Yaw);
+
 		// Set RunDistanceCm and PitchRatio from the actual building geometry
 		// (ridge post stores BuildingHalfWidthCm from the suggestion system).
 		// Without this, RunDistanceCm stays hardcoded at 121.92cm (4ft default).
@@ -1416,10 +1434,15 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				}
 			}
 
+			UE_LOG(LogTemp, Error, TEXT(">>> RAFTER RIDGE POST SEARCH: Found %d posts, NearestPost=%s, BestDist=%.1f"),
+				FoundPosts.Num(), NearestPost ? *NearestPost->GetName() : TEXT("null"), BestDist);
+
 			if (NearestPost && NearestPost->BuildingHalfWidthCm > 0.0f)
 			{
 				float ActualRun = NearestPost->BuildingHalfWidthCm;
 				float ActualPitch = NearestPost->GetPitchRatio();
+				UE_LOG(LogTemp, Error, TEXT(">>> RAFTER SETTING RunDistanceCm=%.1f from RidgePost HalfWidth=%.1f, PitchRatio=%.1f"),
+					ActualRun, NearestPost->BuildingHalfWidthCm, ActualPitch);
 				if (!FMath::IsNearlyEqual(ActualRun, RafterSelf->RunDistanceCm, 0.1f) ||
 					!FMath::IsNearlyEqual(ActualPitch, RafterSelf->PitchRatio, 0.01f))
 				{
@@ -1688,6 +1711,26 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 700;
 	}
 
+	// Rafter ridge end to ridge board side (HIGHEST for rafters — must always beat birdsmouth snaps)
+	if ((SocketA == EConstructionSocketType::Rafter_Ridge &&
+		 SocketB == EConstructionSocketType::RidgeBoard_Side) ||
+		(SocketA == EConstructionSocketType::RidgeBoard_Side &&
+		 SocketB == EConstructionSocketType::Rafter_Ridge))
+	{
+		return 900;
+	}
+
+	// Rafter birdsmouth to plate (LOW — only used for validation, never for placement)
+	if ((SocketA == EConstructionSocketType::Rafter_BirdsMouth &&
+		 (SocketB == EConstructionSocketType::TopPlate_Top ||
+		  SocketB == EConstructionSocketType::DoubleTopPlate_End)) ||
+		((SocketA == EConstructionSocketType::TopPlate_Top ||
+		  SocketA == EConstructionSocketType::DoubleTopPlate_End) &&
+		 SocketB == EConstructionSocketType::Rafter_BirdsMouth))
+	{
+		return 100;
+	}
+
 	// Ridge post bottom to double top plate / top plate top
 	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
 		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
@@ -1810,6 +1853,20 @@ bool ABuildablePiece::IsPlacementValid() const
 
 	if (PieceType != EPieceType::Foundation && !bIsSnapped)
 		return false;
+
+	// Rafters MUST be snapped to a ridge board side socket.
+	// Without this, a birdsmouth→DTP snap could place the rafter with P=0 Y=0
+	// (no pitch, no yaw) — a flat board sitting on the wall instead of sloping from ridge.
+	if (PieceType == EPieceType::Rafter)
+	{
+		if (CurrentSnapCandidate.TargetSocketType != EConstructionSocketType::RidgeBoard_Side ||
+			CurrentSnapCandidate.SourceSocketType != EConstructionSocketType::Rafter_Ridge)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Rafter placement BLOCKED: not snapped to ridge board side (src=%d tgt=%d)"),
+				(int32)CurrentSnapCandidate.SourceSocketType, (int32)CurrentSnapCandidate.TargetSocketType);
+			return false;
+		}
+	}
 
 	return true;
 }
