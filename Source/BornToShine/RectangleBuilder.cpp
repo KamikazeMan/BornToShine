@@ -2220,11 +2220,10 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
         Suggestion.Rotation.Yaw, Suggestion.PostHeightCm,
         *Post->GetPitchDisplayString());
 
-    // Ridge post Z gap diagnostic: compare post bottom to DTP top
+    // Ridge post Z gap diagnostic: compare actual post Z to suggestion Z
     float PostActorZ = ActualPos.Z;
-    float DTPTopZ = Suggestion.Position.Z; // suggestion Z = DoubleTopPlateTopZ
-    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST Z: PostBottom=%.2f, DTP top=%.2f, gap=%.2f"),
-        PostActorZ, DTPTopZ, PostActorZ - DTPTopZ);
+    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST Z: PostActorZ=%.2f (snap), SuggestionZ=%.2f (wrong), diff=%.2f"),
+        PostActorZ, Suggestion.Position.Z, PostActorZ - Suggestion.Position.Z);
 
     return true;
 }
