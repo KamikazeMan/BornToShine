@@ -74,11 +74,14 @@ void ADoubleTopPlate::CreateBottomSockets()
 void ADoubleTopPlate::CreateEndSockets()
 {
 	float HalfLen = BoardLength / 2.0f;
+	// End sockets at DTP top surface so ridge post bottoms land on
+	// top of the plate, not at the plate center (which was 3.81-4.4cm too high).
+	float EndSocketZ = BoardHeight / 2.0f;
 
 	FConstructionSocket LeftEnd;
 	LeftEnd.SocketName = FName(TEXT("DblTopEnd_Left"));
 	LeftEnd.SocketType = EConstructionSocketType::DoubleTopPlate_End;
-	LeftEnd.LocalPosition = FVector(-HalfLen, 0.0f, 0.0f);
+	LeftEnd.LocalPosition = FVector(-HalfLen, 0.0f, EndSocketZ);
 	LeftEnd.LocalRotation = FRotator(0.0f, 180.0f, 0.0f);
 	LeftEnd.bIsOccupied = false;
 	Sockets.Add(LeftEnd);
@@ -86,7 +89,7 @@ void ADoubleTopPlate::CreateEndSockets()
 	FConstructionSocket RightEnd;
 	RightEnd.SocketName = FName(TEXT("DblTopEnd_Right"));
 	RightEnd.SocketType = EConstructionSocketType::DoubleTopPlate_End;
-	RightEnd.LocalPosition = FVector(HalfLen, 0.0f, 0.0f);
+	RightEnd.LocalPosition = FVector(HalfLen, 0.0f, EndSocketZ);
 	RightEnd.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	RightEnd.bIsOccupied = false;
 	Sockets.Add(RightEnd);
