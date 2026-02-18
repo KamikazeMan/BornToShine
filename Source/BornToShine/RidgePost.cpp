@@ -22,8 +22,8 @@ ARidgePost::ARidgePost()
 	// Default post height: 60.96cm (24") — gives 6/12 pitch on an 8ft-wide building
 	PostHeight = 60.96f;
 
-	// Default building half-width: 4ft = 121.92cm (for 8ft wide building)
-	BuildingHalfWidthCm = 121.92f;
+	// No default width — must be set by suggestion system before placement
+	BuildingHalfWidthCm = 0.0f;
 
 	// Scroll wheel: 1 inch per tick
 	HeightIncrementCm = 2.54f;

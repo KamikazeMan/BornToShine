@@ -967,6 +967,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetSocketName.ToString());
 			}
 
+			// Ridge post: block snap if no valid width set (must come from suggestion)
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom)
+			{
+				const ARidgePost* Post = Cast<ARidgePost>(this);
+				if (Post && Post->BuildingHalfWidthCm <= 0.0f)
+				{
+					continue; // No valid width — skip until suggestion sets it
+				}
+			}
+
 			// Ridge post snaps to double top plate — orient along wall, upright
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
 				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
