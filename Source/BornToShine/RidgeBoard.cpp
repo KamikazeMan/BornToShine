@@ -74,20 +74,18 @@ void ARidgeBoard::CreateEndSockets()
 
 void ARidgeBoard::CreateSideSockets()
 {
-	float HalfLen = BoardLength / 2.0f;
-
-	// Create side sockets at 16" OC (40.64cm) intervals for rafter attachment
-	// Sockets on both sides (left face and right face)
+	// Create side sockets at 16" OC (40.64cm) intervals for rafter attachment.
+	// Socket count scales with board length — works for any size building.
 	const float Spacing = 40.64f; // 16" OC
+	int32 NumSockets = FMath::Max(2, FMath::FloorToInt(BoardLength / Spacing) + 1);
 
-	int32 NumSpaces = FMath::FloorToInt(BoardLength / Spacing);
-	// Start 16" from one end, place at regular intervals
-	float StartOffset = -HalfLen + Spacing;
+	// Center the socket positions on the board
+	float TotalSpan = (NumSockets - 1) * Spacing;
+	float StartX = -TotalSpan / 2.0f;
 
-	for (int32 i = 0; i < NumSpaces; i++)
+	for (int32 i = 0; i < NumSockets; i++)
 	{
-		float XPos = StartOffset + i * Spacing;
-		if (XPos > HalfLen - Spacing * 0.5f) break;
+		float XPos = StartX + i * Spacing;
 
 		// Left side (negative Y)
 		FConstructionSocket LeftSide;
