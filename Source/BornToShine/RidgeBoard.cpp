@@ -221,8 +221,11 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketType == EConstructionSocketType::RidgeBoard_Side)
 		{
-			// Rafter center snaps to ridge board top surface
-			Socket.LocalPosition.Z = MeshTopZ;
+			// Rafter mesh bottom is at actor origin, top at +RafterDepth.
+			// Place snap point so rafter top aligns with ridge board top:
+			//   SnapZ + RafterDepth = MeshTopZ  →  SnapZ = MeshTopZ - RafterDepth
+			const float RafterDepth = 13.97f; // 5.5" = 13.97cm
+			Socket.LocalPosition.Z = MeshTopZ - RafterDepth;
 		}
 	}
 
