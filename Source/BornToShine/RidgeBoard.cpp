@@ -83,6 +83,12 @@ void ARidgeBoard::CreateSideSockets()
 	float TotalSpan = (NumSockets - 1) * Spacing;
 	float StartX = -TotalSpan / 2.0f;
 
+	// Rafter mesh bottom is at actor origin (Z=0), top at +RafterDepth.
+	// We want rafter top flush with ridge board top, so:
+	//   SnapZ + RafterDepth = RidgeBoardHalfHeight  →  SnapZ = HalfHeight - RafterDepth
+	const float RafterDepth = 13.97f; // 5.5" = 13.97cm
+	float SideSocketLocalZ = (BoardHeight / 2.0f) - RafterDepth; // 9.21 - 13.97 = -4.76cm
+
 	for (int32 i = 0; i < NumSockets; i++)
 	{
 		float XPos = StartX + i * Spacing;
@@ -91,7 +97,7 @@ void ARidgeBoard::CreateSideSockets()
 		FConstructionSocket LeftSide;
 		LeftSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_L%d"), i));
 		LeftSide.SocketType = EConstructionSocketType::RidgeBoard_Side;
-		LeftSide.LocalPosition = FVector(XPos, -BoardWidth / 2.0f, 0.0f);
+		LeftSide.LocalPosition = FVector(XPos, -BoardWidth / 2.0f, SideSocketLocalZ);
 		LeftSide.LocalRotation = FRotator(0.0f, -90.0f, 0.0f); // Facing left
 		LeftSide.Orientation = ESocketOrientation::Horizontal;
 		LeftSide.bIsOccupied = false;
@@ -101,7 +107,7 @@ void ARidgeBoard::CreateSideSockets()
 		FConstructionSocket RightSide;
 		RightSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_R%d"), i));
 		RightSide.SocketType = EConstructionSocketType::RidgeBoard_Side;
-		RightSide.LocalPosition = FVector(XPos, BoardWidth / 2.0f, 0.0f);
+		RightSide.LocalPosition = FVector(XPos, BoardWidth / 2.0f, SideSocketLocalZ);
 		RightSide.LocalRotation = FRotator(0.0f, 90.0f, 0.0f); // Facing right
 		RightSide.Orientation = ESocketOrientation::Horizontal;
 		RightSide.bIsOccupied = false;
