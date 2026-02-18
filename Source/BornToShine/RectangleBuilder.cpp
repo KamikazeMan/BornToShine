@@ -1997,6 +1997,9 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     RectMin -= FVector(Margin, Margin, 0);
     RectMax += FVector(Margin, Margin, 0);
 
+    UE_LOG(LogTemp, Error, TEXT(">>> BOUNDING BOX: X=[%.1f, %.1f] Y=[%.1f, %.1f]"),
+        RectMin.X, RectMax.X, RectMin.Y, RectMax.Y);
+
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
     int32 DTPCount = 0;
@@ -2011,12 +2014,15 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         {
             if (!Piece) continue;
             FVector Pos = Piece->GetActorLocation();
-            // Only include plates within THIS building's footprint
-            if (Pos.X < RectMin.X || Pos.X > RectMax.X ||
-                Pos.Y < RectMin.Y || Pos.Y > RectMax.Y)
-                continue;
-
+            bool bInside = (Pos.X >= RectMin.X && Pos.X <= RectMax.X &&
+                            Pos.Y >= RectMin.Y && Pos.Y <= RectMax.Y);
             float PerpDist = FVector::DotProduct(Pos, PerpDir);
+            UE_LOG(LogTemp, Error, TEXT(">>> TOP PLATE [%s] pos=(%.1f,%.1f) perp=%.1f %s"),
+                *Piece->GetName(), Pos.X, Pos.Y, PerpDist,
+                bInside ? TEXT("INCLUDED") : TEXT("FILTERED OUT"));
+
+            if (!bInside) continue;
+
             MinPerp = FMath::Min(MinPerp, PerpDist);
             MaxPerp = FMath::Max(MaxPerp, PerpDist);
             DTPCount++;
