@@ -84,8 +84,12 @@ float ARafter::GetSlopeLengthCm() const
 	float RiseTotal = (PitchRatio / 12.0f) * RunDistanceCm;
 	float MainSlope = FMath::Sqrt(RunDistanceCm * RunDistanceCm + RiseTotal * RiseTotal);
 
-	// Add overhang along the slope
+	// Overhang along the slope, trimmed so rafter tail ends behind fascia outer face.
+	// Fascia board (1x8) is 0.75" = 1.905cm thick, nailed to the rafter tail.
+	// Subtract that thickness so the rafter end-grain doesn't poke past the fascia.
 	float OverhangSlope = OverhangCm / FMath::Cos(GetPitchAngleRadians());
+	const float FasciaThickness = 1.905f; // 3/4" fascia board
+	OverhangSlope = FMath::Max(0.0f, OverhangSlope - FasciaThickness);
 
 	return MainSlope + OverhangSlope;
 }
@@ -130,14 +134,12 @@ FVector ARafter::GetTailEndWorldPosition() const
 
 void ARafter::CreateRidgeEndSocket()
 {
-	float SlopeLen = GetSlopeLengthCm();
-	float HalfSlope = SlopeLen / 2.0f;
-
-	// Ridge end at the -X end of the board
+	// Ridge end at the actor origin (attachment point on ridge board).
+	// Actor is placed at the ridge board surface; board extends in +X toward tail.
 	FConstructionSocket RidgeSocket;
 	RidgeSocket.SocketName = FName(TEXT("RafterRidge"));
 	RidgeSocket.SocketType = EConstructionSocketType::Rafter_Ridge;
-	RidgeSocket.LocalPosition = FVector(-HalfSlope, 0.0f, 0.0f);
+	RidgeSocket.LocalPosition = FVector(0.0f, 0.0f, 0.0f);
 	RidgeSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	RidgeSocket.Orientation = ESocketOrientation::Any;
 	RidgeSocket.bIsOccupied = false;
@@ -146,20 +148,15 @@ void ARafter::CreateRidgeEndSocket()
 
 void ARafter::CreateBirdsmouthSocket()
 {
-	float SlopeLen = GetSlopeLengthCm();
-	float HalfSlope = SlopeLen / 2.0f;
-
 	// Main slope from ridge to wall (without overhang)
 	float RiseTotal = (PitchRatio / 12.0f) * RunDistanceCm;
 	float MainSlope = FMath::Sqrt(RunDistanceCm * RunDistanceCm + RiseTotal * RiseTotal);
 
-	// Birdsmouth is MainSlope from the ridge end along the board
-	float BirdsmouthX = -HalfSlope + MainSlope;
-
+	// Birdsmouth is MainSlope distance from ridge along the board (+X direction)
 	FConstructionSocket BirdsmouthSocket;
 	BirdsmouthSocket.SocketName = FName(TEXT("RafterBirdsmouth"));
 	BirdsmouthSocket.SocketType = EConstructionSocketType::Rafter_BirdsMouth;
-	BirdsmouthSocket.LocalPosition = FVector(BirdsmouthX, 0.0f, 0.0f);
+	BirdsmouthSocket.LocalPosition = FVector(MainSlope, 0.0f, 0.0f);
 	BirdsmouthSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	BirdsmouthSocket.Orientation = ESocketOrientation::Any;
 	BirdsmouthSocket.bIsOccupied = false;
@@ -169,13 +166,12 @@ void ARafter::CreateBirdsmouthSocket()
 void ARafter::CreateTailEndSocket()
 {
 	float SlopeLen = GetSlopeLengthCm();
-	float HalfSlope = SlopeLen / 2.0f;
 
-	// Tail end at the +X end of the board
+	// Tail end at SlopeLength from ridge along +X
 	FConstructionSocket TailSocket;
 	TailSocket.SocketName = FName(TEXT("RafterTail"));
 	TailSocket.SocketType = EConstructionSocketType::Rafter_Tail;
-	TailSocket.LocalPosition = FVector(HalfSlope, 0.0f, 0.0f);
+	TailSocket.LocalPosition = FVector(SlopeLen, 0.0f, 0.0f);
 	TailSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	TailSocket.Orientation = ESocketOrientation::Any;
 	TailSocket.bIsOccupied = false;
@@ -202,12 +198,16 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Center the mesh on the SceneRoot (mesh origin assumed at center)
-	MeshComponent->SetRelativeLocation(FVector::ZeroVector);
+	// Offset mesh so the ridge end (−X end) aligns with the actor origin.
+	// The centered mesh extends from −SlopeLen/2 to +SlopeLen/2 after X-scale.
+	// Shift it +SlopeLen/2 so it goes from 0 (ridge) to +SlopeLen (tail).
+	// This way the actor origin IS the ridge attachment point — when the actor
+	// is pitched, the ridge end stays at the ridge board and the board slopes down.
+	MeshComponent->SetRelativeLocation(FVector(SlopeLen / 2.0f, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Log, TEXT("Rafter: XScale=%.3f, SlopeLength=%.1fcm, MeshDefault=%.1fcm"),
-		XScale, SlopeLen, MeshDefaultLength);
+	UE_LOG(LogTemp, Log, TEXT("Rafter: XScale=%.3f, SlopeLength=%.1fcm, MeshDefault=%.1fcm, MeshOffset=+%.1f"),
+		XScale, SlopeLen, MeshDefaultLength, SlopeLen / 2.0f);
 }

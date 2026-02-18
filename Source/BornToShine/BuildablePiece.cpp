@@ -14,6 +14,7 @@
 #include "SnapRuleTable.h"
 #include "RectangleBuilder.h"
 #include "RidgeBoard.h"
+#include "RidgePost.h"
 #include "Rafter.h"
 #include "DoubleTopPlate.h"
 #include "Kismet/GameplayStatics.h"
@@ -966,6 +967,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetSocketName.ToString());
 			}
 
+			// Ridge post snaps to double top plate — orient along wall, upright
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
+				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
+				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Calculate final actor position from socket alignment
 			FVector SocketLocalOffset = Socket.LocalPosition;
 			FVector SocketWorldOffset = CandidateRotation.RotateVector(SocketLocalOffset);
@@ -1157,6 +1169,46 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				UE_LOG(LogTemp, Log,
 					TEXT("DoorFrame CENTER: Centered on plate [%s] at (%.1f, %.1f) Z=%.1f"),
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
+			}
+
+			// Ridge post flush alignment: offset inward so outer face aligns
+			// with the double top plate outer face (post is wider than plate).
+			// PostWidth=11.43cm (3x1.5"), PlateWidth=8.89cm (3.5") → 1.27cm offset.
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
+				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
+				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
+				TargetPiece)
+			{
+				const float PostWidth = 11.43f;  // 3 x 1.5" = 4.5"
+				const float PlateWidth = 8.89f;   // 3.5" (2x4 face)
+				const float FlushOffset = (PostWidth - PlateWidth) / 2.0f; // 1.27cm
+
+				FVector FrameCenter = FVector::ZeroVector;
+				int32 RimCount = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenter += P->GetActorLocation();
+						RimCount++;
+					}
+				}
+				if (RimCount > 0)
+				{
+					FrameCenter /= RimCount;
+					FVector ToCenter = FrameCenter - CandidateLocation;
+					ToCenter.Z = 0.0f;
+					FVector PostRight = CandidateRotation.RotateVector(FVector::RightVector);
+					float DotPerp = FVector::DotProduct(ToCenter, PostRight);
+					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
+					{
+						CandidateLocation += PostRight * FMath::Sign(DotPerp) * FlushOffset;
+					}
+
+					UE_LOG(LogTemp, Log,
+						TEXT("RidgePost flush: shifted %.2fcm toward center (DotPerp=%.2f)"),
+						FlushOffset, DotPerp);
+				}
 			}
 
 			// Plywood XY alignment: apply pre-computed slot position
@@ -1354,7 +1406,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Warning, TEXT("Rafter placed at Pos=%s Rot=%s"),
 			*FinalLocation.ToString(), *FinalRotation.ToString());
 
-		// Verify rafter Z = ridge board top surface (should be ~0 difference now)
+		// Verify rafter origin = ridge board top surface (ridge socket at actor origin)
 		if (Candidate.TargetPiece)
 		{
 			ARidgeBoard* RidgeBd = Cast<ARidgeBoard>(Candidate.TargetPiece);
@@ -1362,13 +1414,12 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			{
 				float RidgeBoardTopZ = RidgeBd->GetActorLocation().Z + RidgeBd->BoardHeight / 2.0f;
 				float RidgeBoardCenterZ = RidgeBd->GetActorLocation().Z;
-				UE_LOG(LogTemp, Warning, TEXT("Ridge board: centerZ=%.1f topZ=%.1f | Rafter Z=%.1f | diff from top=%.1f"),
+				UE_LOG(LogTemp, Warning, TEXT("Ridge board: centerZ=%.1f topZ=%.1f | Rafter origin Z=%.1f | diff=%.1f (should be ~0)"),
 					RidgeBoardCenterZ, RidgeBoardTopZ, FinalLocation.Z, FinalLocation.Z - RidgeBoardTopZ);
 			}
 		}
 
 		// Verify birdsmouth lands on double top plate
-		// Verify birdsmouth lands on double top plate (use socket position)
 		FVector BirdsmouthWorld = FinalLocation;
 		for (const FConstructionSocket& S : Sockets)
 		{
@@ -1563,6 +1614,17 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		SocketB == EConstructionSocketType::TopPlate_End)
 	{
 		return 700;
+	}
+
+	// Ridge post bottom to double top plate / top plate top
+	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
+		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketB == EConstructionSocketType::TopPlate_Top)) ||
+		((SocketA == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketA == EConstructionSocketType::TopPlate_Top) &&
+		 SocketB == EConstructionSocketType::RidgePost_Bottom))
+	{
+		return 800;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)
