@@ -1844,9 +1844,10 @@ bool URectangleBuilderComponent::ApplyTopPlateSuggestion(ATopPlate* Plate)
     }
     if (PlacedTopPlateCount >= TopPlateSuggestions.Num())
     {
-        // All remaining top plates were skipped — trigger next phase
+        // All remaining top plates were skipped — do NOT calculate ridge posts here.
+        // CalculateRidgePostLayout() must only be called once, after ALL 8 top plates
+        // (first + double) are physically placed via the normal path below.
         if (bAnySkipped) { Plate->SetActorLocation(LastSkipPos); Plate->SetActorRotation(LastSkipRot); }
-        CalculateRidgePostLayout();
         return false;
     }
 
