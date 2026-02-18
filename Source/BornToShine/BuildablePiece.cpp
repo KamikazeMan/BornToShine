@@ -16,6 +16,8 @@
 #include "RectangleBuilder.h"
 #include "RidgeBoard.h"
 #include "Rafter.h"
+#include "DoubleTopPlate.h"
+#include "Kismet/GameplayStatics.h"
 
 ABuildablePiece::ABuildablePiece()
 {
@@ -1365,16 +1367,16 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Warning, TEXT("Rafter placed at Pos=%s Rot=%s"),
 			*FinalLocation.ToString(), *FinalRotation.ToString());
 
-		// Verify rafter Z = ridge board top surface
+		// Verify rafter Z = ridge board top surface (should be ~0 difference now)
 		if (Candidate.TargetPiece)
 		{
 			ARidgeBoard* RidgeBd = Cast<ARidgeBoard>(Candidate.TargetPiece);
 			if (RidgeBd)
 			{
-				// Ridge board top Z = actor Z + half board height
 				float RidgeBoardTopZ = RidgeBd->GetActorLocation().Z + RidgeBd->BoardHeight / 2.0f;
-				UE_LOG(LogTemp, Warning, TEXT("Ridge board top Z = %.1f, Rafter placed at Z = %.1f, difference = %.1f"),
-					RidgeBoardTopZ, FinalLocation.Z, FinalLocation.Z - RidgeBoardTopZ);
+				float RidgeBoardCenterZ = RidgeBd->GetActorLocation().Z;
+				UE_LOG(LogTemp, Warning, TEXT("Ridge board: centerZ=%.1f topZ=%.1f | Rafter Z=%.1f | diff from top=%.1f"),
+					RidgeBoardCenterZ, RidgeBoardTopZ, FinalLocation.Z, FinalLocation.Z - RidgeBoardTopZ);
 			}
 		}
 
@@ -1387,6 +1389,21 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			FVector BirdsmouthWorld = GetActorTransform().TransformPosition(BirdsmouthLocal);
 			UE_LOG(LogTemp, Warning, TEXT("Birdsmouth world pos = %s (Z=%.1f)"),
 				*BirdsmouthWorld.ToString(), BirdsmouthWorld.Z);
+
+			// Log double top plate top Z for verification
+			TArray<AActor*> FoundPlates;
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADoubleTopPlate::StaticClass(), FoundPlates);
+			for (AActor* A : FoundPlates)
+			{
+				ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(A);
+				if (DTP)
+				{
+					float PlateTopZ = DTP->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
+					float BirdsmouthGap = BirdsmouthWorld.Z - PlateTopZ;
+					UE_LOG(LogTemp, Warning, TEXT("DoubleTopPlate '%s' top Z = %.1f, birdsmouth gap = %.1f cm"),
+						*DTP->GetName(), PlateTopZ, BirdsmouthGap);
+				}
+			}
 		}
 	}
 

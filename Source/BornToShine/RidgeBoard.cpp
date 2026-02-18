@@ -208,7 +208,7 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 
 	BoardHeight = ActualHeight;
 
-	// Adjust end sockets to mesh center Z
+	// Adjust end sockets to mesh center Z (they sit in ridge post pockets)
 	for (FConstructionSocket& Socket : Sockets)
 	{
 		if (Socket.SocketType == EConstructionSocketType::RidgeBoard_End)
@@ -217,7 +217,11 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketType == EConstructionSocketType::RidgeBoard_Side)
 		{
-			Socket.LocalPosition.Z = MeshCenterZ;
+			// Rafter P0 (ridge plumb cut top) must align with ridge board TOP surface,
+			// not the center. The rafter origin is at the top edge where it meets
+			// the ridge board face. Using MeshCenterZ placed rafters 9.2cm too low
+			// (half of 2x8 = 18.415cm / 2 = 9.2cm).
+			Socket.LocalPosition.Z = MeshTopZ;
 		}
 	}
 
