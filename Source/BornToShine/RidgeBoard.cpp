@@ -83,11 +83,7 @@ void ARidgeBoard::CreateSideSockets()
 	float TotalSpan = (NumSockets - 1) * Spacing;
 	float StartX = -TotalSpan / 2.0f;
 
-	// Rafter mesh bottom is at actor origin (Z=0), top at +RafterDepth.
-	// We want rafter top flush with ridge board top, so:
-	//   SnapZ + RafterDepth = RidgeBoardHalfHeight  →  SnapZ = HalfHeight - RafterDepth
-	const float RafterDepth = 13.97f; // 5.5" = 13.97cm
-	float SideSocketLocalZ = (BoardHeight / 2.0f) - RafterDepth; // 9.21 - 13.97 = -4.76cm
+	float SideSocketLocalZ = BoardHeight / 2.0f;
 
 	for (int32 i = 0; i < NumSockets; i++)
 	{
@@ -221,11 +217,7 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketType == EConstructionSocketType::RidgeBoard_Side)
 		{
-			// Rafter mesh bottom is at actor origin, top at +RafterDepth.
-			// Place snap point so rafter top aligns with ridge board top:
-			//   SnapZ + RafterDepth = MeshTopZ  →  SnapZ = MeshTopZ - RafterDepth
-			const float RafterDepth = 13.97f; // 5.5" = 13.97cm
-			Socket.LocalPosition.Z = MeshTopZ - RafterDepth;
+			Socket.LocalPosition.Z = MeshTopZ;
 		}
 	}
 

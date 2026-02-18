@@ -207,10 +207,7 @@ void ARafter::UpdateRafterLength()
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
 	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
 	float MeshOffsetX = -MeshMinXScaled;
-	// Shift mesh UP by half its depth so the bottom face sits at Z=0 (actor origin).
-	// The birdsmouth bottom face now lands right on the DTP top / snap point.
-	float RafterHalfDepth = 13.97f / 2.0f; // 5.5" board = 13.97cm, half = 6.985cm
-	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, RafterHalfDepth));
+	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
