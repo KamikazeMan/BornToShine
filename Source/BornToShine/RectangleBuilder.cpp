@@ -1967,12 +1967,35 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
     FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
 
-    // Building width: measure from PLACED DOUBLE TOP PLATES (or rim boards as fallback).
-    // Project each DTP position onto the axis perpendicular to the ridge.
+    // Building width: measure from PLACED TOP PLATES (or rim boards as fallback).
+    // Project each top plate position onto the axis perpendicular to the ridge.
     // The distance between the min and max projections = building width.
     // This works regardless of which boards are "through" vs "end."
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
+
+    // Filter: only use top plates within the CURRENT building's footprint.
+    // Compute bounding box from rim board endpoints to exclude other buildings.
+    FVector RectMin = FVector(MAX_FLT, MAX_FLT, 0);
+    FVector RectMax = FVector(-MAX_FLT, -MAX_FLT, 0);
+    for (ARimBoard* RB : CompletedRimBoards)
+    {
+        if (!RB) continue;
+        FVector Pos = RB->GetActorLocation();
+        float HalfLen = RB->GetEffectiveLength() / 2.0f;
+        FVector Fwd = RB->GetActorRotation().RotateVector(FVector::ForwardVector);
+        FVector End1 = Pos + Fwd * HalfLen;
+        FVector End2 = Pos - Fwd * HalfLen;
+        RectMin.X = FMath::Min3(RectMin.X, End1.X, End2.X);
+        RectMin.Y = FMath::Min3(RectMin.Y, End1.Y, End2.Y);
+        RectMax.X = FMath::Max3(RectMax.X, End1.X, End2.X);
+        RectMax.Y = FMath::Max3(RectMax.Y, End1.Y, End2.Y);
+    }
+
+    // Expand slightly for tolerance
+    const float Margin = 20.0f;
+    RectMin -= FVector(Margin, Margin, 0);
+    RectMax += FVector(Margin, Margin, 0);
 
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
@@ -1987,7 +2010,13 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
-            float PerpDist = FVector::DotProduct(Piece->GetActorLocation(), PerpDir);
+            FVector Pos = Piece->GetActorLocation();
+            // Only include plates within THIS building's footprint
+            if (Pos.X < RectMin.X || Pos.X > RectMax.X ||
+                Pos.Y < RectMin.Y || Pos.Y > RectMax.Y)
+                continue;
+
+            float PerpDist = FVector::DotProduct(Pos, PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
             MaxPerp = FMath::Max(MaxPerp, PerpDist);
             DTPCount++;
