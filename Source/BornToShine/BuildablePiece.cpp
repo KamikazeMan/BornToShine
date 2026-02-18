@@ -1392,6 +1392,58 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	if (PieceType == EPieceType::Rafter)
 	{
 		FinalRotation.Roll = 0.0f;
+
+		// Set RunDistanceCm and PitchRatio from the actual building geometry
+		// (ridge post stores BuildingHalfWidthCm from the suggestion system).
+		// Without this, RunDistanceCm stays hardcoded at 121.92cm (4ft default).
+		ARafter* RafterSelf = Cast<ARafter>(this);
+		if (RafterSelf && Candidate.TargetPiece)
+		{
+			// Find nearest placed ridge post to read building dimensions
+			TArray<AActor*> FoundPosts;
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), ARidgePost::StaticClass(), FoundPosts);
+			float BestDist = FLT_MAX;
+			ARidgePost* NearestPost = nullptr;
+			for (AActor* A : FoundPosts)
+			{
+				ARidgePost* Post = Cast<ARidgePost>(A);
+				if (!Post) continue;
+				float Dist = FVector::Dist(Candidate.TargetPiece->GetActorLocation(), Post->GetActorLocation());
+				if (Dist < BestDist)
+				{
+					BestDist = Dist;
+					NearestPost = Post;
+				}
+			}
+
+			if (NearestPost && NearestPost->BuildingHalfWidthCm > 0.0f)
+			{
+				float ActualRun = NearestPost->BuildingHalfWidthCm;
+				float ActualPitch = NearestPost->GetPitchRatio();
+				if (!FMath::IsNearlyEqual(ActualRun, RafterSelf->RunDistanceCm, 0.1f) ||
+					!FMath::IsNearlyEqual(ActualPitch, RafterSelf->PitchRatio, 0.01f))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Rafter: Updating from ridge post — Run: %.1f→%.1fcm (%.1f→%.1fft), Pitch: %.1f→%.1f/12"),
+						RafterSelf->RunDistanceCm, ActualRun,
+						RafterSelf->RunDistanceCm / 30.48f, ActualRun / 30.48f,
+						RafterSelf->PitchRatio, ActualPitch);
+					RafterSelf->SetPitch(ActualPitch, ActualRun);
+
+					// Recompute FinalLocation with updated sockets
+					// (SetPitch regenerates sockets, so ridge socket may have changed)
+					FVector SocketLocalOffset(0.0f, 0.0f, 0.0f); // Ridge socket still at origin
+					FVector SocketWorldOffset = FinalRotation.RotateVector(SocketLocalOffset);
+					FinalLocation = Candidate.SnapLocation - SocketWorldOffset;
+
+					// Update pitch rotation
+					FinalRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
+				}
+			}
+
+			UE_LOG(LogTemp, Warning, TEXT("Rafter: RunDistanceCm=%.1f (%.1fft), SlopeLen=%.1f, PitchRatio=%.1f/12"),
+				RafterSelf->RunDistanceCm, RafterSelf->RunDistanceCm / 30.48f,
+				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
+		}
 	}
 
 	SetActorRotation(FinalRotation);

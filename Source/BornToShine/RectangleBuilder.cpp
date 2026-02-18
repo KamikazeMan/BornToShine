@@ -6,6 +6,7 @@
 #include "BottomPlate.h"
 #include "WallStud.h"
 #include "TopPlate.h"
+#include "DoubleTopPlate.h"
 #include "CornerPost.h"
 #include "PlywoodSheet.h"
 #include "FoundationBlock.h"
@@ -1976,23 +1977,52 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     DefaultPostHeight = FMath::Clamp(DefaultPostHeight, 30.48f, 243.84f);
 
     // --- Find the Z position: top of double top plate ---
+    // CRITICAL: Must search for DoubleTopPlate (EPieceType::DoubleTopPlate),
+    // NOT single TopPlate (EPieceType::TopPlate). Using single TopPlate gives
+    // the top surface one board thickness (3.81cm) too low, causing the entire
+    // ridge post → ridge board → rafter chain to be offset.
     float DoubleTopPlateTopZ = 0.0f;
     bool bFoundDTP = false;
 
     if (AConstructionPhaseManager::Instance)
     {
-        TArray<ABuildablePiece*> TopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
-        for (ABuildablePiece* Piece : TopPlates)
+        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoubleTopPlate);
+        for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
-            ATopPlate* TP = Cast<ATopPlate>(Piece);
-            if (!TP) continue;
+            ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
+            if (!DTP) continue;
 
-            float PlateTopZ = Piece->GetActorLocation().Z + TP->BoardHeight / 2.0f;
+            float PlateTopZ = Piece->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
             if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
             {
                 DoubleTopPlateTopZ = PlateTopZ;
                 bFoundDTP = true;
+            }
+        }
+
+        // Fallback: try single TopPlate if no DTP found yet
+        if (!bFoundDTP)
+        {
+            TArray<ABuildablePiece*> TopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+            for (ABuildablePiece* Piece : TopPlates)
+            {
+                if (!Piece) continue;
+                ATopPlate* TP = Cast<ATopPlate>(Piece);
+                if (!TP) continue;
+
+                // Single top plate top + one board thickness (DTP sits on top)
+                float PlateTopZ = Piece->GetActorLocation().Z + TP->BoardHeight / 2.0f + 3.81f;
+                if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+                {
+                    DoubleTopPlateTopZ = PlateTopZ;
+                    bFoundDTP = true;
+                }
+            }
+            if (bFoundDTP)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: No DoubleTopPlate found, estimated DTP top from single TopPlate + 3.81cm = %.1f"),
+                    DoubleTopPlateTopZ);
             }
         }
     }
@@ -2097,22 +2127,23 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     // Set default height (player can adjust with scroll wheel before placing)
     Post->SetPostHeightCm(Suggestion.PostHeightCm);
 
-    // Position and rotation: prefer the snap pipeline's values which include the
-    // flush offset from DetectSnapCandidates (aligns post outer face with plate
-    // outer face). Only fall back to the suggestion position if the post isn't
-    // snapped (e.g., player clicked away from a DTP socket).
+    // Position: Use snap pipeline XY (includes flush offset from DetectSnapCandidates)
+    // but suggestion Z (correctly computed from DTP top surface).
+    // The snap pipeline's Z may be wrong (DTP_End socket at Z=0 = mesh center,
+    // not top), while the suggestion Z accounts for the actual DTP top.
     if (Post->IsPlacementValid())
     {
-        // Keep the snap pipeline's position (includes flush offset)
-        // Only update rotation from suggestion
+        // Keep snap pipeline XY (flush offset preserved), use suggestion Z
+        FVector SnappedPos = Post->GetActorLocation();
+        Post->SetActorLocation(FVector(SnappedPos.X, SnappedPos.Y, Suggestion.Position.Z));
         Post->SetActorRotation(Suggestion.Rotation);
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SNAP position (%.1f, %.1f, %.1f) — flush offset preserved"),
-            Post->GetActorLocation().X, Post->GetActorLocation().Y, Post->GetActorLocation().Z);
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post SNAP XY (%.1f, %.1f) + SUGGESTION Z (%.1f) — snap Z was %.1f"),
+            SnappedPos.X, SnappedPos.Y, Suggestion.Position.Z, SnappedPos.Z);
     }
     else
     {
-        // Fallback: use suggestion position (already includes FlushInsetCm along ridge)
+        // Fallback: use full suggestion position (includes FlushInsetCm along ridge)
         Post->SetActorLocation(Suggestion.Position);
         Post->SetActorRotation(Suggestion.Rotation);
 
