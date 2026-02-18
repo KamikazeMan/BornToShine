@@ -2,7 +2,6 @@
 
 #include "BuildingComponent.h"
 #include "BuildablePiece.h"
-#include "ProceduralMeshComponent.h"
 #include "RimBoard.h"
 #include "FloorJoist.h"
 #include "PlywoodSheet.h"
@@ -237,21 +236,12 @@ void UBuildingComponent::SpawnPreviewPiece()
 		bool bHasMesh = Mesh && Mesh->GetStaticMesh();
 		bool bHasMaterial = Mesh && Mesh->GetMaterial(0);
 
-		// Also check for procedural mesh (rafter uses ProceduralMeshComponent)
-		UProceduralMeshComponent* ProcMesh = CurrentPreviewPiece->FindComponentByClass<UProceduralMeshComponent>();
-		if (!bHasMesh && ProcMesh && ProcMesh->GetNumSections() > 0)
-		{
-			bHasMesh = true;
-			bHasMaterial = ProcMesh->GetMaterial(0) != nullptr;
-		}
-
-		UE_LOG(LogTemp, Log, TEXT("SpawnPreviewPiece[%d]: Class=%s  Type=%s  HasMesh=%d  HasMaterial=%d  Visible=%d  ProcMesh=%d"),
+		UE_LOG(LogTemp, Log, TEXT("SpawnPreviewPiece[%d]: Class=%s  Type=%s  HasMesh=%d  HasMaterial=%d  Visible=%d"),
 			CurrentPieceTypeIndex,
 			*PieceClass->GetName(),
 			*UEnum::GetDisplayValueAsText(CurrentPreviewPiece->GetPieceType()).ToString(),
 			bHasMesh, bHasMaterial,
-			Mesh ? Mesh->IsVisible() : -1,
-			ProcMesh ? 1 : 0);
+			Mesh ? Mesh->IsVisible() : -1);
 
 		if (!bHasMesh)
 		{

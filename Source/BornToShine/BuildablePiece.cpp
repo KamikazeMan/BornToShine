@@ -1,7 +1,6 @@
 // Born To Shine - Base class for all buildable construction pieces
 
 #include "BuildablePiece.h"
-#include "ProceduralMeshComponent.h"
 #include "RimBoard.h"
 #include "CornerPost.h"
 #include "BottomPlate.h"
@@ -169,16 +168,6 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			}
 		}
 
-		// Also apply preview material to ProceduralMesh (rafters)
-		UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
-		if (ProcMesh && DynamicMaterial)
-		{
-			if (!OriginalMeshMaterial)
-			{
-				OriginalMeshMaterial = ProcMesh->GetMaterial(0);
-			}
-			ProcMesh->SetMaterial(0, DynamicMaterial);
-		}
 	}
 	else
 	{
@@ -197,12 +186,6 @@ void ABuildablePiece::SetPreviewMode(bool bIsPreview)
 			}
 		}
 
-		// Restore material on ProceduralMesh (rafters)
-		UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
-		if (ProcMesh && OriginalMeshMaterial)
-		{
-			ProcMesh->SetMaterial(0, OriginalMeshMaterial);
-		}
 	}
 
 	UpdateVisualFeedback();
@@ -950,15 +933,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// The RidgeBoard_Side socket already encodes which side the rafter faces:
 			//   Left sockets (RidgeBoardSide_L*) have LocalRotation.Yaw = -90
 			//   Right sockets (RidgeBoardSide_R*) have LocalRotation.Yaw = +90
-			// Use the socket's rotation directly — no player look direction needed.
-			// Pitch/Roll stay 0 because the rafter geometry has slope baked into vertices.
+			// Pitch is set from the rafter's pitch angle (slopes downward from ridge to tail).
 			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
 				TgtSocketType == EConstructionSocketType::RidgeBoard_Side &&
 				TargetPiece)
 			{
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
-				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
+
+				// Set pitch from rafter angle (negative = +X tilts down toward tail)
+				const ARafter* RafterSelf = Cast<const ARafter>(this);
+				if (RafterSelf)
+				{
+					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
+				}
 
 				// Get the target socket's local rotation to determine facing direction
 				FConstructionSocket TgtSocket;
@@ -968,13 +956,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					SocketYawOffset = TgtSocket.LocalRotation.Yaw;
 				}
 
-				// Rafter +X = horizontal toward tail (from ridge toward wall).
+				// Rafter +X = along slope toward tail (from ridge toward wall).
 				// Socket yaw -90 = rafter faces left, +90 = rafter faces right.
 				CandidateRotation.Yaw = TargetActorRotation.Yaw + SocketYawOffset;
 
 				UE_LOG(LogTemp, Log,
-					TEXT("Rafter snap: RidgeYaw=%.1f SocketYaw=%.1f → RafterYaw=%.1f (socket=%s)"),
-					TargetActorRotation.Yaw, SocketYawOffset, CandidateRotation.Yaw,
+					TEXT("Rafter snap: RidgeYaw=%.1f SocketYaw=%.1f → RafterYaw=%.1f Pitch=%.1f (socket=%s)"),
+					TargetActorRotation.Yaw, SocketYawOffset, CandidateRotation.Yaw, CandidateRotation.Pitch,
 					*TargetSocketName.ToString());
 			}
 
@@ -1347,11 +1335,10 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FinalRotation.Roll = 0.0f;
 	}
 
-	// Rafter: pitch is baked into the procedural mesh vertices.
-	// Actor must NEVER have pitch/roll — only yaw to face the correct wall.
+	// Rafter: pitch is set by snap system from the roof angle.
+	// Only force roll to 0 — keep pitch for the slope.
 	if (PieceType == EPieceType::Rafter)
 	{
-		FinalRotation.Pitch = 0.0f;
 		FinalRotation.Roll = 0.0f;
 	}
 
@@ -1381,28 +1368,31 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		}
 
 		// Verify birdsmouth lands on double top plate
-		ARafter* RafterActor = Cast<ARafter>(this);
-		if (RafterActor)
+		// Verify birdsmouth lands on double top plate (use socket position)
+		FVector BirdsmouthWorld = FinalLocation;
+		for (const FConstructionSocket& S : Sockets)
 		{
-			float Rise = (RafterActor->PitchRatio / 12.0f) * RafterActor->RunDistanceCm;
-			FVector BirdsmouthLocal(RafterActor->RunDistanceCm, 0.0f, -Rise);
-			FVector BirdsmouthWorld = GetActorTransform().TransformPosition(BirdsmouthLocal);
-			UE_LOG(LogTemp, Warning, TEXT("Birdsmouth world pos = %s (Z=%.1f)"),
-				*BirdsmouthWorld.ToString(), BirdsmouthWorld.Z);
-
-			// Log double top plate top Z for verification
-			TArray<AActor*> FoundPlates;
-			UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADoubleTopPlate::StaticClass(), FoundPlates);
-			for (AActor* A : FoundPlates)
+			if (S.SocketName == FName("RafterBirdsmouth"))
 			{
-				ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(A);
-				if (DTP)
-				{
-					float PlateTopZ = DTP->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
-					float BirdsmouthGap = BirdsmouthWorld.Z - PlateTopZ;
-					UE_LOG(LogTemp, Warning, TEXT("DoubleTopPlate '%s' top Z = %.1f, birdsmouth gap = %.1f cm"),
-						*DTP->GetName(), PlateTopZ, BirdsmouthGap);
-				}
+				BirdsmouthWorld = GetActorTransform().TransformPosition(S.LocalPosition);
+				break;
+			}
+		}
+		UE_LOG(LogTemp, Warning, TEXT("Birdsmouth world pos = %s (Z=%.1f)"),
+			*BirdsmouthWorld.ToString(), BirdsmouthWorld.Z);
+
+		// Log double top plate top Z for verification
+		TArray<AActor*> FoundPlates;
+		UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADoubleTopPlate::StaticClass(), FoundPlates);
+		for (AActor* A : FoundPlates)
+		{
+			ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(A);
+			if (DTP)
+			{
+				float PlateTopZ = DTP->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
+				float BirdsmouthGap = BirdsmouthWorld.Z - PlateTopZ;
+				UE_LOG(LogTemp, Warning, TEXT("DoubleTopPlate '%s' top Z = %.1f, birdsmouth gap = %.1f cm"),
+					*DTP->GetName(), PlateTopZ, BirdsmouthGap);
 			}
 		}
 	}
@@ -1709,10 +1699,7 @@ void ABuildablePiece::SetPreviewColor(const FLinearColor& Color)
 
 void ABuildablePiece::UpdateVisualFeedback()
 {
-	// Find ProceduralMesh for pieces that use it (e.g. rafters)
-	UProceduralMeshComponent* ProcMesh = FindComponentByClass<UProceduralMeshComponent>();
-
-	if (!MeshComponent && !ProcMesh) return;
+	if (!MeshComponent) return;
 
 	switch (PieceState)
 	{
@@ -1729,11 +1716,6 @@ void ABuildablePiece::UpdateVisualFeedback()
 		DynamicMaterial->SetScalarParameterValue(FName("Opacity"), TargetColor.A);
 
 		if (MeshComponent) MeshComponent->SetRenderCustomDepth(true);
-		if (ProcMesh)
-		{
-			ProcMesh->SetMaterial(0, DynamicMaterial);
-			ProcMesh->SetRenderCustomDepth(true);
-		}
 		break;
 	}
 
@@ -1743,11 +1725,6 @@ void ABuildablePiece::UpdateVisualFeedback()
 		{
 			if (OriginalMeshMaterial) MeshComponent->SetMaterial(0, OriginalMeshMaterial);
 			MeshComponent->SetRenderCustomDepth(true);
-		}
-		if (ProcMesh)
-		{
-			if (OriginalMeshMaterial) ProcMesh->SetMaterial(0, OriginalMeshMaterial);
-			ProcMesh->SetRenderCustomDepth(true);
 		}
 		break;
 	}
@@ -1759,11 +1736,6 @@ void ABuildablePiece::UpdateVisualFeedback()
 		{
 			if (FinalMat) MeshComponent->SetMaterial(0, FinalMat);
 			MeshComponent->SetRenderCustomDepth(false);
-		}
-		if (ProcMesh)
-		{
-			if (FinalMat) ProcMesh->SetMaterial(0, FinalMat);
-			ProcMesh->SetRenderCustomDepth(false);
 		}
 		DynamicMaterial = nullptr;
 		break;

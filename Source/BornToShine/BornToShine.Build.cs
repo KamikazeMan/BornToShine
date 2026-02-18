@@ -17,8 +17,7 @@ public class BornToShine : ModuleRules
 			"UMG",
 			"Slate",
 			"SlateCore",
-			"Json",
-			"ProceduralMeshComponent"
+			"Json"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

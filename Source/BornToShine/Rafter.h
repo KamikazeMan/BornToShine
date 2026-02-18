@@ -1,4 +1,4 @@
-// Born To Shine - Rafter (procedural mesh with dynamic pitch-based cuts)
+// Born To Shine - Rafter (static mesh with dynamic pitch-based placement)
 
 #pragma once
 
@@ -7,32 +7,19 @@
 #include "ConstructionTypes.h"
 #include "Rafter.generated.h"
 
-class UProceduralMeshComponent;
-
 /**
  * Rafter — 2x6 lumber that forms the sloped roof structure.
  *
- * Uses ProceduralMeshComponent to generate mesh dynamically based on roof pitch.
- * All cut angles are auto-calculated from the pitch.
+ * Uses a static mesh (straight 2x6 board) that gets X-scaled to the
+ * correct slope length. Roof pitch is applied via actor rotation (Pitch
+ * component of FRotator), not baked into mesh vertices.
  *
  * Cross-Section: 1.5" x 5.5" (3.81cm x 13.97cm)
  *
- * Three Dynamic Cuts:
- *   1. Plumb Cut (Ridge End) — vertical cut at the ridge board, angle = pitch angle
- *   2. Birdsmouth Cut (Top Plate) — notch where rafter sits on the double top plate
- *      - Seat cut (horizontal) + heel cut (vertical)
- *      - Seat depth = 2/3 of rafter depth
- *   3. Tail Cut (Overhang End) — angled or plumb cut at the fascia end
- *
- * Geometry:
- *   - Rafter runs from ridge board down to top plate, continuing past for overhang
- *   - Length auto-calculated from pitch and building half-width
- *   - All angles auto-calculated from pitch ratio
- *
- * Socket Layout:
- *   - Ridge End (1): Attaches to RidgeBoard_Side socket
- *   - Birdsmouth (1): Sits on top plate
- *   - Tail End (1): For fascia board attachment
+ * Socket Layout (all along the straight board's local X axis):
+ *   - Ridge End: at -SlopeLength/2 (attaches to RidgeBoard_Side)
+ *   - Birdsmouth: at MainSlope distance from ridge end
+ *   - Tail End: at +SlopeLength/2 (for fascia board attachment)
  */
 UCLASS()
 class BORNTOSHINE_API ARafter : public ABuildablePiece
@@ -61,11 +48,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float OverhangCm;
 
-	// Birdsmouth seat cut depth (fraction of rafter depth, default 2/3)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
-	float BirdsmouthSeatFraction;
-
-	// Set pitch and rebuild mesh
+	// Set pitch and rebuild sockets + scale
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void SetPitch(float NewPitchRatio, float NewRunCm);
 
@@ -98,27 +81,14 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	class USceneComponent* SceneRoot;
 
-	// Procedural mesh for the rafter shape
-	UPROPERTY(VisibleAnywhere)
-	UProceduralMeshComponent* ProceduralMesh;
-
-	// Generate the rafter mesh with all cuts
-	void GenerateRafterMesh();
-
-	// Helper: add a rectangular cross-section extruded along a path
-	void BuildRafterGeometry(
-		TArray<FVector>& Vertices,
-		TArray<int32>& Triangles,
-		TArray<FVector>& Normals,
-		TArray<FVector2D>& UVs
-	);
+	// Original unscaled length of the mesh along X (captured once in BeginPlay)
+	float MeshDefaultLength;
 
 	void CreateRidgeEndSocket();
 	void CreateBirdsmouthSocket();
 	void CreateTailEndSocket();
 	void RegenerateSockets();
 
-	// Material for the procedural mesh
-	UPROPERTY(EditAnywhere, Category = "Construction|Materials")
-	class UMaterialInterface* RafterMaterial;
+	// Scale the mesh along X to match SlopeLength
+	void UpdateRafterLength();
 };
