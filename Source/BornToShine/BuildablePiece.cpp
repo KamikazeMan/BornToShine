@@ -1174,6 +1174,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// Ridge post flush alignment: offset inward so outer face aligns
 			// with the double top plate outer face (post is wider than plate).
 			// PostWidth=11.43cm (3x1.5"), PlateWidth=8.89cm (3.5") → 1.27cm offset.
+			// The offset must be PERPENDICULAR to the gable wall (across the wall thickness),
+			// pushing the post toward the building interior.
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
 				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
 				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
@@ -1183,6 +1185,11 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const float PlateWidthVal = 8.89f;   // 3.5" (2x4 face)
 				const float FlushOffset = (PostWidthVal - PlateWidthVal) / 2.0f; // 1.27cm
 
+				// The DTP's RIGHT vector is perpendicular to the wall surface.
+				// We need to shift the post along this axis toward the building interior.
+				FVector WallRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
+
+				// Find building center from rim boards
 				FVector FrameCenter = FVector::ZeroVector;
 				int32 RimCount = 0;
 				for (ABuildablePiece* P : NearbyPieces)
@@ -1196,29 +1203,31 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				if (RimCount > 0)
 				{
 					FrameCenter /= RimCount;
+
+					// Direction from post to building center
 					FVector ToCenter = FrameCenter - CandidateLocation;
 					ToCenter.Z = 0.0f;
-					FVector PostRight = CandidateRotation.RotateVector(FVector::RightVector);
-					float DotPerp = FVector::DotProduct(ToCenter, PostRight);
+
+					// Project onto wall's right vector to find which side is "inward"
+					float DotPerp = FVector::DotProduct(ToCenter, WallRight);
 
 					FVector BeforeFlush = CandidateLocation;
 
 					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
 					{
-						// Shift post INWARD (toward FrameCenter) so the wider post's
-						// outer face aligns with the DTP outer face.
-						CandidateLocation += PostRight * FMath::Sign(DotPerp) * FlushOffset;
+						// Shift post toward building center (inward) along wall perpendicular
+						CandidateLocation += WallRight * FMath::Sign(DotPerp) * FlushOffset;
 					}
 
 					UE_LOG(LogTemp, Warning,
 						TEXT("RidgePost flush: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
-						     "FrameCenter=(%.1f,%.1f) PostRight=(%.2f,%.2f) DotPerp=%.2f FlushOffset=%.2f RimCount=%d"),
+						     "FrameCenter=(%.1f,%.1f) WallRight=(%.2f,%.2f) DotPerp=%.2f FlushOffset=%.2f RimCount=%d"),
 						*TargetPiece->GetName(),
 						TargetPiece->GetActorLocation().X, TargetPiece->GetActorLocation().Y, TargetPiece->GetActorLocation().Z,
 						BeforeFlush.X, BeforeFlush.Y, BeforeFlush.Z,
 						CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z,
 						FrameCenter.X, FrameCenter.Y,
-						PostRight.X, PostRight.Y,
+						WallRight.X, WallRight.Y,
 						DotPerp, FlushOffset, RimCount);
 				}
 			}

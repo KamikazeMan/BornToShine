@@ -1980,7 +1980,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
 
     if (AConstructionPhaseManager::Instance)
     {
-        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoubleTopPlate);
+        // NOTE: Double top plates are registered as EPieceType::TopPlate (not DoubleTopPlate).
+        // Search for ALL TopPlate pieces — both first and double plates are on the same
+        // wall lines so they give the same perpendicular width measurement.
+        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
         for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
