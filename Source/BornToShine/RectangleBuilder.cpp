@@ -1963,40 +1963,54 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     // Building center line (midpoint between the two long walls)
     FVector BuildingCenter2D = (Through1Center + Through3Center) / 2.0f;
 
-    // Building half-width = half the distance between through boards (perpendicular)
-    FVector EndFwd = EndBoardA->GetActorRotation().RotateVector(FVector::ForwardVector);
-    float FullWidth = FMath::Abs(FVector::DotProduct(Through3Center - Through1Center, EndFwd));
-    float HalfWidth = FullWidth / 2.0f;
-
     // Ridge line direction (parallel to through boards)
     FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
     FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
 
-    // DIAGNOSTIC: Log all board positions, lengths, and the width calculation
-    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST WIDTH CALC:"));
-    UE_LOG(LogTemp, Error, TEXT("  ThroughBoard1=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
-        *ThroughBoard1->GetName(), Through1Center.X, Through1Center.Y, Through1Center.Z,
-        ThroughBoard1->GetEffectiveLength(), ThroughBoard1->GetEffectiveLength() / 30.48f,
-        ThroughBoard1->GetActorRotation().Yaw);
-    UE_LOG(LogTemp, Error, TEXT("  ThroughBoard3=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
-        *ThroughBoard3->GetName(), Through3Center.X, Through3Center.Y, Through3Center.Z,
-        ThroughBoard3->GetEffectiveLength(), ThroughBoard3->GetEffectiveLength() / 30.48f,
-        ThroughBoard3->GetActorRotation().Yaw);
-    UE_LOG(LogTemp, Error, TEXT("  EndBoardA=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
-        *EndBoardA->GetName(), EndBoardA->GetActorLocation().X, EndBoardA->GetActorLocation().Y, EndBoardA->GetActorLocation().Z,
-        EndBoardA->GetEffectiveLength(), EndBoardA->GetEffectiveLength() / 30.48f,
-        EndBoardA->GetActorRotation().Yaw);
-    UE_LOG(LogTemp, Error, TEXT("  EndBoardB=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
-        *EndBoardB->GetName(), EndBoardB->GetActorLocation().X, EndBoardB->GetActorLocation().Y, EndBoardB->GetActorLocation().Z,
-        EndBoardB->GetEffectiveLength(), EndBoardB->GetEffectiveLength() / 30.48f,
-        EndBoardB->GetActorRotation().Yaw);
-    UE_LOG(LogTemp, Error, TEXT("  Through1→Through3 vec=(%.1f,%.1f,%.1f) dist=%.1f"),
-        Through3Center.X - Through1Center.X, Through3Center.Y - Through1Center.Y, Through3Center.Z - Through1Center.Z,
-        FVector::Dist(Through1Center, Through3Center));
-    UE_LOG(LogTemp, Error, TEXT("  EndFwd=(%.3f,%.3f,%.3f) DotProduct=%.1f → FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
-        EndFwd.X, EndFwd.Y, EndFwd.Z,
-        FVector::DotProduct(Through3Center - Through1Center, EndFwd),
-        FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
+    // Building width: measure from PLACED DOUBLE TOP PLATES (or rim boards as fallback).
+    // Project each DTP position onto the axis perpendicular to the ridge.
+    // The distance between the min and max projections = building width.
+    // This works regardless of which boards are "through" vs "end."
+    FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
+    PerpDir.Normalize();
+
+    float MinPerp = MAX_FLT;
+    float MaxPerp = -MAX_FLT;
+    int32 DTPCount = 0;
+
+    if (AConstructionPhaseManager::Instance)
+    {
+        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoubleTopPlate);
+        for (ABuildablePiece* Piece : DTPPieces)
+        {
+            if (!Piece) continue;
+            float PerpDist = FVector::DotProduct(Piece->GetActorLocation(), PerpDir);
+            MinPerp = FMath::Min(MinPerp, PerpDist);
+            MaxPerp = FMath::Max(MaxPerp, PerpDist);
+            DTPCount++;
+        }
+    }
+
+    float FullWidth;
+    float HalfWidth;
+
+    if (DTPCount >= 2 && MaxPerp > MinPerp)
+    {
+        // Measured from actual DTP positions
+        FullWidth = MaxPerp - MinPerp;
+        HalfWidth = FullWidth / 2.0f;
+        UE_LOG(LogTemp, Warning, TEXT("RidgePost width: Measured from %d DTPs — FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
+            DTPCount, FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
+    }
+    else
+    {
+        // Fallback: use rim board rectangle (through board distance)
+        FVector EndFwd = EndBoardA->GetActorRotation().RotateVector(FVector::ForwardVector);
+        FullWidth = FMath::Abs(FVector::DotProduct(Through3Center - Through1Center, EndFwd));
+        HalfWidth = FullWidth / 2.0f;
+        UE_LOG(LogTemp, Warning, TEXT("RidgePost width: Fallback from rim boards — FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft) (no DTPs found)"),
+            FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
+    }
 
     // Default post height for 6/12 pitch: rise = (6/12) * halfWidth
     float DefaultPostHeight = (6.0f / 12.0f) * HalfWidth;

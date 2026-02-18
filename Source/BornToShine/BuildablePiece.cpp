@@ -996,16 +996,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z + SocketLocalOffset.Z);
 			}
 
-			// Rafter Z offset: The ridge board side socket is at the board CENTER.
-			// The rafter top edge should align with the ridge board TOP.
-			// Offset up by half the ridge board height.
-			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
-				TgtSocketType == EConstructionSocketType::RidgeBoard_Side)
-			{
-				float RidgeBoardHalfHeight = 9.21f; // Half of 2x8 (18.42cm / 2)
-				CandidateLocation.Z += RidgeBoardHalfHeight;
-			}
-
 			// Joist top-face snap: lower joist so its top is flush with rim board top.
 			// Snap location is at top-face socket (rim center Z + halfHeight).
 			// Joist center should be at rim center Z, so subtract halfHeight.
