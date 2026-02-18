@@ -1972,6 +1972,32 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
     FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
 
+    // DIAGNOSTIC: Log all board positions, lengths, and the width calculation
+    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST WIDTH CALC:"));
+    UE_LOG(LogTemp, Error, TEXT("  ThroughBoard1=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
+        *ThroughBoard1->GetName(), Through1Center.X, Through1Center.Y, Through1Center.Z,
+        ThroughBoard1->GetEffectiveLength(), ThroughBoard1->GetEffectiveLength() / 30.48f,
+        ThroughBoard1->GetActorRotation().Yaw);
+    UE_LOG(LogTemp, Error, TEXT("  ThroughBoard3=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
+        *ThroughBoard3->GetName(), Through3Center.X, Through3Center.Y, Through3Center.Z,
+        ThroughBoard3->GetEffectiveLength(), ThroughBoard3->GetEffectiveLength() / 30.48f,
+        ThroughBoard3->GetActorRotation().Yaw);
+    UE_LOG(LogTemp, Error, TEXT("  EndBoardA=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
+        *EndBoardA->GetName(), EndBoardA->GetActorLocation().X, EndBoardA->GetActorLocation().Y, EndBoardA->GetActorLocation().Z,
+        EndBoardA->GetEffectiveLength(), EndBoardA->GetEffectiveLength() / 30.48f,
+        EndBoardA->GetActorRotation().Yaw);
+    UE_LOG(LogTemp, Error, TEXT("  EndBoardB=[%s] pos=(%.1f,%.1f,%.1f) len=%.1fcm(%.1fft) yaw=%.1f"),
+        *EndBoardB->GetName(), EndBoardB->GetActorLocation().X, EndBoardB->GetActorLocation().Y, EndBoardB->GetActorLocation().Z,
+        EndBoardB->GetEffectiveLength(), EndBoardB->GetEffectiveLength() / 30.48f,
+        EndBoardB->GetActorRotation().Yaw);
+    UE_LOG(LogTemp, Error, TEXT("  Through1→Through3 vec=(%.1f,%.1f,%.1f) dist=%.1f"),
+        Through3Center.X - Through1Center.X, Through3Center.Y - Through1Center.Y, Through3Center.Z - Through1Center.Z,
+        FVector::Dist(Through1Center, Through3Center));
+    UE_LOG(LogTemp, Error, TEXT("  EndFwd=(%.3f,%.3f,%.3f) DotProduct=%.1f → FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
+        EndFwd.X, EndFwd.Y, EndFwd.Z,
+        FVector::DotProduct(Through3Center - Through1Center, EndFwd),
+        FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
+
     // Default post height for 6/12 pitch: rise = (6/12) * halfWidth
     float DefaultPostHeight = (6.0f / 12.0f) * HalfWidth;
     DefaultPostHeight = FMath::Clamp(DefaultPostHeight, 30.48f, 243.84f);
