@@ -996,6 +996,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation.Z + SocketLocalOffset.Z);
 			}
 
+			// Rafter Z offset: The ridge board side socket is at the board CENTER.
+			// The rafter top edge should align with the ridge board TOP.
+			// Offset up by half the ridge board height.
+			if (Socket.SocketType == EConstructionSocketType::Rafter_Ridge &&
+				TgtSocketType == EConstructionSocketType::RidgeBoard_Side)
+			{
+				float RidgeBoardHalfHeight = 9.21f; // Half of 2x8 (18.42cm / 2)
+				CandidateLocation.Z += RidgeBoardHalfHeight;
+			}
+
 			// Joist top-face snap: lower joist so its top is flush with rim board top.
 			// Snap location is at top-face socket (rim center Z + halfHeight).
 			// Joist center should be at rim center Z, so subtract halfHeight.
@@ -1205,9 +1215,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
 					{
-						// Sign FLIPPED: negative sign shifts post INWARD (toward building center)
-						// so the outer face (away from center) aligns with the DTP outer face.
-						CandidateLocation -= PostRight * FMath::Sign(DotPerp) * FlushOffset;
+						// Shift post INWARD (toward FrameCenter) so the wider post's
+						// outer face aligns with the DTP outer face.
+						CandidateLocation += PostRight * FMath::Sign(DotPerp) * FlushOffset;
 					}
 
 					UE_LOG(LogTemp, Warning,
@@ -1397,6 +1407,19 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	{
 		FinalRotation.Pitch = 0.0f;
 		FinalRotation.Roll = 0.0f;
+	}
+
+	// Ridge post: force upright, match plate yaw
+	if (PieceType == EPieceType::RidgePost)
+	{
+		FinalRotation.Pitch = 0.0f;
+		FinalRotation.Roll = 0.0f;
+		// Yaw comes from DetectSnapCandidates (matches target plate yaw).
+		// Enforce it here as well in case the candidate rotation was lost.
+		if (Candidate.TargetPiece)
+		{
+			FinalRotation.Yaw = Candidate.TargetPiece->GetActorRotation().Yaw;
+		}
 	}
 
 	// Rafter: pitch is set by snap system from the roof angle.
