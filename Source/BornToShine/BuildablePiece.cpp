@@ -1501,6 +1501,40 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
 
+	// Ridge board Z chain diagnostic: trace DTP → post → pocket → ridge board
+	if (PieceType == EPieceType::RidgeBoard && Candidate.TargetPiece)
+	{
+		ARidgePost* RidgePost = Cast<ARidgePost>(Candidate.TargetPiece);
+		if (RidgePost)
+		{
+			// Find the pocket socket local Z from the post's sockets
+			float PocketSocketLocalZ = 0.0f;
+			for (const FConstructionSocket& Sock : RidgePost->GetAllSockets())
+			{
+				if (Sock.SocketType == EConstructionSocketType::RidgePost_Pocket)
+				{
+					PocketSocketLocalZ = Sock.LocalPosition.Z;
+					break;
+				}
+			}
+
+			ARidgeBoard* RidgeBd = Cast<ARidgeBoard>(this);
+			float RidgeBoardTopZ = GetActorLocation().Z + (RidgeBd ? RidgeBd->BoardHeight / 2.0f : 0.0f);
+
+			UE_LOG(LogTemp, Error, TEXT(">>> Z CHAIN: DTP_top=%.2f, PostActorZ=%.2f, PostHeight=%.2f, "
+				"PocketSocketZ=%.2f, RidgeBoardActorZ=%.2f, RidgeBoardTopZ=%.2f, "
+				"ExpectedRidgeBoardZ(post+pocket)=%.2f, diff=%.2f"),
+				286.1f,
+				RidgePost->GetActorLocation().Z,
+				RidgePost->PostHeight,
+				PocketSocketLocalZ,
+				GetActorLocation().Z,
+				RidgeBoardTopZ,
+				RidgePost->GetActorLocation().Z + PocketSocketLocalZ,
+				GetActorLocation().Z - (RidgePost->GetActorLocation().Z + PocketSocketLocalZ));
+		}
+	}
+
 	// Rafter placement diagnostics
 	if (PieceType == EPieceType::Rafter)
 	{

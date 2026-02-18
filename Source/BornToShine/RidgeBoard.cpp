@@ -215,11 +215,8 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketType == EConstructionSocketType::RidgeBoard_Side)
 		{
-			// Rafter actor origin = rafter mesh CENTER. We want the rafter
-			// TOP face flush with the ridge board top, so place the socket
-			// half a rafter depth below the ridge board top surface.
-			const float RafterHalfDepth = 6.985f; // half of 2x6 (13.97cm)
-			Socket.LocalPosition.Z = MeshTopZ - RafterHalfDepth;
+			// Rafter center snaps to ridge board top surface
+			Socket.LocalPosition.Z = MeshTopZ;
 		}
 	}
 
