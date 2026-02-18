@@ -207,17 +207,11 @@ void ARafter::UpdateRafterLength()
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
 	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
 	float MeshOffsetX = -MeshMinXScaled;
-
-	// Shift mesh DOWN in local Z so the top face of the rafter
-	// aligns with the actor origin (which sits at the ridge board top).
-	// Local Z on a pitched rafter is perpendicular to the slope,
-	// so this does NOT affect the birdsmouth Z calculation.
-	float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm, half of 2x6
-	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, -RafterHalfDepth));
+	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, MeshOffsetX=+%.2f, MeshOffsetZ=%.2f (half-depth local shift)"),
-		XScale, SlopeLen, MeshDefaultLength, MeshOffsetX, -RafterHalfDepth);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, MeshOffsetX=+%.2f"),
+		XScale, SlopeLen, MeshDefaultLength, MeshOffsetX);
 }

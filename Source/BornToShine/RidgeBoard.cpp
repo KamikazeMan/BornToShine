@@ -215,11 +215,11 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 		}
 		else if (Socket.SocketType == EConstructionSocketType::RidgeBoard_Side)
 		{
-			// Rafter P0 (ridge plumb cut top) must align with ridge board TOP surface,
-			// not the center. The rafter origin is at the top edge where it meets
-			// the ridge board face. Using MeshCenterZ placed rafters 9.2cm too low
-			// (half of 2x8 = 18.415cm / 2 = 9.2cm).
-			Socket.LocalPosition.Z = MeshTopZ;
+			// Rafter actor origin = rafter mesh CENTER. We want the rafter
+			// TOP face flush with the ridge board top, so place the socket
+			// half a rafter depth below the ridge board top surface.
+			const float RafterHalfDepth = 6.985f; // half of 2x6 (13.97cm)
+			Socket.LocalPosition.Z = MeshTopZ - RafterHalfDepth;
 		}
 	}
 
