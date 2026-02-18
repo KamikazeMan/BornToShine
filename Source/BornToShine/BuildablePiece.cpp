@@ -1496,9 +1496,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// Shift Z up by 0.75cm
 		FinalLocation.Z += 0.75f;
 
-		// Shift along ridge direction by 2.19cm (toward the ridge board center)
+		// Shift along ridge direction by 4.4cm (toward the ridge board center)
 		FVector RidgeDir = FinalRotation.RotateVector(FVector::RightVector);
-		FinalLocation += RidgeDir * 2.19f;
+		FinalLocation += RidgeDir * 4.4f;
 
 		// Flatten pitch by 5.07 degrees
 		FinalRotation.Pitch += 5.07f;
