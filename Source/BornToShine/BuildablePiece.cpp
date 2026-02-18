@@ -1490,15 +1490,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
 		}
 
-		// The rafter mesh center is at the actor origin. The rafter is a 2x6
-		// (13.97cm deep). Half the depth sticks above the ridge board top.
-		// Shift down by half depth projected vertically (cosine of pitch angle)
-		// so the rafter TOP edge aligns with the ridge board top surface.
-		const float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm (half of 2x6)
-		float VerticalShift = RafterHalfDepth * FMath::Cos(FMath::DegreesToRadians(FMath::Abs(FinalRotation.Pitch)));
-		FinalLocation.Z -= VerticalShift;
-		UE_LOG(LogTemp, Warning, TEXT("Rafter: Z shifted down by %.2f (halfDepth=%.2f * cos(%.1f deg)) -> Z=%.1f"),
-			VerticalShift, RafterHalfDepth, FMath::Abs(FinalRotation.Pitch), FinalLocation.Z);
+		// Rafter mesh vertical offset is handled in UpdateRafterLength()
+		// via local-space Z shift (perpendicular to slope). Actor origin
+		// stays at the snap position so birdsmouth Z is not affected.
 	}
 
 	SetActorRotation(FinalRotation);
