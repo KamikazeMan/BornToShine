@@ -112,19 +112,8 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	class USceneComponent* SceneRoot;
 
-	// Dual-mesh architecture: PocketMesh (top, never scaled) + PostMesh (lower column, scaled on Z)
-	// Until David provides split meshes, both are nullptr and we use MeshComponent at scale 1,1,1.
-	UPROPERTY(VisibleAnywhere)
-	UStaticMeshComponent* PocketMesh;
-
-	UPROPERTY(VisibleAnywhere)
-	UStaticMeshComponent* PostMesh;
-
 	// Original unscaled height of the mesh from Rhino (captured once in BeginPlay)
 	float OriginalMeshHeight;
-
-	// Height of the pocket portion (top part with notch - never scaled)
-	float PocketPortionHeight;
 
 	void CreateBottomSocket();
 	void CreatePocketSocket();

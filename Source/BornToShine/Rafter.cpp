@@ -31,7 +31,8 @@ ARafter::ARafter()
 	// Create procedural mesh component (replaces the static mesh for rafters)
 	ProceduralMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ProceduralMesh"));
 	ProceduralMesh->SetupAttachment(SceneRoot);
-	ProceduralMesh->bUseComplexAsSimpleCollision = false;
+	ProceduralMesh->bUseComplexAsSimpleCollision = true;
+	ProceduralMesh->SetCastShadow(true);
 
 	// Hide the base class static mesh (we use procedural mesh instead)
 	if (MeshComponent)
@@ -222,12 +223,116 @@ void ARafter::GenerateRafterMesh()
 
 	if (Vertices.Num() == 0) return;
 
-	// Create tangents (required for lighting)
+	// --- VERTEX WELDING PASS ---
+	// AddFace creates 4 new vertices per quad, so adjacent faces sharing an edge
+	// have duplicate vertices at the same position. This creates open edges and
+	// visible seam lines. Merge vertices within 0.01cm to close the mesh.
+	{
+		const float WeldThreshold = 0.01f;
+		const float WeldThresholdSq = WeldThreshold * WeldThreshold;
+		int32 OrigCount = Vertices.Num();
+
+		// Build a remap table: for each vertex, find the lowest-index vertex
+		// at the same position (within threshold) that shares the same normal.
+		TArray<int32> Remap;
+		Remap.SetNum(OrigCount);
+		for (int32 i = 0; i < OrigCount; i++)
+		{
+			Remap[i] = i; // Default: maps to itself
+		}
+
+		for (int32 i = 0; i < OrigCount; i++)
+		{
+			if (Remap[i] != i) continue; // Already remapped
+			for (int32 j = i + 1; j < OrigCount; j++)
+			{
+				if (Remap[j] != j) continue; // Already remapped
+				if (FVector::DistSquared(Vertices[i], Vertices[j]) < WeldThresholdSq
+					&& FVector::DotProduct(Normals[i], Normals[j]) > 0.99f)
+				{
+					Remap[j] = i;
+				}
+			}
+		}
+
+		// Build compacted arrays
+		TArray<FVector> NewVerts;
+		TArray<FVector> NewNormals;
+		TArray<FVector2D> NewUVs;
+		TArray<int32> CompactRemap; // old index -> new index
+		CompactRemap.SetNum(OrigCount);
+
+		for (int32 i = 0; i < OrigCount; i++)
+		{
+			int32 Canonical = Remap[i];
+			if (Canonical == i)
+			{
+				CompactRemap[i] = NewVerts.Num();
+				NewVerts.Add(Vertices[i]);
+				NewNormals.Add(Normals[i]);
+				NewUVs.Add(UVs[i]);
+			}
+		}
+		// Fill in remapped indices
+		for (int32 i = 0; i < OrigCount; i++)
+		{
+			if (Remap[i] != i)
+			{
+				CompactRemap[i] = CompactRemap[Remap[i]];
+			}
+		}
+
+		// Remap triangle indices
+		for (int32& Idx : Triangles)
+		{
+			Idx = CompactRemap[Idx];
+		}
+
+		int32 Welded = OrigCount - NewVerts.Num();
+		Vertices = MoveTemp(NewVerts);
+		Normals = MoveTemp(NewNormals);
+		UVs = MoveTemp(NewUVs);
+
+		if (Welded > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("Rafter: Welded %d duplicate vertices (%d -> %d)"),
+				Welded, OrigCount, Vertices.Num());
+		}
+	}
+
+	// Compute per-vertex tangents from triangle edges for correct lighting.
+	// A constant tangent causes shading artifacts that look like edge seams.
 	TArray<FProcMeshTangent> Tangents;
 	Tangents.SetNum(Vertices.Num());
 	for (int32 i = 0; i < Tangents.Num(); i++)
 	{
+		// Default tangent along X
 		Tangents[i] = FProcMeshTangent(FVector(1.0f, 0.0f, 0.0f), false);
+	}
+	// Derive tangent from first edge of each triangle
+	for (int32 t = 0; t + 2 < Triangles.Num(); t += 3)
+	{
+		int32 I0 = Triangles[t], I1 = Triangles[t + 1], I2 = Triangles[t + 2];
+		FVector Edge1 = Vertices[I1] - Vertices[I0];
+		FVector Edge2 = Vertices[I2] - Vertices[I0];
+		FVector2D DUV1 = UVs[I1] - UVs[I0];
+		FVector2D DUV2 = UVs[I2] - UVs[I0];
+		float Det = DUV1.X * DUV2.Y - DUV2.X * DUV1.Y;
+		FVector T;
+		if (FMath::Abs(Det) > 1e-8f)
+		{
+			float InvDet = 1.0f / Det;
+			T = (Edge1 * DUV2.Y - Edge2 * DUV1.Y) * InvDet;
+		}
+		else
+		{
+			T = Edge1;
+		}
+		T.Normalize();
+		FProcMeshTangent PMT(T, false);
+		Tangents[I0] = PMT;
+		Tangents[I1] = PMT;
+		Tangents[I2] = PMT;
 	}
 
 	// Vertex colors
@@ -579,19 +684,18 @@ void ARafter::BuildRafterGeometry(
 	AddFace(Prof[6] - Y, Prof[6] + Y, Prof[0] + Y, Prof[0] - Y, NormPlumbRidge);
 
 	// --- LEFT SIDE FACE (-Y): 7-point polygon with shared vertices ---
-	// Using indexed triangulation eliminates gaps between triangles
 	{
 		int32 Base = Vertices.Num();
 		for (int32 i = 0; i < 7; i++)
 		{
 			Vertices.Add(Prof[i] - Y);
 			Normals.Add(NormLeft);
-			UVs.Add(FVector2D(Prof[i].X / 200.0f, Prof[i].Z / 200.0f));
+			UVs.Add(FVector2D(Prof[i].X / 200.0f, -Prof[i].Z / 200.0f));
 		}
 		// Fan triangulation from vertex 0
 		for (int32 i = 1; i < 6; i++)
 		{
-			Triangles.Add(Base + 0);
+			Triangles.Add(Base);
 			Triangles.Add(Base + i);
 			Triangles.Add(Base + i + 1);
 		}
@@ -604,12 +708,12 @@ void ARafter::BuildRafterGeometry(
 		{
 			Vertices.Add(Prof[i] + Y);
 			Normals.Add(NormRight);
-			UVs.Add(FVector2D(Prof[i].X / 200.0f, Prof[i].Z / 200.0f));
+			UVs.Add(FVector2D(Prof[i].X / 200.0f, -Prof[i].Z / 200.0f));
 		}
 		// Fan triangulation from vertex 0 (reversed winding)
 		for (int32 i = 1; i < 6; i++)
 		{
-			Triangles.Add(Base + 0);
+			Triangles.Add(Base);
 			Triangles.Add(Base + i + 1);
 			Triangles.Add(Base + i);
 		}

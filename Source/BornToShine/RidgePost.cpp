@@ -40,11 +40,7 @@ ARidgePost::ARidgePost()
 		MeshComponent->SetupAttachment(SceneRoot);
 	}
 
-	// Dual-mesh components (nullptr until David provides split meshes)
-	PocketMesh = nullptr;
-	PostMesh = nullptr;
 	OriginalMeshHeight = 0.0f;
-	PocketPortionHeight = 30.5f; // ~12" fixed pocket top portion
 
 	// Ridge posts require manual nailing
 	bAutoNailOnPlace = false;
@@ -237,9 +233,8 @@ void ARidgePost::UpdateMeshScale()
 	float MeshRelZ = PostHeight - MeshLocalTopZ;
 	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, MeshRelZ));
 
-	// The gap below the mesh (from Z=0 to mesh bottom) is empty.
-	// TODO: David will model a separate column mesh for the lower portion,
-	// or we add a simple procedural box to fill the gap.
+	// The gap below the mesh (from Z=0 to mesh bottom) is inside the wall
+	// framing — nobody sees it. No fill needed.
 
 	// Update socket positions
 	float BottomZ = 0.0f;
