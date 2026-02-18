@@ -1181,7 +1181,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
 				TargetPiece)
 			{
-				const float FlushOffset = 1.03f; // Tested in PIE — visual alignment confirmed
+				const float FlushOffset = 2.30f; // 1.27 original + 1.03 additional from PIE testing
 
 				// The DTP's RIGHT vector is perpendicular to the wall surface.
 				// We need to shift the post along this axis toward the building interior.
