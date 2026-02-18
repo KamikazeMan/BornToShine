@@ -1412,10 +1412,30 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			ARidgeBoard* RidgeBd = Cast<ARidgeBoard>(Candidate.TargetPiece);
 			if (RidgeBd)
 			{
-				float RidgeBoardTopZ = RidgeBd->GetActorLocation().Z + RidgeBd->BoardHeight / 2.0f;
-				float RidgeBoardCenterZ = RidgeBd->GetActorLocation().Z;
-				UE_LOG(LogTemp, Warning, TEXT("Ridge board: centerZ=%.1f topZ=%.1f | Rafter origin Z=%.1f | diff=%.1f (should be ~0)"),
-					RidgeBoardCenterZ, RidgeBoardTopZ, FinalLocation.Z, FinalLocation.Z - RidgeBoardTopZ);
+				// Compute the actual mesh top Z from the ridge board's mesh bounds
+				// (don't use ActorZ + BoardHeight/2 — mesh origin may not be centered)
+				float RidgeBoardActorZ = RidgeBd->GetActorLocation().Z;
+				float RidgeBoardTopZ_Formula = RidgeBoardActorZ + RidgeBd->BoardHeight / 2.0f;
+
+				// Get the ACTUAL side socket Z to see what SnapLoc.Z should be
+				float SideSocketLocalZ = 0.0f;
+				for (const FConstructionSocket& RBSock : RidgeBd->GetAllSockets())
+				{
+					if (RBSock.SocketType == EConstructionSocketType::RidgeBoard_Side)
+					{
+						SideSocketLocalZ = RBSock.LocalPosition.Z;
+						break;
+					}
+				}
+				float SideSocketWorldZ = RidgeBoardActorZ + SideSocketLocalZ;
+
+				UE_LOG(LogTemp, Warning,
+					TEXT("Ridge board: ActorZ=%.1f BoardHeight=%.1f FormulaTopZ=%.1f | SideSocketLocalZ=%.1f SideSocketWorldZ=%.1f | Rafter Z=%.1f | diff(formula)=%.1f diff(socket)=%.1f"),
+					RidgeBoardActorZ, RidgeBd->BoardHeight, RidgeBoardTopZ_Formula,
+					SideSocketLocalZ, SideSocketWorldZ,
+					FinalLocation.Z,
+					FinalLocation.Z - RidgeBoardTopZ_Formula,
+					FinalLocation.Z - SideSocketWorldZ);
 			}
 		}
 

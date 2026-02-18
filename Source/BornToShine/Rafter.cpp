@@ -198,16 +198,20 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Offset mesh so the ridge end (−X end) aligns with the actor origin.
-	// The centered mesh extends from −SlopeLen/2 to +SlopeLen/2 after X-scale.
-	// Shift it +SlopeLen/2 so it goes from 0 (ridge) to +SlopeLen (tail).
+	// Offset mesh so the ridge end (min-X edge) aligns with the actor origin.
+	// The mesh origin may NOT be at the mesh center (e.g., Rhino meshes often
+	// have origin at one end). Use actual bounds to find the min-X edge position
+	// after X-scaling, then shift to place that edge at the actor origin (0,0,0).
 	// This way the actor origin IS the ridge attachment point — when the actor
 	// is pitched, the ridge end stays at the ridge board and the board slopes down.
-	MeshComponent->SetRelativeLocation(FVector(SlopeLen / 2.0f, 0.0f, 0.0f));
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
+	float MeshOffsetX = -MeshMinXScaled;
+	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Log, TEXT("Rafter: XScale=%.3f, SlopeLength=%.1fcm, MeshDefault=%.1fcm, MeshOffset=+%.1f"),
-		XScale, SlopeLen, MeshDefaultLength, SlopeLen / 2.0f);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, BoundsOriginX=%.2f, BoundsExtentX=%.2f, MeshMinXScaled=%.2f, MeshOffset=+%.2f"),
+		XScale, SlopeLen, MeshDefaultLength, Bounds.Origin.X, Bounds.BoxExtent.X, MeshMinXScaled, MeshOffsetX);
 }

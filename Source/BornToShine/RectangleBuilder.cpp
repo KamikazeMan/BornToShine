@@ -2097,9 +2097,28 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     // Set default height (player can adjust with scroll wheel before placing)
     Post->SetPostHeightCm(Suggestion.PostHeightCm);
 
-    // Set position and rotation
-    Post->SetActorLocation(Suggestion.Position);
-    Post->SetActorRotation(Suggestion.Rotation);
+    // Position and rotation: prefer the snap pipeline's values which include the
+    // flush offset from DetectSnapCandidates (aligns post outer face with plate
+    // outer face). Only fall back to the suggestion position if the post isn't
+    // snapped (e.g., player clicked away from a DTP socket).
+    if (Post->IsPlacementValid())
+    {
+        // Keep the snap pipeline's position (includes flush offset)
+        // Only update rotation from suggestion
+        Post->SetActorRotation(Suggestion.Rotation);
+
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SNAP position (%.1f, %.1f, %.1f) — flush offset preserved"),
+            Post->GetActorLocation().X, Post->GetActorLocation().Y, Post->GetActorLocation().Z);
+    }
+    else
+    {
+        // Fallback: use suggestion position (already includes FlushInsetCm along ridge)
+        Post->SetActorLocation(Suggestion.Position);
+        Post->SetActorRotation(Suggestion.Rotation);
+
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SUGGESTION position (%.1f, %.1f, %.1f) — no snap available"),
+            Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
+    }
 
     // Mark as placed
     Post->SetPreviewMode(false);
@@ -2117,8 +2136,10 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     PlacedRidgePosts.Add(Post);
     PlacedRidgePostCount++;
 
-    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed ridge post %d/%d at (%.1f, %.1f, %.1f) Yaw=%.1f Height=%.1fcm %s"),
+    FVector ActualPos = Post->GetActorLocation();
+    UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed ridge post %d/%d at ACTUAL(%.1f, %.1f, %.1f) SUGGESTION(%.1f, %.1f, %.1f) Yaw=%.1f Height=%.1fcm %s"),
         PlacedRidgePostCount, RidgePostSuggestions.Num(),
+        ActualPos.X, ActualPos.Y, ActualPos.Z,
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
         Suggestion.Rotation.Yaw, Suggestion.PostHeightCm,
         *Post->GetPitchDisplayString());
