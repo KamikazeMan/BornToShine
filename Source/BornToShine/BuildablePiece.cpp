@@ -1493,8 +1493,8 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// stays at the snap position so birdsmouth Z is not affected.
 
 		// Rafter alignment correction — tested in PIE
-		// Z shift: drop by half board (0.75 - 4.4 = -3.65)
-		FinalLocation.Z -= 3.65f;
+		// Z shift: 0.75 - 3.81 = -3.06
+		FinalLocation.Z -= 3.06f;
 
 		// Shift along ridge direction by 8.21cm (toward the ridge board center)
 		FVector RidgeDir = FinalRotation.RotateVector(FVector::RightVector);
