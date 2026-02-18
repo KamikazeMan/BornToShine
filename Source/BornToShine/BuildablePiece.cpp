@@ -1503,6 +1503,25 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Warning, TEXT("Rafter placed at Pos=%s Rot=%s"),
 			*FinalLocation.ToString(), *FinalRotation.ToString());
 
+		// Geometry check: log actor position, ridge board, and tail end
+		UE_LOG(LogTemp, Error, TEXT(">>> RAFTER GEOMETRY CHECK:"));
+		UE_LOG(LogTemp, Error, TEXT("  Actor pos: %s"), *GetActorLocation().ToString());
+		if (Candidate.TargetPiece)
+		{
+			UE_LOG(LogTemp, Error, TEXT("  Ridge board pos: %s"), *Candidate.TargetPiece->GetActorLocation().ToString());
+		}
+		ARafter* RafterGeom = Cast<ARafter>(this);
+		if (RafterGeom)
+		{
+			UE_LOG(LogTemp, Error, TEXT("  Rafter Yaw=%.1f, mesh extends %.1fcm from origin along +X rotated by yaw"),
+				FinalRotation.Yaw, RafterGeom->GetSlopeLengthCm());
+
+			// Calculate where the tail end is in world space
+			FVector TailLocal(RafterGeom->GetSlopeLengthCm(), 0, 0);
+			FVector TailWorld = GetActorTransform().TransformPosition(TailLocal);
+			UE_LOG(LogTemp, Error, TEXT("  Tail end world pos: %s"), *TailWorld.ToString());
+		}
+
 		// Verify rafter origin = ridge board top surface (ridge socket at actor origin)
 		if (Candidate.TargetPiece)
 		{
