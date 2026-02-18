@@ -1974,32 +1974,6 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
-    // Filter: only use top plates within the CURRENT building's footprint.
-    // Compute bounding box from rim board endpoints to exclude other buildings.
-    FVector RectMin = FVector(MAX_FLT, MAX_FLT, 0);
-    FVector RectMax = FVector(-MAX_FLT, -MAX_FLT, 0);
-    for (ARimBoard* RB : CompletedRimBoards)
-    {
-        if (!RB) continue;
-        FVector Pos = RB->GetActorLocation();
-        float HalfLen = RB->GetEffectiveLength() / 2.0f;
-        FVector Fwd = RB->GetActorRotation().RotateVector(FVector::ForwardVector);
-        FVector End1 = Pos + Fwd * HalfLen;
-        FVector End2 = Pos - Fwd * HalfLen;
-        RectMin.X = FMath::Min3(RectMin.X, End1.X, End2.X);
-        RectMin.Y = FMath::Min3(RectMin.Y, End1.Y, End2.Y);
-        RectMax.X = FMath::Max3(RectMax.X, End1.X, End2.X);
-        RectMax.Y = FMath::Max3(RectMax.Y, End1.Y, End2.Y);
-    }
-
-    // Expand slightly for tolerance
-    const float Margin = 20.0f;
-    RectMin -= FVector(Margin, Margin, 0);
-    RectMax += FVector(Margin, Margin, 0);
-
-    UE_LOG(LogTemp, Error, TEXT(">>> BOUNDING BOX: X=[%.1f, %.1f] Y=[%.1f, %.1f]"),
-        RectMin.X, RectMax.X, RectMin.Y, RectMax.Y);
-
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
     int32 DTPCount = 0;
@@ -2013,16 +1987,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
-            FVector Pos = Piece->GetActorLocation();
-            bool bInside = (Pos.X >= RectMin.X && Pos.X <= RectMax.X &&
-                            Pos.Y >= RectMin.Y && Pos.Y <= RectMax.Y);
-            float PerpDist = FVector::DotProduct(Pos, PerpDir);
-            UE_LOG(LogTemp, Error, TEXT(">>> TOP PLATE [%s] pos=(%.1f,%.1f) perp=%.1f %s"),
-                *Piece->GetName(), Pos.X, Pos.Y, PerpDist,
-                bInside ? TEXT("INCLUDED") : TEXT("FILTERED OUT"));
-
-            if (!bInside) continue;
-
+            float PerpDist = FVector::DotProduct(Piece->GetActorLocation(), PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
             MaxPerp = FMath::Max(MaxPerp, PerpDist);
             DTPCount++;
