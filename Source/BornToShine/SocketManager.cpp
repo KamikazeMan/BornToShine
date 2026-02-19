@@ -331,6 +331,23 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
+			// DEBUG: Log every target socket for ridge post BEFORE any filtering
+			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom)
+			{
+				static float LastRPScanTime = 0.0f;
+				float CurTime = Piece->GetWorld() ? Piece->GetWorld()->GetTimeSeconds() : 0.0f;
+				if (CurTime - LastRPScanTime > 3.0f)
+				{
+					UE_LOG(LogTemp, Error, TEXT(">>> RP SCAN: piece=[%s] type=%d socket=[%s] sockType=%d occupied=%d"),
+						*Piece->GetName(), (int32)Piece->GetPieceType(),
+						*TargetSocket.SocketName.ToString(), (int32)TargetSocket.SocketType,
+						TargetSocket.bIsOccupied ? 1 : 0);
+					// Only throttle after first batch
+					if (TargetSocket.SocketName.ToString().Contains(TEXT("Right")))
+						LastRPScanTime = CurTime;
+				}
+			}
+
 			// Skip occupied sockets UNLESS:
 			// - Source is plywood/bottom plate targeting framing top faces
 			// - Target is Wall_Bottom_Plate (continuous surface, multiple pieces sit on it)
