@@ -1686,13 +1686,11 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Z -= 5.873027f;
-			FinalLocation.Y = -27.5f;
 			FinalRotation = FRotator(-27.5f, 90.0f, 0.0f);
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Z -= 5.873027f;
-			FinalLocation.Y = -27.5f;
 			FinalRotation = FRotator(-27.5f, -90.0f, 0.0f);
 		}
 
