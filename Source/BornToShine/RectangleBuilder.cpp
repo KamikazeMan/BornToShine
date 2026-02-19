@@ -1968,6 +1968,11 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
     FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
 
+    // Rotate the post 90° so the wide face (5.5" face of the 2x6 boards)
+    // is parallel to the ridge board running direction.
+    FRotator PostRotation = RidgeRotation;
+    PostRotation.Yaw += 90.0f;
+
     // Building width: measure from PLACED TOP PLATES (or rim boards as fallback).
     // Project each top plate position onto the axis perpendicular to the ridge.
     // The distance between the min and max projections = building width.
@@ -2120,7 +2125,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
 
         FRidgePostSuggestion Sug;
         Sug.Position = FVector(PostXY.X, PostXY.Y, PostBaseZ);
-        Sug.Rotation = RidgeRotation;
+        Sug.Rotation = PostRotation;
         Sug.PostHeightCm = DefaultPostHeight;
         Sug.BuildingHalfWidthCm = HalfWidth;
         Sug.PostIndex = i;

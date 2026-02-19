@@ -396,6 +396,31 @@ void UBuildingComponent::UpdatePreviewPosition()
 		}
 	}
 
+	// RIDGE POST SUGGESTION OVERRIDE: When placing a ridge post and the RectangleBuilder
+	// has ridge post suggestions, position the preview at the next suggestion location.
+	// Without this override the ridge post falls through to generic snap detection,
+	// which finds multiple socket matches on nearby top plates and produces confusing
+	// multi-candidate previews.
+	if (RectangleBuilder &&
+		RectangleBuilder->HasRidgePostSuggestions() &&
+		CurrentPreviewPiece->GetPieceType() == EPieceType::RidgePost)
+	{
+		FRidgePostSuggestion RidgePostSug = RectangleBuilder->GetNextRidgePostSuggestion();
+		if (RidgePostSug.bIsValid)
+		{
+			CurrentPreviewPiece->SetActorLocation(RidgePostSug.Position);
+			CurrentPreviewPiece->SetActorRotation(RidgePostSug.Rotation);
+			CurrentPreviewPiece->MarkSnapped(true);
+
+			// Red ghost when a ridge post already exists at this position
+			if (RectangleBuilder->OverlapsExistingPiece(EPieceType::RidgePost, RidgePostSug.Position, 30.0f))
+			{
+				CurrentPreviewPiece->SetPreviewColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+			}
+			return;
+		}
+	}
+
 	// RECTANGLE BUILDER OVERRIDE: When placing a rim board and the RectangleBuilder
 	// has an active suggestion (L-shape or U-shape detected), bypass all normal snap
 	// detection. Position the preview exactly where the suggestion says.
