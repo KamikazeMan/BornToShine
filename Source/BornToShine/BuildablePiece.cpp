@@ -1493,12 +1493,12 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// stays at the snap position so birdsmouth Z is not affected.
 
 		// Rafter alignment correction — tested in PIE
-		if (FMath::IsNear(FinalRotation.Roll, 90.0f, 1.0f))
+		if (FMath::IsNearlyEqual(FinalRotation.Roll, 90.0f, 1.0f))
 		{
 			FinalLocation = FVector(363.888735f, 120.824998f, 349.0f);
 			FinalRotation = FRotator(0.0f, -23.840288f, 90.0f);
 		}
-		else if (FMath::IsNear(FinalRotation.Roll, -90.0f, 1.0f))
+		else if (FMath::IsNearlyEqual(FinalRotation.Roll, -90.0f, 1.0f))
 		{
 			FinalLocation = FVector(363.888735f, 123.824998f, 349.0f);
 			FinalRotation = FRotator(0.0f, -23.840288f, -90.0f);
