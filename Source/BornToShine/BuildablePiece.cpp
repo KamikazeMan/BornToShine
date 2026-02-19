@@ -1499,12 +1499,12 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation = FVector(363.888735f, 120.824998f, 349.0f);
-			FinalRotation = FRotator(0.0f, 90.0f, -23.840288f);
+			FinalRotation = FRotator(-23.840288f, 90.0f, 0.0f);
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation = FVector(363.888735f, 123.824998f, 349.0f);
-			FinalRotation = FRotator(0.0f, -90.0f, -23.840288f);
+			FinalRotation = FRotator(-23.840288f, -90.0f, 0.0f);
 		}
 
 		UE_LOG(LogTemp, Error, TEXT(">>> RAFTER FINAL before SetActorRotation: P=%.6f Y=%.6f R=%.6f (Socket=%s)"),
