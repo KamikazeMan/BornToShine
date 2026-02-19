@@ -355,13 +355,13 @@ bool ASocketManager::FindBestSnapPoint(
 				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
-				bool bRidgePostBottomSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
 				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
+				bool bRidgePostBottomSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
 				bool bDTPEndTarget = (TargetSocket.SocketType == EConstructionSocketType::DoubleTopPlate_End);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
-				    !((bRafterBirdsmouthSource || bRidgePostBottomSource) && bTopPlateTopTarget) &&
+				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
 				    !(bRidgePostBottomSource && bDTPEndTarget))
 				{
 					continue;
@@ -370,18 +370,6 @@ bool ASocketManager::FindBestSnapPoint(
 
 			// Check compatibility
 			if (!AreSocketsCompatible(SourceSocket.SocketType, TargetSocket.SocketType, CurrentPhase)) continue;
-
-			// Ridge post bottom should only snap to the CENTER top socket on a top plate.
-			// This ensures the post lands at the building-width center of the gable wall DTP,
-			// not at left/right ends or OC positions along the plate.
-			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top)
-			{
-				if (!TargetSocket.SocketName.ToString().Contains(TEXT("Center")))
-				{
-					continue;
-				}
-			}
 
 			// Get world space position of target socket
 			FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);

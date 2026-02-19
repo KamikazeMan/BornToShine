@@ -685,6 +685,17 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
+
+			// Ridge post bottom ONLY snaps to DoubleTopPlate_End — reject
+			// TopPlate_Top, TopPlate_End, and every other socket type.
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom)
+			{
+				if (TgtSocketType != EConstructionSocketType::DoubleTopPlate_End)
+				{
+					continue; // Skip — ridge post only snaps to double top plate end
+				}
+			}
+
 			int32 Prio = GetSocketConnectionPriority(Socket.SocketType, TgtSocketType);
 
 			// Compute the candidate rotation
