@@ -686,14 +686,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
 
-			// Ridge post bottom ONLY snaps to DoubleTopPlate_End — reject
-			// TopPlate_Top, TopPlate_End, and every other socket type.
-			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom)
+			// DEBUG: Log every socket type the ridge post finds so we can
+			// identify the correct target and filter to it.
+			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom && TargetPiece)
 			{
-				if (TgtSocketType != EConstructionSocketType::DoubleTopPlate_End)
-				{
-					continue; // Skip — ridge post only snaps to double top plate end
-				}
+				UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST SNAP: target=[%s] socketType=%d socketName=%s dist=%.1f"),
+					*TargetPiece->GetName(), (int32)TgtSocketType, *TargetSocketName.ToString(), Dist);
 			}
 
 			int32 Prio = GetSocketConnectionPriority(Socket.SocketType, TgtSocketType);
