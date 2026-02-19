@@ -354,10 +354,13 @@ bool ASocketManager::FindBestSnapPoint(
 				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
 				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
+				bool bRidgePostSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
+				bool bDTPEndTarget = (TargetSocket.SocketType == EConstructionSocketType::DoubleTopPlate_End);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
-				    !(bRafterBirdsmouthSource && bTopPlateTopTarget))
+				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
+				    !(bRidgePostSource && bDTPEndTarget))
 				{
 					continue;
 				}
