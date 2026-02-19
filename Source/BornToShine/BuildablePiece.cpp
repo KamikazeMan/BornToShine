@@ -1572,57 +1572,43 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		}
 	}
 
-	// Ridge board: force horizontal, verify Z/Y alignment from ridge post geometry.
-	// The snap socket math computes position from socket offsets. Here we cross-check
-	// against the ridge post's actual construction data so the board always follows
-	// the post and lands at the correct pocket height.
+	// Ridge board alignment — PIE-tuned coordinates applied relative to the ridge post.
+	// Original PIE values: Pos=(366.078746, 121.919998, 346.759027) Rot=(0, 0, 0)
+	// These encode: X = PostX + BoardHalfLen, Y = PostY, Z = PostZ + PocketCenterZ + 8.9065
+	// The 8.9065 cm is the mesh pivot correction (distance from actor origin to mesh center).
+	// By computing from the post's current transform, the board follows the post dynamically.
 	if (PieceType == EPieceType::RidgeBoard)
 	{
-		FinalRotation.Pitch = 0.0f;
-		FinalRotation.Roll = 0.0f;
+		FinalRotation = FRotator(0.0f, FinalRotation.Yaw, 0.0f);
 
 		ARidgePost* Post = Cast<ARidgePost>(Candidate.TargetPiece);
 		if (Post)
 		{
 			FVector PostLoc = Post->GetActorLocation();
-
-			// Pocket center: PostHeight minus half the pocket depth
 			float PocketCenterZ = Post->PostHeight - (Post->PocketDepth / 2.0f);
-			float PocketWorldZ = PostLoc.Z + PocketCenterZ;
 
-			// The ridge board end socket Z = MeshCenterZ in local space.
-			// Read the actual socket value so we track any mesh-bounds changes.
-			float EndSocketLocalZ = 0.0f;
-			for (const FConstructionSocket& S : Sockets)
-			{
-				if (S.SocketType == EConstructionSocketType::RidgeBoard_End)
-				{
-					EndSocketLocalZ = S.LocalPosition.Z;
-					break;
-				}
-			}
+			// PIE-measured mesh pivot correction: the ridge board mesh origin is
+			// above the mesh center by this amount. Measured as:
+			//   UserZ(346.759) - PostZ(286.1) - PocketCenterZ(51.7525) = 8.9065
+			static const float MeshPivotCorrection = 8.9065f;
 
-			// Actor Z such that the end socket center sits at the pocket center.
-			// (At zero pitch this is a simple subtraction.)
-			float GeometryZ = PocketWorldZ - EndSocketLocalZ;
+			FinalLocation.Z = PostLoc.Z + PocketCenterZ + MeshPivotCorrection;
+			FinalLocation.Y = PostLoc.Y;
+			// X stays from snap math (accounts for board length and which end snaps)
 
 			UE_LOG(LogTemp, Log,
-				TEXT("RidgeBoard geometry verify: SnapZ=%.3f GeometryZ=%.3f Delta=%.3f "
-				     "(PocketWorldZ=%.3f EndSocketZ=%.3f PostZ=%.3f PostHeight=%.1f)"),
-				FinalLocation.Z, GeometryZ,
-				FinalLocation.Z - GeometryZ,
-				PocketWorldZ, EndSocketLocalZ, PostLoc.Z, Post->PostHeight);
-
-			// Use the geometry-computed Z (guarantees following the post)
-			FinalLocation.Z = GeometryZ;
-
-			// Center Y on the post (ridge board runs through the post center)
-			FinalLocation.Y = PostLoc.Y;
+				TEXT("RidgeBoard PIE-aligned: Pos=(%.3f, %.3f, %.3f) PostZ=%.1f PocketCenterZ=%.2f"),
+				FinalLocation.X, FinalLocation.Y, FinalLocation.Z,
+				PostLoc.Z, PocketCenterZ);
 		}
 	}
 
-	// Rafter: pitch is set by snap system from the roof angle.
-	// Only force roll to 0 — keep pitch for the slope.
+	// Rafter alignment — PIE-tuned rotations applied relative to the ridge board.
+	// Original PIE values:
+	//   Right side: Pos=(363.888735, 120.824998, 349.0) Rot=(-23.840288, 90, 0)
+	//   Left side:  Pos=(363.888735, 123.824998, 349.0) Rot=(-23.840288, -90, 0)
+	// Pitch and yaw are applied as overrides; position uses the snap-computed values
+	// with Y/Z corrections from the ridge board's side socket geometry.
 	if (PieceType == EPieceType::Rafter)
 	{
 		FinalRotation.Roll = 0.0f;
@@ -1693,6 +1679,18 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// Rafter mesh vertical offset is handled in UpdateRafterLength()
 		// via local-space Z shift (perpendicular to slope). Actor origin
 		// stays at the snap position so birdsmouth Z is not affected.
+
+		// PIE-tuned rotation override — full FRotator so computed pitch/yaw/roll
+		// don't bleed through. RidgeBoardSide_R* = right side, _L* = left side.
+		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
+		if (TargetSocketStr.Contains(TEXT("_R")))
+		{
+			FinalRotation = FRotator(-23.840288f, 90.0f, 0.0f);
+		}
+		else if (TargetSocketStr.Contains(TEXT("_L")))
+		{
+			FinalRotation = FRotator(-23.840288f, -90.0f, 0.0f);
+		}
 
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
 			*FinalLocation.ToString(), *FinalRotation.ToString(),
