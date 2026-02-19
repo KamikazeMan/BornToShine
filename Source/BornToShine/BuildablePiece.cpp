@@ -1680,16 +1680,18 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// via local-space Z shift (perpendicular to slope). Actor origin
 		// stays at the snap position so birdsmouth Z is not affected.
 
-		// PIE-tuned rotation override — full FRotator so computed pitch/yaw/roll
-		// don't bleed through. RidgeBoardSide_R* = right side, _L* = left side.
+		// PIE-tuned rotation and position overrides.
+		// RidgeBoardSide_R* = right side, _L* = left side.
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
-			FinalRotation = FRotator(-23.840288f, 90.0f, 0.0f);
+			FinalLocation.Z -= 5.873027f;
+			FinalRotation = FRotator(-23.840288f, 90.0f + 3.659712f, 0.0f);
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
-			FinalRotation = FRotator(-23.840288f, -90.0f, 0.0f);
+			FinalLocation.Z -= 5.873027f;
+			FinalRotation = FRotator(-23.840288f, -90.0f + 3.659712f, 0.0f);
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
