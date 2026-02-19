@@ -337,6 +337,8 @@ bool ASocketManager::FindBestSnapPoint(
 			// - Source is TopPlate targeting stud/post/door frame tops (plate spans multiple studs)
 			// - Source is rafter birdsmouth targeting TopPlate_Top (plate top is a continuous surface;
 			//   double top plate may already occupy the socket but rafters still sit on it)
+			// - Source is ridge post bottom targeting TopPlate_Top (ridge post sits on DTP top surface;
+			//   DTP may have its TopPlate_Top sockets occupied by the first-layer connection)
 			// - Target is RidgeBoard_Side (multiple rafters attach at different 16" OC positions;
 			//   side sockets are individual but we allow re-check in case the occupied flag
 			//   was set prematurely during preview)
@@ -353,14 +355,14 @@ bool ASocketManager::FindBestSnapPoint(
 				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
+				bool bRidgePostBottomSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
 				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
-				bool bRidgePostSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
 				bool bDTPEndTarget = (TargetSocket.SocketType == EConstructionSocketType::DoubleTopPlate_End);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
-				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
-				    !(bRidgePostSource && bDTPEndTarget))
+				    !((bRafterBirdsmouthSource || bRidgePostBottomSource) && bTopPlateTopTarget) &&
+				    !(bRidgePostBottomSource && bDTPEndTarget))
 				{
 					continue;
 				}
@@ -369,6 +371,18 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check compatibility
 			if (!AreSocketsCompatible(SourceSocket.SocketType, TargetSocket.SocketType, CurrentPhase)) continue;
 
+			// Ridge post bottom should only snap to the CENTER top socket on a top plate.
+			// This ensures the post lands at the building-width center of the gable wall DTP,
+			// not at left/right ends or OC positions along the plate.
+			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
+				TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top)
+			{
+				if (!TargetSocket.SocketName.ToString().Contains(TEXT("Center")))
+				{
+					continue;
+				}
+			}
+
 			// Get world space position of target socket
 			FVector TargetWorldLocation = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
 			FRotator TargetWorldRotation = Piece->GetActorRotation() + TargetSocket.LocalRotation;
@@ -376,10 +390,25 @@ bool ASocketManager::FindBestSnapPoint(
 			// Check if within snap distance
 			float Distance = FVector::Dist(WorldLocation, TargetWorldLocation);
 
-			// Debug logging disabled (runs every frame - too spammy)
-			// Only log successful snaps, not every check
-
 			if (Distance > Rule.SnapDistance) continue;
+
+			// Ridge post snap diagnostic (throttled)
+			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom)
+			{
+				static float LastRPLogTime = 0.0f;
+				float CurrentTime = Piece->GetWorld() ? Piece->GetWorld()->GetTimeSeconds() : 0.0f;
+				if (CurrentTime - LastRPLogTime > 2.0f)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("RidgePost snap MATCH: src=%s → tgt=%s [%s] on [%s] dist=%.1f Z=%.1f"),
+						*SourceSocket.SocketName.ToString(),
+						*TargetSocket.SocketName.ToString(),
+						*UEnum::GetValueAsString(TargetSocket.SocketType),
+						*Piece->GetName(),
+						Distance,
+						TargetWorldLocation.Z);
+					LastRPLogTime = CurrentTime;
+				}
+			}
 
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
