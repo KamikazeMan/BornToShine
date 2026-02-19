@@ -674,15 +674,11 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				continue;
 			}
 
-			// Corner posts ONLY snap via their bottom socket to CornerPost_Seat
-			// on bottom plates. Reject PostTop→TopPlate_Bottom matches that
-			// would incorrectly hang the post from a top plate.
-			if (PieceType == EPieceType::CornerPost &&
-				Socket.SocketType != EConstructionSocketType::CornerPost_Bottom)
+			// Ridge posts ONLY snap via their bottom socket to DoubleTopPlate_End.
+			// Reject RidgePostPocket matches that would snap the post to a ridge board.
+			if (PieceType == EPieceType::RidgePost &&
+				Socket.SocketType != EConstructionSocketType::RidgePost_Bottom)
 			{
-				UE_LOG(LogTemp, Log,
-					TEXT("CornerPost snap filter: REJECTED socket %s (type %d) — only CornerPost_Bottom accepted"),
-					*Socket.SocketName.ToString(), (int32)Socket.SocketType);
 				continue;
 			}
 
@@ -784,7 +780,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// The L-shaped post's inside corner bisects its two stud faces at 45°
 					// from the forward axis.  Snap to the nearest 90° so the post aligns
 					// cleanly with the rectangular building walls.
-					CandidateRotation.Yaw = FMath::RoundToFloat((ToCenterYaw - 45.0f) / 90.0f) * 90.0f + 90.0f;
+					CandidateRotation.Yaw = FMath::RoundToFloat((ToCenterYaw - 45.0f) / 90.0f) * 90.0f;
 				}
 				else
 				{
@@ -1132,15 +1128,15 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateRotation.Yaw, *Socket.SocketName.ToString());
 			}
 
-			// Ridge post snaps to double top plate — orient along wall, upright
+			// Ridge post snaps to double top plate — perpendicular to gable wall, upright.
+			// The pocket faces along the ridge line (perpendicular to the DTP).
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
-				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
+				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
 				TargetPiece)
 			{
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
-				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw + 90.0f;
 			}
 
 			// Calculate final actor position from socket alignment
@@ -1342,8 +1338,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// The offset must be PERPENDICULAR to the gable wall (across the wall thickness),
 			// pushing the post toward the building interior.
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
-				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
+				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
 				TargetPiece)
 			{
 				const float FlushOffset = 2.30f; // 1.27 original + 1.03 additional from PIE testing
@@ -2080,10 +2075,8 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 
 	// Ridge post bottom to double top plate / top plate top
 	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
-		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
-		  SocketB == EConstructionSocketType::TopPlate_Top)) ||
-		((SocketA == EConstructionSocketType::DoubleTopPlate_End ||
-		  SocketA == EConstructionSocketType::TopPlate_Top) &&
+		 SocketB == EConstructionSocketType::DoubleTopPlate_End) ||
+		(SocketA == EConstructionSocketType::DoubleTopPlate_End &&
 		 SocketB == EConstructionSocketType::RidgePost_Bottom))
 	{
 		return 800;

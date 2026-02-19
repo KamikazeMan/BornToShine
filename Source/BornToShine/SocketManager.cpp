@@ -614,11 +614,11 @@ void ASocketManager::CreateDoubleTopPlateRules()
 
 void ASocketManager::CreateRidgePostRules()
 {
-	// Ridge post bottom snaps to double top plate top face (or end)
+	// Ridge post bottom snaps to double top plate ends ONLY.
+	// TopPlate_Top removed — ridge posts belong on the DTP, not on regular top plates.
 	FSocketCompatibilityRule PostBottomRule;
 	PostBottomRule.SourceSocketType = EConstructionSocketType::RidgePost_Bottom;
 	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_End);
-	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
 	PostBottomRule.RequiredPhase = EConstructionPhase::RoofFrame;
 	PostBottomRule.SnapDistance = 250.0f;
 	PostBottomRule.bCheckAlignment = false;
