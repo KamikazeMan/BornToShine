@@ -685,15 +685,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
-
-			// DEBUG: Log every socket type the ridge post finds so we can
-			// identify the correct target and filter to it.
-			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom && TargetPiece)
-			{
-				UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST SNAP: target=[%s] socketType=%d socketName=%s dist=%.1f"),
-					*TargetPiece->GetName(), (int32)TgtSocketType, *TargetSocketName.ToString(), Dist);
-			}
-
 			int32 Prio = GetSocketConnectionPriority(Socket.SocketType, TgtSocketType);
 
 			// Compute the candidate rotation

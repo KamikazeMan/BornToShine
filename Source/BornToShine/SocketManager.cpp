@@ -331,19 +331,15 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
-			// DEBUG: Log first 200 TopPlate/DTP sockets then stop
+			// Ridge post bottom only targets "Center" TopPlate_Top sockets on the
+			// highest-Z plates (the double top plate layer).  This prevents snapping
+			// to left/right/OC sockets and to first-layer plates underneath.
 			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				(Piece->GetPieceType() == EPieceType::TopPlate || Piece->GetPieceType() == EPieceType::DoubleTopPlate))
+				TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top)
 			{
-				static int32 RPScanCount = 0;
-				if (RPScanCount < 200)
+				if (!TargetSocket.SocketName.ToString().Contains(TEXT("Center")))
 				{
-					UE_LOG(LogTemp, Error, TEXT(">>> RP SCAN: piece=[%s] type=%d socket=[%s] sockType=%d occupied=%d Z=%.1f"),
-						*Piece->GetName(), (int32)Piece->GetPieceType(),
-						*TargetSocket.SocketName.ToString(), (int32)TargetSocket.SocketType,
-						TargetSocket.bIsOccupied ? 1 : 0,
-						Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition).Z);
-					RPScanCount++;
+					continue;
 				}
 			}
 
@@ -371,14 +367,12 @@ bool ASocketManager::FindBestSnapPoint(
 				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
-				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
 				bool bRidgePostBottomSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
-				bool bDTPEndTarget = (TargetSocket.SocketType == EConstructionSocketType::DoubleTopPlate_End);
+				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
-				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
-				    !(bRidgePostBottomSource && bDTPEndTarget))
+				    !((bRafterBirdsmouthSource || bRidgePostBottomSource) && bTopPlateTopTarget))
 				{
 					continue;
 				}
@@ -395,24 +389,6 @@ bool ASocketManager::FindBestSnapPoint(
 			float Distance = FVector::Dist(WorldLocation, TargetWorldLocation);
 
 			if (Distance > Rule.SnapDistance) continue;
-
-			// Ridge post snap diagnostic (throttled)
-			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom)
-			{
-				static float LastRPLogTime = 0.0f;
-				float CurrentTime = Piece->GetWorld() ? Piece->GetWorld()->GetTimeSeconds() : 0.0f;
-				if (CurrentTime - LastRPLogTime > 2.0f)
-				{
-					UE_LOG(LogTemp, Warning, TEXT("RidgePost snap MATCH: src=%s → tgt=%s [%s] on [%s] dist=%.1f Z=%.1f"),
-						*SourceSocket.SocketName.ToString(),
-						*TargetSocket.SocketName.ToString(),
-						*UEnum::GetValueAsString(TargetSocket.SocketType),
-						*Piece->GetName(),
-						Distance,
-						TargetWorldLocation.Z);
-					LastRPLogTime = CurrentTime;
-				}
-			}
 
 			// Check alignment if required
 			if (Rule.bCheckAlignment)
@@ -650,11 +626,13 @@ void ASocketManager::CreateDoubleTopPlateRules()
 
 void ASocketManager::CreateRidgePostRules()
 {
-	// Ridge post bottom snaps to double top plate ends ONLY.
-	// TopPlate_Top removed — ridge posts belong on the DTP, not on regular top plates.
+	// Ridge post bottom snaps to TopPlate_Top (sockType 23).
+	// DTPs are spawned as ATopPlate objects so they use TopPlate socket types.
+	// FindBestSnapPoint further filters to only "Center"-named sockets so the
+	// post lands at the building-width center of the gable wall.
 	FSocketCompatibilityRule PostBottomRule;
 	PostBottomRule.SourceSocketType = EConstructionSocketType::RidgePost_Bottom;
-	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoubleTopPlate_End);
+	PostBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
 	PostBottomRule.RequiredPhase = EConstructionPhase::RoofFrame;
 	PostBottomRule.SnapDistance = 250.0f;
 	PostBottomRule.bCheckAlignment = false;
