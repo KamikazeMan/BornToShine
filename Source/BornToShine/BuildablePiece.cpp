@@ -967,6 +967,100 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetSocketName.ToString());
 			}
 
+			// Rafter birdsmouth snaps to top plate / double top plate top.
+			// Rafter runs PERPENDICULAR to the wall plate. The side of the plate
+			// determines which direction the rafter faces — look for the nearest
+			// ridge board to determine which way is "toward the ridge."
+			if (Socket.SocketType == EConstructionSocketType::Rafter_BirdsMouth &&
+				(TgtSocketType == EConstructionSocketType::TopPlate_Top ||
+				 TgtSocketType == EConstructionSocketType::DoubleTopPlate_End) &&
+				TargetPiece)
+			{
+				CandidateRotation.Roll = 0.0f;
+
+				// Set pitch from rafter angle
+				const ARafter* RafterSelf = Cast<const ARafter>(this);
+				if (RafterSelf)
+				{
+					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
+				}
+
+				// Yaw: perpendicular to wall plate, facing toward the ridge board.
+				// Find the nearest ridge board to determine direction.
+				float PlateYaw = TargetPiece->GetActorRotation().Yaw;
+				FVector PlateRight = FRotator(0, PlateYaw, 0).RotateVector(FVector::RightVector);
+
+				FVector BestRidgeDir = FVector::ZeroVector;
+				float BestRidgeDist = FLT_MAX;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RidgeBoard)
+					{
+						FVector ToRidge = P->GetActorLocation() - SnapLoc;
+						ToRidge.Z = 0.0f;
+						float D = ToRidge.Size();
+						if (D < BestRidgeDist && D > 1.0f)
+						{
+							BestRidgeDist = D;
+							BestRidgeDir = ToRidge.GetSafeNormal();
+						}
+					}
+				}
+
+				if (BestRidgeDist < FLT_MAX)
+				{
+					// Rafter +X points from ridge TOWARD tail (downslope).
+					// So rafter faces AWAY from the ridge → yaw = opposite of toward-ridge.
+					float ToRidgeYaw = FMath::RadiansToDegrees(FMath::Atan2(BestRidgeDir.Y, BestRidgeDir.X));
+					CandidateRotation.Yaw = ToRidgeYaw + 180.0f; // +X = away from ridge
+				}
+				else
+				{
+					// Fallback: use plate's right vector perpendicular
+					CandidateRotation.Yaw = PlateYaw + 90.0f;
+				}
+
+				UE_LOG(LogTemp, Log,
+					TEXT("Rafter BirdsMouth snap: PlateYaw=%.1f → RafterYaw=%.1f Pitch=%.1f (socket=%s)"),
+					PlateYaw, CandidateRotation.Yaw, CandidateRotation.Pitch,
+					*TargetSocketName.ToString());
+			}
+
+			// Rafter tail snaps to fascia board rafter tail sockets.
+			// Rafter runs perpendicular to the fascia board (which runs along the eave).
+			// Socket LocalRotation.Yaw (-90) encodes which side the rafter faces.
+			if (Socket.SocketType == EConstructionSocketType::Rafter_Tail &&
+				TgtSocketType == EConstructionSocketType::Fascia_RafterTail &&
+				TargetPiece)
+			{
+				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
+				CandidateRotation.Roll = 0.0f;
+
+				// Set pitch from rafter angle
+				const ARafter* RafterSelf = Cast<const ARafter>(this);
+				if (RafterSelf)
+				{
+					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
+				}
+
+				// Get fascia socket facing direction
+				FConstructionSocket TgtSocket;
+				float SocketYawOffset = -90.0f; // fallback
+				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
+				{
+					SocketYawOffset = TgtSocket.LocalRotation.Yaw;
+				}
+
+				// Rafter tail points AWAY from the building.
+				// The rafter's +X goes from ridge to tail.
+				// Fascia socket yaw points inward, rafter +X = outward = opposite.
+				CandidateRotation.Yaw = TargetActorRotation.Yaw + SocketYawOffset + 180.0f;
+
+				UE_LOG(LogTemp, Log,
+					TEXT("Rafter Tail snap: FasciaYaw=%.1f SocketYaw=%.1f → RafterYaw=%.1f Pitch=%.1f"),
+					TargetActorRotation.Yaw, SocketYawOffset, CandidateRotation.Yaw, CandidateRotation.Pitch);
+			}
+
 			// Ridge post snaps to double top plate — orient along wall, upright
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
 				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||

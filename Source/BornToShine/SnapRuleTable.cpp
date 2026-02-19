@@ -32,6 +32,7 @@ void ASnapRuleTable::InitializeRules()
 	AddBottomPlateRules();
 	AddTopPlateRules();
 	AddDoorFrameRules();
+	AddRafterRules();
 }
 
 void ASnapRuleTable::AddCornerRules(float BoardHalfWidth)
@@ -567,6 +568,84 @@ void ASnapRuleTable::AddDoorFrameRules()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added door frame rules (Bottom->Plate=%d)"), 900);
+}
+
+void ASnapRuleTable::AddRafterRules()
+{
+	// RAFTER RIDGE → RIDGE BOARD SIDE (primary snap — highest rafter priority)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::Rafter_Ridge,
+			EConstructionSocketType::RidgeBoard_Side
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f; // Rotation computed in DetectSnapCandidates
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 950; // Highest rafter priority — ridge is primary
+		RuleTable.Add(Key, Rule);
+	}
+
+	// RAFTER BIRDSMOUTH → TOP PLATE TOP (secondary snap)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::Rafter_BirdsMouth,
+			EConstructionSocketType::TopPlate_Top
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 850; // Below ridge — birdsmouth is secondary
+		RuleTable.Add(Key, Rule);
+	}
+
+	// RAFTER BIRDSMOUTH → DOUBLE TOP PLATE END
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::Rafter_BirdsMouth,
+			EConstructionSocketType::DoubleTopPlate_End
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 850;
+		RuleTable.Add(Key, Rule);
+	}
+
+	// RAFTER TAIL → FASCIA RAFTER TAIL (tertiary snap)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::Rafter_Tail,
+			EConstructionSocketType::Fascia_RafterTail
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 750; // Lowest rafter priority — tail is tertiary
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added rafter rules (Ridge=%d, BirdsMouth=%d, Tail=%d)"),
+		950, 850, 750);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)

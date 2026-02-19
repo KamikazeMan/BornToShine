@@ -112,7 +112,7 @@ void ATopPlate::CreateTopFaceSockets()
 	float HalfLen = BoardLength / 2.0f;
 	float SocketZ = BoardHeight / 2.0f;
 
-	// Top face sockets for DoubleTopPlate (at ends + center)
+	// Top face sockets at ends + center (for DoubleTopPlate attachment)
 	{
 		FConstructionSocket LeftTop;
 		LeftTop.SocketName = FName(TEXT("TopPlateTop_Left"));
@@ -137,6 +137,34 @@ void ATopPlate::CreateTopFaceSockets()
 		CenterTop.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
 		CenterTop.bIsOccupied = false;
 		Sockets.Add(CenterTop);
+	}
+
+	// 16" OC intermediate top face sockets (for rafter birdsmouth attachment).
+	// These sit between the Left/Center/Right sockets and give rafters
+	// positions to snap their birdsmouth cuts along the wall plate.
+	{
+		const float Spacing = 40.64f; // 16" OC in cm
+		int32 NumSpaces = FMath::FloorToInt(BoardLength / Spacing);
+		float StartX = -HalfLen + Spacing;
+
+		for (int32 i = 0; i < NumSpaces; i++)
+		{
+			float XPos = StartX + i * Spacing;
+			if (XPos > HalfLen - Spacing * 0.5f) break;
+
+			// Skip positions that are very close to Left/Center/Right sockets (already exist)
+			if (FMath::Abs(XPos - (-HalfLen)) < 5.0f) continue;
+			if (FMath::Abs(XPos - 0.0f) < 5.0f) continue;
+			if (FMath::Abs(XPos - HalfLen) < 5.0f) continue;
+
+			FConstructionSocket OC_Top;
+			OC_Top.SocketName = FName(*FString::Printf(TEXT("TopPlateTop_OC%d"), i));
+			OC_Top.SocketType = EConstructionSocketType::TopPlate_Top;
+			OC_Top.LocalPosition = FVector(XPos, 0.0f, SocketZ);
+			OC_Top.LocalRotation = FRotator(-90.0f, 0.0f, 0.0f);
+			OC_Top.bIsOccupied = false;
+			Sockets.Add(OC_Top);
+		}
 	}
 }
 

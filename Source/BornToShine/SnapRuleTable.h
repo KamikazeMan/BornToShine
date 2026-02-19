@@ -160,4 +160,5 @@ private:
 	void AddBottomPlateRules();
 	void AddTopPlateRules();
 	void AddDoorFrameRules();
+	void AddRafterRules();
 };

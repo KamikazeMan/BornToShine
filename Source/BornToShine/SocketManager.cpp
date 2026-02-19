@@ -335,6 +335,11 @@ bool ASocketManager::FindBestSnapPoint(
 			// - Source is plywood/bottom plate targeting framing top faces
 			// - Target is Wall_Bottom_Plate (continuous surface, multiple pieces sit on it)
 			// - Source is TopPlate targeting stud/post/door frame tops (plate spans multiple studs)
+			// - Source is rafter birdsmouth targeting TopPlate_Top (plate top is a continuous surface;
+			//   double top plate may already occupy the socket but rafters still sit on it)
+			// - Target is RidgeBoard_Side (multiple rafters attach at different 16" OC positions;
+			//   side sockets are individual but we allow re-check in case the occupied flag
+			//   was set prematurely during preview)
 			if (TargetSocket.bIsOccupied)
 			{
 				bool bPlywoodSource = (SourceSocket.SocketType == EConstructionSocketType::Plywood_Corner ||
@@ -347,9 +352,12 @@ bool ASocketManager::FindBestSnapPoint(
 				bool bStudPostTopTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
+				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
+				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
-				    !(bTopPlateSource && bStudPostTopTarget))
+				    !(bTopPlateSource && bStudPostTopTarget) &&
+				    !(bRafterBirdsmouthSource && bTopPlateTopTarget))
 				{
 					continue;
 				}
