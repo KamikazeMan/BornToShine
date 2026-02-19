@@ -1493,13 +1493,16 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// stays at the snap position so birdsmouth Z is not affected.
 
 		// Rafter alignment correction — tested in PIE
-		// Check the original snap rotation (before Roll was zeroed above)
-		if (FMath::IsNearlyEqual(Candidate.SnapRotation.Roll, 90.0f, 1.0f))
+		// Roll is always zeroed in snap detection (line 943) and above (line 1426),
+		// so check the target socket name to determine left vs right side.
+		// RidgeBoardSide_R* = right side (+90 yaw offset), RidgeBoardSide_L* = left side (-90 yaw offset)
+		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
+		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation = FVector(363.888735f, 120.824998f, 349.0f);
 			FinalRotation = FRotator(0.0f, -23.840288f, 90.0f);
 		}
-		else if (FMath::IsNearlyEqual(Candidate.SnapRotation.Roll, -90.0f, 1.0f))
+		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation = FVector(363.888735f, 123.824998f, 349.0f);
 			FinalRotation = FRotator(0.0f, -23.840288f, -90.0f);
