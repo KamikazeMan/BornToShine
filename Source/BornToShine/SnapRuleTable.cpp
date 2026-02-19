@@ -33,6 +33,7 @@ void ASnapRuleTable::InitializeRules()
 	AddTopPlateRules();
 	AddDoorFrameRules();
 	AddRafterRules();
+	AddRidgeBoardRules();
 }
 
 void ASnapRuleTable::AddCornerRules(float BoardHalfWidth)
@@ -646,6 +647,29 @@ void ASnapRuleTable::AddRafterRules()
 
 	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added rafter rules (Ridge=%d, BirdsMouth=%d, Tail=%d)"),
 		950, 850, 750);
+}
+
+void ASnapRuleTable::AddRidgeBoardRules()
+{
+	// RIDGE BOARD END → RIDGE POST POCKET (primary ridge board snap)
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::RidgeBoard_End,
+			EConstructionSocketType::RidgePost_Pocket
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f; // Rotation computed in DetectSnapCandidates
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 850; // High — primary connection for ridge board
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added ridge board rules (End->Pocket=%d)"), 850);
 }
 
 FVector ASnapRuleTable::CalculateFlushOffset(float BoardHalfWidth, const FRotator& TargetRotation, bool bExtendRight)

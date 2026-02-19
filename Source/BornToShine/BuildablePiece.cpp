@@ -1572,6 +1572,55 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		}
 	}
 
+	// Ridge board: force horizontal, verify Z/Y alignment from ridge post geometry.
+	// The snap socket math computes position from socket offsets. Here we cross-check
+	// against the ridge post's actual construction data so the board always follows
+	// the post and lands at the correct pocket height.
+	if (PieceType == EPieceType::RidgeBoard)
+	{
+		FinalRotation.Pitch = 0.0f;
+		FinalRotation.Roll = 0.0f;
+
+		ARidgePost* Post = Cast<ARidgePost>(Candidate.TargetPiece);
+		if (Post)
+		{
+			FVector PostLoc = Post->GetActorLocation();
+
+			// Pocket center: PostHeight minus half the pocket depth
+			float PocketCenterZ = Post->PostHeight - (Post->PocketDepth / 2.0f);
+			float PocketWorldZ = PostLoc.Z + PocketCenterZ;
+
+			// The ridge board end socket Z = MeshCenterZ in local space.
+			// Read the actual socket value so we track any mesh-bounds changes.
+			float EndSocketLocalZ = 0.0f;
+			for (const FConstructionSocket& S : Sockets)
+			{
+				if (S.SocketType == EConstructionSocketType::RidgeBoard_End)
+				{
+					EndSocketLocalZ = S.LocalPosition.Z;
+					break;
+				}
+			}
+
+			// Actor Z such that the end socket center sits at the pocket center.
+			// (At zero pitch this is a simple subtraction.)
+			float GeometryZ = PocketWorldZ - EndSocketLocalZ;
+
+			UE_LOG(LogTemp, Log,
+				TEXT("RidgeBoard geometry verify: SnapZ=%.3f GeometryZ=%.3f Delta=%.3f "
+				     "(PocketWorldZ=%.3f EndSocketZ=%.3f PostZ=%.3f PostHeight=%.1f)"),
+				FinalLocation.Z, GeometryZ,
+				FinalLocation.Z - GeometryZ,
+				PocketWorldZ, EndSocketLocalZ, PostLoc.Z, Post->PostHeight);
+
+			// Use the geometry-computed Z (guarantees following the post)
+			FinalLocation.Z = GeometryZ;
+
+			// Center Y on the post (ridge board runs through the post center)
+			FinalLocation.Y = PostLoc.Y;
+		}
+	}
+
 	// Rafter: pitch is set by snap system from the roof angle.
 	// Only force roll to 0 — keep pitch for the slope.
 	if (PieceType == EPieceType::Rafter)
@@ -1963,6 +2012,15 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::Rafter_BirdsMouth))
 	{
 		return 100;
+	}
+
+	// Ridge board end to ridge post pocket (PRIMARY ridge board snap)
+	if ((SocketA == EConstructionSocketType::RidgeBoard_End &&
+		 SocketB == EConstructionSocketType::RidgePost_Pocket) ||
+		(SocketA == EConstructionSocketType::RidgePost_Pocket &&
+		 SocketB == EConstructionSocketType::RidgeBoard_End))
+	{
+		return 850;
 	}
 
 	// Ridge post bottom to double top plate / top plate top

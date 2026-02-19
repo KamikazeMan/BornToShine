@@ -161,4 +161,5 @@ private:
 	void AddTopPlateRules();
 	void AddDoorFrameRules();
 	void AddRafterRules();
+	void AddRidgeBoardRules();
 };
