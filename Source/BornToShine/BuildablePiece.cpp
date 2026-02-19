@@ -1587,17 +1587,13 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			FVector PostLoc = Post->GetActorLocation();
 			float PocketCenterZ = Post->PostHeight - (Post->PocketDepth / 2.0f);
 
-			// PIE-measured mesh pivot correction: the ridge board mesh origin is
-			// above the mesh center by this amount. Measured as:
-			//   UserZ(346.759) - PostZ(286.1) - PocketCenterZ(51.7525) = 8.9065
-			static const float MeshPivotCorrection = 8.9065f;
-
-			FinalLocation.Z = PostLoc.Z + PocketCenterZ + MeshPivotCorrection;
+			// Z = post base + pocket center. No additional correction needed —
+			// the Z chain diagnostic confirms ExpectedZ = PostActorZ + PocketSocketZ.
+			FinalLocation.Z = PostLoc.Z + PocketCenterZ;
 			FinalLocation.Y = PostLoc.Y;
 
-			// Auto-resize ridge board to span between the two ridge posts.
-			// Find the other ridge post and measure center-to-center distance,
-			// then add PostWidth so the board ends flush with the post outer faces.
+			// Auto-resize ridge board to span between the two ridge posts
+			// and center it at the midpoint between them.
 			ARidgeBoard* RBoard = Cast<ARidgeBoard>(this);
 			if (RBoard)
 			{
@@ -1617,34 +1613,34 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 
 				if (OtherPost)
 				{
-					float PostDist = FVector::Dist2D(PostLoc, OtherPost->GetActorLocation());
+					FVector OtherLoc = OtherPost->GetActorLocation();
+					float PostDist = FVector::Dist2D(PostLoc, OtherLoc);
 					// Board spans pocket-to-pocket plus one PostWidth so ends are
 					// flush with the outer faces of both posts.
 					float NeededLengthCm = PostDist + Post->PostWidth;
 
 					RBoard->SetBoardLengthCm(NeededLengthCm);
 
+					// Center the board at the midpoint between the two posts.
+					FVector Midpoint = (PostLoc + OtherLoc) / 2.0f;
+					FinalLocation.X = Midpoint.X;
+					FinalLocation.Y = Midpoint.Y;
+					// Z already set from pocket calculation above
+
+					// Board direction: along the line between the two posts
+					FVector PostDir = (OtherLoc - PostLoc).GetSafeNormal2D();
+					float BoardYaw = FMath::RadiansToDegrees(FMath::Atan2(PostDir.Y, PostDir.X));
+					FinalRotation = FRotator(0.0f, BoardYaw, 0.0f);
+
 					UE_LOG(LogTemp, Log,
-						TEXT("RidgeBoard auto-resize: PostDist=%.1f + PostWidth=%.1f → Length=%.1fcm"),
-						PostDist, Post->PostWidth, NeededLengthCm);
-
-					// Re-run snap detection with the new length for accurate X positioning.
-					// Keep PIE-corrected Y/Z from above (they depend on the post, not the board length).
-					TArray<FSnapCandidate> RefreshedCandidates = DetectSnapCandidates();
-					FSnapCandidate RefreshedBest = SelectBestCandidate(RefreshedCandidates);
-
-					if (RefreshedBest.IsValid())
-					{
-						FinalLocation.X = RefreshedBest.SnapLocation.X;
-						FinalRotation = FRotator(0.0f, RefreshedBest.SnapRotation.Yaw, 0.0f);
-					}
+						TEXT("RidgeBoard auto-resize: PostDist=%.1f + PostWidth=%.1f → Length=%.1fcm, Center=(%.1f, %.1f) Yaw=%.1f"),
+						PostDist, Post->PostWidth, NeededLengthCm,
+						FinalLocation.X, FinalLocation.Y, BoardYaw);
 				}
 			}
 
-			// X stays from snap math (accounts for board length and which end snaps)
-
 			UE_LOG(LogTemp, Log,
-				TEXT("RidgeBoard PIE-aligned: Pos=(%.3f, %.3f, %.3f) PostZ=%.1f PocketCenterZ=%.2f"),
+				TEXT("RidgeBoard aligned: Pos=(%.3f, %.3f, %.3f) PostZ=%.1f PocketCenterZ=%.2f"),
 				FinalLocation.X, FinalLocation.Y, FinalLocation.Z,
 				PostLoc.Z, PocketCenterZ);
 		}
