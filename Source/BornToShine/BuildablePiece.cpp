@@ -1500,6 +1500,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FVector RidgeDir = FinalRotation.RotateVector(FVector::RightVector);
 		FinalLocation += RidgeDir * 8.21f;
 
+		// Y shift: move 3.81cm
+		FinalLocation.Y += 3.81f;
+
 		// Flatten pitch by 5.07 degrees
 		FinalRotation.Pitch += 5.07f;
 	}
