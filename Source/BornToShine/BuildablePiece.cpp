@@ -674,6 +674,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				continue;
 			}
 
+			// Corner posts ONLY snap via their bottom socket to CornerPost_Seat
+			// on bottom plates. Reject PostTop→TopPlate_Bottom matches that
+			// would incorrectly hang the post from a top plate.
+			if (PieceType == EPieceType::CornerPost &&
+				Socket.SocketType != EConstructionSocketType::CornerPost_Bottom)
+			{
+				UE_LOG(LogTemp, Log,
+					TEXT("CornerPost snap filter: REJECTED socket %s (type %d) — only CornerPost_Bottom accepted"),
+					*Socket.SocketName.ToString(), (int32)Socket.SocketType);
+				continue;
+			}
+
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
@@ -772,7 +784,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// The L-shaped post's inside corner bisects its two stud faces at 45°
 					// from the forward axis.  Snap to the nearest 90° so the post aligns
 					// cleanly with the rectangular building walls.
-					CandidateRotation.Yaw = FMath::RoundToFloat((ToCenterYaw - 45.0f) / 90.0f) * 90.0f;
+					CandidateRotation.Yaw = FMath::RoundToFloat((ToCenterYaw - 45.0f) / 90.0f) * 90.0f + 90.0f;
 				}
 				else
 				{
