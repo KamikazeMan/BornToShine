@@ -38,6 +38,7 @@ ARidgePost::ARidgePost()
 	if (MeshComponent)
 	{
 		MeshComponent->SetupAttachment(SceneRoot);
+		MeshComponent->SetRelativeRotation(FRotator(0.0f, 90.0f, 0.0f));
 	}
 
 	OriginalMeshHeight = 0.0f;
@@ -215,7 +216,7 @@ void ARidgePost::UpdateMeshScale()
 	// Anchor the mesh bottom at Z=0 (sitting flush on the double top plate).
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
 	float MeshBottomScaled = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ZScale;
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshBottomScaled));
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshBottomScaled - 3.759796f));
 
 	// The pocket is visually stretched by ZScale, but the ridge beam is
 	// always 18.415cm (7.25") tall. Position the pocket socket where the
