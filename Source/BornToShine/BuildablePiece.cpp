@@ -1594,6 +1594,53 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 
 			FinalLocation.Z = PostLoc.Z + PocketCenterZ + MeshPivotCorrection;
 			FinalLocation.Y = PostLoc.Y;
+
+			// Auto-resize ridge board to span between the two ridge posts.
+			// Find the other ridge post and measure center-to-center distance,
+			// then add PostWidth so the board ends flush with the post outer faces.
+			ARidgeBoard* RBoard = Cast<ARidgeBoard>(this);
+			if (RBoard)
+			{
+				TArray<AActor*> AllPosts;
+				UGameplayStatics::GetAllActorsOfClass(GetWorld(), ARidgePost::StaticClass(), AllPosts);
+
+				ARidgePost* OtherPost = nullptr;
+				for (AActor* A : AllPosts)
+				{
+					ARidgePost* RP = Cast<ARidgePost>(A);
+					if (RP && RP != Post)
+					{
+						OtherPost = RP;
+						break;
+					}
+				}
+
+				if (OtherPost)
+				{
+					float PostDist = FVector::Dist2D(PostLoc, OtherPost->GetActorLocation());
+					// Board spans pocket-to-pocket plus one PostWidth so ends are
+					// flush with the outer faces of both posts.
+					float NeededLengthCm = PostDist + Post->PostWidth;
+
+					RBoard->SetBoardLengthCm(NeededLengthCm);
+
+					UE_LOG(LogTemp, Log,
+						TEXT("RidgeBoard auto-resize: PostDist=%.1f + PostWidth=%.1f → Length=%.1fcm"),
+						PostDist, Post->PostWidth, NeededLengthCm);
+
+					// Re-run snap detection with the new length for accurate X positioning.
+					// Keep PIE-corrected Y/Z from above (they depend on the post, not the board length).
+					TArray<FSnapCandidate> RefreshedCandidates = DetectSnapCandidates();
+					FSnapCandidate RefreshedBest = SelectBestCandidate(RefreshedCandidates);
+
+					if (RefreshedBest.IsValid())
+					{
+						FinalLocation.X = RefreshedBest.SnapLocation.X;
+						FinalRotation = FRotator(0.0f, RefreshedBest.SnapRotation.Yaw, 0.0f);
+					}
+				}
+			}
+
 			// X stays from snap math (accounts for board length and which end snaps)
 
 			UE_LOG(LogTemp, Log,
