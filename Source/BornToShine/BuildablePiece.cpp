@@ -1493,23 +1493,22 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// stays at the snap position so birdsmouth Z is not affected.
 
 		// Rafter alignment correction — tested in PIE
-		// Roll is always zeroed in snap detection (line 943) and above (line 1426),
-		// so check the target socket name to determine left vs right side.
-		// RidgeBoardSide_R* = right side (+90 yaw offset), RidgeBoardSide_L* = left side (-90 yaw offset)
-		// Preserve computed Pitch (roof slope) — only override Location, Yaw, and Roll.
+		// Full FRotator override so computed pitch/yaw/roll don't bleed through.
+		// RidgeBoardSide_R* = right side, RidgeBoardSide_L* = left side.
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation = FVector(363.888735f, 120.824998f, 349.0f);
-			FinalRotation.Yaw = -23.840288f;
-			FinalRotation.Roll = 90.0f;
+			FinalRotation = FRotator(0.0f, -23.840288f, 90.0f);
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation = FVector(363.888735f, 123.824998f, 349.0f);
-			FinalRotation.Yaw = -23.840288f;
-			FinalRotation.Roll = -90.0f;
+			FinalRotation = FRotator(0.0f, -23.840288f, -90.0f);
 		}
+
+		UE_LOG(LogTemp, Error, TEXT(">>> RAFTER FINAL before SetActorRotation: P=%.6f Y=%.6f R=%.6f (Socket=%s)"),
+			FinalRotation.Pitch, FinalRotation.Yaw, FinalRotation.Roll, *TargetSocketStr);
 	}
 
 	// Ridge board alignment correction — tested in PIE
