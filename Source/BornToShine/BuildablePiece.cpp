@@ -1061,6 +1061,65 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					TargetActorRotation.Yaw, SocketYawOffset, CandidateRotation.Yaw, CandidateRotation.Pitch);
 			}
 
+			// Ridge board end snaps to ridge post pocket.
+			// Board must be horizontal (no pitch/roll) and oriented to face
+			// the OTHER ridge post so the board spans between both.
+			if (Socket.SocketType == EConstructionSocketType::RidgeBoard_End &&
+				TgtSocketType == EConstructionSocketType::RidgePost_Pocket &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+
+				// Find the other ridge post to determine board direction
+				FVector ThisPostLoc = TargetPiece->GetActorLocation();
+				FVector OtherPostLoc = FVector::ZeroVector;
+				bool bFoundOtherPost = false;
+
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P != TargetPiece && P->GetPieceType() == EPieceType::RidgePost)
+					{
+						OtherPostLoc = P->GetActorLocation();
+						bFoundOtherPost = true;
+						break;
+					}
+				}
+
+				if (bFoundOtherPost)
+				{
+					// Board direction: from this post toward the other post
+					FVector PostDir = (OtherPostLoc - ThisPostLoc).GetSafeNormal2D();
+					float BoardYaw = FMath::RadiansToDegrees(FMath::Atan2(PostDir.Y, PostDir.X));
+
+					// Which end of the board is snapping determines direction.
+					// If the LEFT end (negative X) snaps, board +X should point AWAY from this post.
+					// If the RIGHT end (positive X) snaps, board +X should point TOWARD this post.
+					bool bIsLeftEnd = Socket.SocketName.ToString().Contains(TEXT("Left"));
+					if (bIsLeftEnd)
+					{
+						// Left end at this post → +X (right end) toward other post
+						CandidateRotation.Yaw = BoardYaw;
+					}
+					else
+					{
+						// Right end at this post → +X toward this post = opposite direction
+						CandidateRotation.Yaw = BoardYaw + 180.0f;
+					}
+				}
+				else
+				{
+					// Only one post found — use the post's yaw + 90 (perpendicular to gable wall)
+					CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw + 90.0f;
+				}
+
+				UE_LOG(LogTemp, Log,
+					TEXT("RidgeBoard snap: PostPos=%s OtherPost=%s → Yaw=%.1f (socket=%s)"),
+					*ThisPostLoc.ToString(),
+					bFoundOtherPost ? *OtherPostLoc.ToString() : TEXT("none"),
+					CandidateRotation.Yaw, *Socket.SocketName.ToString());
+			}
+
 			// Ridge post snaps to double top plate — orient along wall, upright
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
 				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
@@ -1586,30 +1645,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// via local-space Z shift (perpendicular to slope). Actor origin
 		// stays at the snap position so birdsmouth Z is not affected.
 
-		// Rafter alignment correction — tested in PIE
-		// Full FRotator override so computed pitch/yaw/roll don't bleed through.
-		// RidgeBoardSide_R* = right side, RidgeBoardSide_L* = left side.
-		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
-		if (TargetSocketStr.Contains(TEXT("_R")))
-		{
-			FinalLocation = FVector(363.888735f, 120.824998f, 349.0f);
-			FinalRotation = FRotator(-23.840288f, 90.0f, 0.0f);
-		}
-		else if (TargetSocketStr.Contains(TEXT("_L")))
-		{
-			FinalLocation = FVector(363.888735f, 123.824998f, 349.0f);
-			FinalRotation = FRotator(-23.840288f, -90.0f, 0.0f);
-		}
-
-		UE_LOG(LogTemp, Error, TEXT(">>> RAFTER FINAL before SetActorRotation: P=%.6f Y=%.6f R=%.6f (Socket=%s)"),
-			FinalRotation.Pitch, FinalRotation.Yaw, FinalRotation.Roll, *TargetSocketStr);
-	}
-
-	// Ridge board alignment correction — tested in PIE
-	if (PieceType == EPieceType::RidgeBoard)
-	{
-		FinalLocation = FVector(366.078746f, 121.919998f, 346.759027f);
-		FinalRotation = FRotator(0.0f, 0.0f, 0.0f);
+		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
+			*FinalLocation.ToString(), *FinalRotation.ToString(),
+			*Candidate.TargetSocketName.ToString());
 	}
 
 	SetActorRotation(FinalRotation);
