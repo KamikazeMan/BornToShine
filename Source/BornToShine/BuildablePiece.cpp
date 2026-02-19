@@ -674,14 +674,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				continue;
 			}
 
-			// Ridge posts ONLY snap via their bottom socket to DoubleTopPlate_End.
-			// Reject RidgePostPocket matches that would snap the post to a ridge board.
-			if (PieceType == EPieceType::RidgePost &&
-				Socket.SocketType != EConstructionSocketType::RidgePost_Bottom)
-			{
-				continue;
-			}
-
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
 
 			EConstructionSocketType TgtSocketType = GetTargetSocketType(TargetPiece, TargetSocketName);
@@ -1128,15 +1120,15 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateRotation.Yaw, *Socket.SocketName.ToString());
 			}
 
-			// Ridge post snaps to double top plate — perpendicular to gable wall, upright.
-			// The pocket faces along the ridge line (perpendicular to the DTP).
+			// Ridge post snaps to double top plate — orient along wall, upright
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
+				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
+				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
 				TargetPiece)
 			{
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
-				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw + 90.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
 			// Calculate final actor position from socket alignment
@@ -1338,7 +1330,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			// The offset must be PERPENDICULAR to the gable wall (across the wall thickness),
 			// pushing the post toward the building interior.
 			if (Socket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
-				TgtSocketType == EConstructionSocketType::DoubleTopPlate_End &&
+				(TgtSocketType == EConstructionSocketType::DoubleTopPlate_End ||
+				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
 				TargetPiece)
 			{
 				const float FlushOffset = 2.30f; // 1.27 original + 1.03 additional from PIE testing
@@ -2075,8 +2068,10 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 
 	// Ridge post bottom to double top plate / top plate top
 	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
-		 SocketB == EConstructionSocketType::DoubleTopPlate_End) ||
-		(SocketA == EConstructionSocketType::DoubleTopPlate_End &&
+		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketB == EConstructionSocketType::TopPlate_Top)) ||
+		((SocketA == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketA == EConstructionSocketType::TopPlate_Top) &&
 		 SocketB == EConstructionSocketType::RidgePost_Bottom))
 	{
 		return 800;
