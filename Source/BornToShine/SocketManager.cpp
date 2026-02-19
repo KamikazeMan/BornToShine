@@ -331,23 +331,19 @@ bool ASocketManager::FindBestSnapPoint(
 
 		for (const FConstructionSocket& TargetSocket : TargetSockets)
 		{
-			// DEBUG: Log TopPlate/DTP sockets only (skip foundations, rim boards, etc.)
+			// DEBUG: Log first 200 TopPlate/DTP sockets then stop
 			if (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom &&
 				(Piece->GetPieceType() == EPieceType::TopPlate || Piece->GetPieceType() == EPieceType::DoubleTopPlate))
 			{
-				static float LastRPScanTime = 0.0f;
-				float CurTime = Piece->GetWorld() ? Piece->GetWorld()->GetTimeSeconds() : 0.0f;
-				if (CurTime - LastRPScanTime > 3.0f)
+				static int32 RPScanCount = 0;
+				if (RPScanCount < 200)
 				{
 					UE_LOG(LogTemp, Error, TEXT(">>> RP SCAN: piece=[%s] type=%d socket=[%s] sockType=%d occupied=%d Z=%.1f"),
 						*Piece->GetName(), (int32)Piece->GetPieceType(),
 						*TargetSocket.SocketName.ToString(), (int32)TargetSocket.SocketType,
 						TargetSocket.bIsOccupied ? 1 : 0,
 						Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition).Z);
-					// Throttle after last socket of a piece
-					if (TargetSocket.SocketName.ToString().Contains(TEXT("Right")) ||
-						TargetSocket.SocketName.ToString().Contains(TEXT("OC")))
-						LastRPScanTime = CurTime;
+					RPScanCount++;
 				}
 			}
 
