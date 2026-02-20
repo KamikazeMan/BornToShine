@@ -2288,30 +2288,39 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post, FVec
     FRidgePostSuggestion Suggestion = GetNearestUnplacedRidgePostSuggestion(PlayerPosition);
     if (!Suggestion.bIsValid) return false;
 
+    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST SUGGESTION: Pos=(%.1f, %.1f, %.1f) HalfWidth=%.1f PostHeight=%.1f"),
+        Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
+        Suggestion.BuildingHalfWidthCm, Suggestion.PostHeightCm);
+
     // Set building half-width for pitch calculation
     Post->SetBuildingHalfWidth(Suggestion.BuildingHalfWidthCm);
 
     // Set default height (player can adjust with scroll wheel before placing)
     Post->SetPostHeightCm(Suggestion.PostHeightCm);
 
-    // Position: Use snap pipeline position (includes flush offset from
-    // DetectSnapCandidates AND correct DTP surface Z from the snap system).
+    // Use suggestion XY (centered on building) with snap Z (correct DTP surface).
+    // The snap system positions the post at the DTP end socket which is on the
+    // wall edge, NOT at the building center. Use suggestion XY to override.
+    FVector FinalPos = Suggestion.Position;
     if (Post->IsPlacementValid())
     {
         FVector SnappedPos = Post->GetActorLocation();
-        Post->SetActorRotation(Suggestion.Rotation);
+        // Take Z from snap (correct DTP surface height), XY from suggestion (centered)
+        FinalPos.Z = SnappedPos.Z;
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SNAP position (%.1f, %.1f, %.1f) — suggestion Z was %.1f"),
-            SnappedPos.X, SnappedPos.Y, SnappedPos.Z, Suggestion.Position.Z);
+        UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST SNAP vs SUGGESTION: SnapXY=(%.1f, %.1f) SuggestionXY=(%.1f, %.1f) UsingZ=%.1f"),
+            SnappedPos.X, SnappedPos.Y,
+            Suggestion.Position.X, Suggestion.Position.Y,
+            FinalPos.Z);
     }
     else
     {
-        Post->SetActorLocation(Suggestion.Position);
-        Post->SetActorRotation(Suggestion.Rotation);
-
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Ridge post using SUGGESTION position (%.1f, %.1f, %.1f) — no snap available"),
-            Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z);
+        UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST: No snap available, using full suggestion pos=(%.1f, %.1f, %.1f)"),
+            FinalPos.X, FinalPos.Y, FinalPos.Z);
     }
+
+    Post->SetActorLocation(FinalPos);
+    Post->SetActorRotation(Suggestion.Rotation);
 
     // Mark as placed
     Post->SetPreviewMode(false);

@@ -200,14 +200,25 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Mesh origin is at the ridge end (X=0 to 243.84 in Rhino).
-	// No X offset needed — the ridge end naturally sits at the actor origin.
-	// When the actor is pitched, it rotates around the ridge end. No arc/sag.
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+	// Diagnostic: check if the mesh pivot is at the ridge end or still centered.
+	// If Origin.X ≈ 121.92 and MeshMinX ≈ 0 → mesh was re-exported with ridge-end origin.
+	// If Origin.X ≈ 0 and MeshMinX ≈ -121.92 → mesh is still center-origin (old FBX).
+	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
+	float MeshOffsetX = -MeshMinXScaled;
+
+	UE_LOG(LogTemp, Error, TEXT(">>> RAFTER BOUNDS: Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f) MeshMinXScaled=%.2f MeshOffsetX=%.2f"),
+		Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z,
+		Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z,
+		MeshMinXScaled, MeshOffsetX);
+
+	// Apply the computed offset so the ridge end (min-X) is always at actor origin,
+	// regardless of whether the mesh is center-origin or ridge-end-origin.
+	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm (no offset, pivot at center)"),
-		XScale, SlopeLen, MeshDefaultLength);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, MeshOffsetX=%.2f"),
+		XScale, SlopeLen, MeshDefaultLength, MeshOffsetX);
 }

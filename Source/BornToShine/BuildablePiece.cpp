@@ -1084,8 +1084,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Fixed pitch override
-				CandidateRotation.Pitch = -25.3f;
+				// TEST: hardcoded -24.5 pitch (matching ridge and birdsmouth snaps)
+				CandidateRotation.Pitch = -24.5f;
 
 				// Get fascia socket facing direction
 				FConstructionSocket TgtSocket;
