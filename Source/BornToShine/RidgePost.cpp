@@ -216,10 +216,7 @@ void ARidgePost::UpdateMeshScale()
 	// Anchor the mesh bottom at Z=0 (sitting flush on the double top plate).
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
 	float MeshBottomScaled = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ZScale;
-	MeshComponent->SetRelativeLocation(FVector(3.490002f, 3.490002f, -MeshBottomScaled - 3.759796f));
-
-	UE_LOG(LogTemp, Error, TEXT("RIDGEPOST DEBUG: RelLoc=%s"),
-		*MeshComponent->GetRelativeLocation().ToString());
+	MeshComponent->SetRelativeLocation(FVector(3.490002f, 0.0f, -MeshBottomScaled - 3.759796f));
 
 	// The pocket is visually stretched by ZScale, but the ridge beam is
 	// always 18.415cm (7.25") tall. Position the pocket socket where the

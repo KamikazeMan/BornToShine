@@ -2105,6 +2105,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     const float PlateThicknessCm = 8.89f;   // 2x4 depth = 3.5"
     const float PostWidthCm = 11.43f;       // 4.5" = 3 laminated 2x6 boards
     const float FlushInsetCm = (PostWidthCm - PlateThicknessCm) / 2.0f; // 1.27cm = 0.5"
+    const float MeshPivotInsetCm = 3.490002f; // Mesh pivot offset from geometric center
 
     ARimBoard* EndBoards[2] = { EndBoardA, EndBoardB };
 
@@ -2120,8 +2121,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         FVector OutwardDir = (ProjectionDist >= 0.0f) ? RidgeFwd : -RidgeFwd;
 
         // Position at building center (width) at the gable end wall,
-        // then inset toward building interior for flush alignment
-        FVector PostXY = BuildingCenter2D + RidgeFwd * ProjectionDist - OutwardDir * FlushInsetCm;
+        // then inset toward building interior for flush alignment + mesh pivot correction
+        FVector PostXY = BuildingCenter2D + RidgeFwd * ProjectionDist - OutwardDir * (FlushInsetCm + MeshPivotInsetCm);
 
         FRidgePostSuggestion Sug;
         Sug.Position = FVector(PostXY.X, PostXY.Y, PostBaseZ);
