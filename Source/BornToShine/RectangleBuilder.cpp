@@ -2171,27 +2171,20 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         UE_LOG(LogTemp, Warning, TEXT("RidgePost width: Measured from %d DTPs — FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
             DTPCount, FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
 
-        // Correct BuildingCenter2D perpendicular component ONLY if the
-        // measured center differs significantly from the through-board midpoint.
-        // Small shifts (< 5cm) are noise from asymmetric top plate offsets
-        // (e.g. shared walls between adjacent buildings where the plate sits
-        // on one building's side). The through-board midpoint is authoritative.
+        // Always use DTP-measured center — the physical plate positions are
+        // the ground truth for building width and center, even when they differ
+        // slightly from the through-board midpoint (e.g. shared walls, asymmetric
+        // plate placement, or building expansions).
         float MeasuredPerpCenter = (MinPerp + MaxPerp) / 2.0f;
         float CurrentPerpProj = FVector::DotProduct(BuildingCenter2D, PerpDir);
         float CenterShift = MeasuredPerpCenter - CurrentPerpProj;
-        UE_LOG(LogTemp, Error, TEXT(">>> CENTER CORRECTION: MeasuredPerpCenter=%.1f CurrentPerpProj=%.1f Shift=%.1f"),
+        UE_LOG(LogTemp, Warning, TEXT("RidgePost: Center correction: MeasuredCenter=%.1f ThroughBoardMid=%.1f Shift=%.1fcm"),
             MeasuredPerpCenter, CurrentPerpProj, CenterShift);
-        if (FMath::Abs(CenterShift) > 5.0f)
+        if (FMath::Abs(CenterShift) > 0.1f)
         {
-            // Large shift — building is wider than through-board span, apply correction
             BuildingCenter2D += PerpDir * CenterShift;
-            UE_LOG(LogTemp, Error, TEXT(">>> CENTER AFTER CORRECTION: (%.1f, %.1f) [large shift applied]"),
-                BuildingCenter2D.X, BuildingCenter2D.Y);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT(">>> CENTER: Shift %.1fcm < 5cm threshold — using through-board midpoint (%.1f, %.1f)"),
-                CenterShift, BuildingCenter2D.X, BuildingCenter2D.Y);
+            UE_LOG(LogTemp, Warning, TEXT("RidgePost: Center adjusted to (%.1f, %.1f) [shift=%.1fcm from through-board midpoint]"),
+                BuildingCenter2D.X, BuildingCenter2D.Y, CenterShift);
         }
     }
     else
@@ -2293,6 +2286,32 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     const float MeshPivotInsetCm = 3.490002f; // Mesh pivot offset from geometric center
 
     ARimBoard* EndBoards[2] = { EndBoardA, EndBoardB };
+
+    // --- Remove stale suggestions from earlier versions of this building ---
+    // When a building is expanded (e.g., 8ft section → 16ft double), the old
+    // suggestions from the smaller version have wrong center/width. Remove any
+    // existing suggestion whose gable-end position (ridge-direction projection)
+    // matches a new gable end within tolerance.
+    for (int32 e = 0; e < 2; e++)
+    {
+        if (!EndBoards[e]) continue;
+        FVector NewEndCenter = EndBoards[e]->GetActorLocation();
+        float NewEndProj = FVector::DotProduct(NewEndCenter, RidgeFwd);
+
+        for (int32 s = RidgePostSuggestions.Num() - 1; s >= 0; s--)
+        {
+            const FRidgePostSuggestion& Existing = RidgePostSuggestions[s];
+            if (!Existing.bIsValid) continue;
+            float ExistingProj = FVector::DotProduct(Existing.Position, RidgeFwd);
+            // Same gable end position along the ridge (within ~2ft tolerance)
+            if (FMath::Abs(ExistingProj - NewEndProj) < 60.0f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RidgePost: Removing stale suggestion[%d] at (%.1f,%.1f) — same gable end as new calculation (RidgeProj=%.1f vs %.1f)"),
+                    s, Existing.Position.X, Existing.Position.Y, ExistingProj, NewEndProj);
+                RidgePostSuggestions.RemoveAt(s);
+            }
+        }
+    }
 
     for (int32 i = 0; i < 2; i++)
     {

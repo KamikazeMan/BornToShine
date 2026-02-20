@@ -412,6 +412,25 @@ void UBuildingComponent::UpdatePreviewPosition()
 			CurrentPreviewPiece->SetActorRotation(RidgePostSug.Rotation);
 			CurrentPreviewPiece->MarkSnapped(true);
 
+			// Set height and half-width on the preview so mesh scales correctly
+			ARidgePost* PreviewPost = Cast<ARidgePost>(CurrentPreviewPiece);
+			if (PreviewPost)
+			{
+				PreviewPost->SetBuildingHalfWidth(RidgePostSug.BuildingHalfWidthCm);
+				PreviewPost->SetPostHeightCm(RidgePostSug.PostHeightCm);
+			}
+
+			// Log only when suggestion changes (avoid per-frame spam)
+			static FVector LastLoggedSugPos = FVector::ZeroVector;
+			if (FVector::DistSquared(LastLoggedSugPos, RidgePostSug.Position) > 1.0f)
+			{
+				LastLoggedSugPos = RidgePostSug.Position;
+				UE_LOG(LogTemp, Warning, TEXT("RidgePost preview: Suggestion Pos=(%.1f,%.1f,%.1f) HW=%.1f H=%.1f PlayerPos=(%.1f,%.1f,%.1f)"),
+					RidgePostSug.Position.X, RidgePostSug.Position.Y, RidgePostSug.Position.Z,
+					RidgePostSug.BuildingHalfWidthCm, RidgePostSug.PostHeightCm,
+					PlayerPos.X, PlayerPos.Y, PlayerPos.Z);
+			}
+
 			// Red ghost when a ridge post already exists at this position
 			if (RectangleBuilder->OverlapsExistingPiece(EPieceType::RidgePost, RidgePostSug.Position, 30.0f))
 			{
