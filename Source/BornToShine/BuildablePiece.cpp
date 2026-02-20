@@ -998,10 +998,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// TEST: hardcoded -24.5 pitch
-				CandidateRotation.Pitch = -24.5f;
-
-				// Get the target socket's local rotation to determine facing direction
+				// Calculate pitch from rafter's actual PitchRatio (rise per 12 run)
+				ARafter* RafterPreview = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
+				float PreviewPitch = RafterPreview ? RafterPreview->PitchRatio : 6.0f;
+				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(PreviewPitch, 12.0f));
 				FConstructionSocket TgtSocket;
 				float SocketYawOffset = 90.0f; // fallback
 				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
@@ -1030,10 +1030,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			{
 				CandidateRotation.Roll = 0.0f;
 
-				// TEST: hardcoded -24.5 pitch
-				CandidateRotation.Pitch = -24.5f;
-
-				// Yaw: perpendicular to wall plate, facing toward the ridge board.
+				// Calculate pitch from rafter's actual PitchRatio
+				ARafter* RafterBM = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
+				float BMPitch = RafterBM ? RafterBM->PitchRatio : 6.0f;
+				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(BMPitch, 12.0f));
 				// Find the nearest ridge board to determine direction.
 				float PlateYaw = TargetPiece->GetActorRotation().Yaw;
 				FVector PlateRight = FRotator(0, PlateYaw, 0).RotateVector(FVector::RightVector);
@@ -1084,10 +1084,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// TEST: hardcoded -24.5 pitch (matching ridge and birdsmouth snaps)
-				CandidateRotation.Pitch = -24.5f;
-
-				// Get fascia socket facing direction
+				// Calculate pitch from rafter's actual PitchRatio
+				ARafter* RafterTail = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
+				float TailPitch = RafterTail ? RafterTail->PitchRatio : 6.0f;
+				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(TailPitch, 12.0f));
 				FConstructionSocket TgtSocket;
 				float SocketYawOffset = -90.0f; // fallback
 				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
@@ -1814,8 +1814,10 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
 		}
 
-		// TEST: hardcoded -24.5 pitch to verify ridge-end pivot behaviour.
-		float ActualPitchDeg = 24.5f;
+		// Calculate pitch from rafter's actual PitchRatio instead of hardcoded angle.
+		float ActualPitchDeg = RafterSelf
+			? FMath::RadiansToDegrees(FMath::Atan2(RafterSelf->PitchRatio, 12.0f))
+			: 26.565f; // 6/12 fallback
 		FinalRotation.Pitch = -ActualPitchDeg;
 
 		// Z offset: lower rafter center so rafter TOP aligns with ridge board top.
