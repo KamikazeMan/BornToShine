@@ -1989,34 +1989,45 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
-    // Compute tight rectangular filter from rim board extents along
-    // the ridge and perpendicular axes. This prevents adjacent buildings'
-    // top plates from polluting the width/center calculations.
-    float MinRidgeProj = MAX_FLT, MaxRidgeProj = -MAX_FLT;
-    float MinPerpProj = MAX_FLT, MaxPerpProj = -MAX_FLT;
+    // Build rim-board-segment proximity filter from this building's
+    // CompletedRimBoards. A piece belongs to this building if its XY
+    // position is within a threshold distance of any rim board line
+    // segment. This is tighter than the old OBB + margin approach and
+    // avoids leaking top plates from adjacent buildings.
+    struct FRimSeg { FVector2D A; FVector2D B; };
+    TArray<FRimSeg> RimSegments;
     for (ARimBoard* Board : CompletedRimBoards)
     {
         if (!Board) continue;
-        FVector Loc = Board->GetActorLocation();
-        float RProj = FVector::DotProduct(Loc, RidgeFwd);
-        float PProj = FVector::DotProduct(Loc, PerpDir);
-        // Account for board half-length along each axis
-        FVector BoardFwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
+        FVector Center = Board->GetActorLocation();
+        FVector Fwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
         float HalfLen = Board->GetEffectiveLength() / 2.0f;
-        float RExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, RidgeFwd));
-        float PExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, PerpDir));
-        MinRidgeProj = FMath::Min(MinRidgeProj, RProj - RExtent);
-        MaxRidgeProj = FMath::Max(MaxRidgeProj, RProj + RExtent);
-        MinPerpProj = FMath::Min(MinPerpProj, PProj - PExtent);
-        MaxPerpProj = FMath::Max(MaxPerpProj, PProj + PExtent);
+        FVector EndA = Center - Fwd * HalfLen;
+        FVector EndB = Center + Fwd * HalfLen;
+        RimSegments.Add({ FVector2D(EndA.X, EndA.Y), FVector2D(EndB.X, EndB.Y) });
     }
-    const float RectMargin = 30.0f; // ~12" margin around building perimeter
-    MinRidgeProj -= RectMargin;
-    MaxRidgeProj += RectMargin;
-    MinPerpProj -= RectMargin;
-    MaxPerpProj += RectMargin;
-    UE_LOG(LogTemp, Log, TEXT("RidgePost: OBB filter Ridge=[%.1f,%.1f] Perp=[%.1f,%.1f] Center=(%.1f,%.1f)"),
-        MinRidgeProj, MaxRidgeProj, MinPerpProj, MaxPerpProj, BuildingCenter2D.X, BuildingCenter2D.Y);
+    // Threshold: ~6" (15cm). Top plates sit directly above rim boards
+    // (same XY plane), so any plate belonging to this building will be
+    // within one board-width of a rim segment. 15cm is generous enough
+    // to catch all plates but tight enough to exclude adjacent buildings.
+    const float SegProximity = 15.0f;
+    auto IsNearRimSegment = [&RimSegments, SegProximity](const FVector& Loc) -> bool
+    {
+        FVector2D P(Loc.X, Loc.Y);
+        for (const FRimSeg& Seg : RimSegments)
+        {
+            FVector2D AB = Seg.B - Seg.A;
+            float ABLenSq = AB.SizeSquared();
+            if (ABLenSq < KINDA_SMALL_NUMBER) continue;
+            float t = FMath::Clamp(FVector2D::DotProduct(P - Seg.A, AB) / ABLenSq, 0.0f, 1.0f);
+            FVector2D Closest = Seg.A + AB * t;
+            if (FVector2D::Distance(P, Closest) < SegProximity) return true;
+        }
+        return false;
+    };
+
+    UE_LOG(LogTemp, Log, TEXT("RidgePost: Rim-segment filter built from %d rim boards, proximity=%.1fcm"),
+        RimSegments.Num(), SegProximity);
 
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
@@ -2030,11 +2041,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             if (!Piece) continue;
             FVector PieceLoc = Piece->GetActorLocation();
 
-            // Skip top plates from other buildings (rectangular OBB filter)
-            float PlateRidge = FVector::DotProduct(PieceLoc, RidgeFwd);
-            float PlatePerp = FVector::DotProduct(PieceLoc, PerpDir);
-            if (PlateRidge < MinRidgeProj || PlateRidge > MaxRidgeProj ||
-                PlatePerp < MinPerpProj || PlatePerp > MaxPerpProj) continue;
+            // Skip top plates from other buildings (rim-segment proximity)
+            if (!IsNearRimSegment(PieceLoc)) continue;
 
             float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
@@ -2090,8 +2098,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     float DoubleTopPlateTopZ = 0.0f;
     bool bFoundDTP = false;
 
-    // Use global PhaseManager query for Z calculation, filtered by rectangular
-    // OBB to THIS building (same bounds used for width measurement).
+    // Use global PhaseManager query for Z calculation, filtered by rim-segment
+    // proximity to THIS building (same filter used for width measurement).
     // Check for double top plates first, then fall back to single top plates.
     if (AConstructionPhaseManager::Instance)
     {
@@ -2100,9 +2108,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         {
             if (!Piece) continue;
             FVector DLoc = Piece->GetActorLocation();
-            float DR = FVector::DotProduct(DLoc, RidgeFwd);
-            float DP = FVector::DotProduct(DLoc, PerpDir);
-            if (DR < MinRidgeProj || DR > MaxRidgeProj || DP < MinPerpProj || DP > MaxPerpProj) continue;
+            if (!IsNearRimSegment(DLoc)) continue;
             ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
             if (DTP)
             {
@@ -2123,9 +2129,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             {
                 if (!Piece) continue;
                 FVector TLoc = Piece->GetActorLocation();
-                float TR = FVector::DotProduct(TLoc, RidgeFwd);
-                float TP = FVector::DotProduct(TLoc, PerpDir);
-                if (TR < MinRidgeProj || TR > MaxRidgeProj || TP < MinPerpProj || TP > MaxPerpProj) continue;
+                if (!IsNearRimSegment(TLoc)) continue;
                 float PlateTopZ = TLoc.Z + 3.81f / 2.0f + 3.81f;
                 if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
                 {

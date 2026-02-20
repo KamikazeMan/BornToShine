@@ -1452,22 +1452,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector ToCenter = FrameCenter - CandidateLocation;
 					ToCenter.Z = 0.0f;
 
-					// Project onto wall's right vector to get perpendicular distance to center
+					// Project onto wall's right vector to find which side is "inward"
 					float DotPerp = FVector::DotProduct(ToCenter, WallRight);
 
 					FVector BeforeFlush = CandidateLocation;
 
-					// Move post to the building center (perpendicular to ridge line),
-					// not just a fixed 2.30cm nudge. This ensures the ridge post is
-					// centered between the two long walls regardless of building width.
 					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
 					{
-						CandidateLocation += WallRight * DotPerp;
+						// Shift post toward building center (inward) along wall perpendicular
+						CandidateLocation += WallRight * FMath::Sign(DotPerp) * 2.03f;
 					}
 
 					UE_LOG(LogTemp, Warning,
-						TEXT("RidgePost center: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
-						     "FrameCenter=(%.1f,%.1f) WallRight=(%.2f,%.2f) DotPerp=%.2f RimCount=%d"),
+						TEXT("RidgePost flush: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
+						     "FrameCenter=(%.1f,%.1f) WallRight=(%.2f,%.2f) DotPerp=%.2f FlushOffset=2.03 RimCount=%d"),
 						*TargetPiece->GetName(),
 						TargetPiece->GetActorLocation().X, TargetPiece->GetActorLocation().Y, TargetPiece->GetActorLocation().Z,
 						BeforeFlush.X, BeforeFlush.Y, BeforeFlush.Z,
