@@ -200,25 +200,21 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Diagnostic: check if the mesh pivot is at the ridge end or still centered.
-	// If Origin.X ≈ 121.92 and MeshMinX ≈ 0 → mesh was re-exported with ridge-end origin.
-	// If Origin.X ≈ 0 and MeshMinX ≈ -121.92 → mesh is still center-origin (old FBX).
+	// Diagnostic: log mesh bounds to verify the mesh origin.
+	// Re-exported mesh should have: Origin.X ≈ 121.92, Extent.X ≈ 121.92, MinX ≈ 0
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
-	float MeshOffsetX = -MeshMinXScaled;
+	float MeshMinX = Bounds.Origin.X - Bounds.BoxExtent.X;
 
-	UE_LOG(LogTemp, Error, TEXT(">>> RAFTER BOUNDS: Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f) MeshMinXScaled=%.2f MeshOffsetX=%.2f"),
-		Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z,
-		Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z,
-		MeshMinXScaled, MeshOffsetX);
+	UE_LOG(LogTemp, Error, TEXT(">>> RAFTER MESH BOUNDS: Origin.X=%.2f Extent.X=%.2f MinX=%.2f"),
+		Bounds.Origin.X, Bounds.BoxExtent.X, MeshMinX);
 
-	// Apply the computed offset so the ridge end (min-X) is always at actor origin,
-	// regardless of whether the mesh is center-origin or ridge-end-origin.
-	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
+	// Mesh was re-exported from Rhino with origin at the ridge end (MinX=0).
+	// No offset needed — ridge end IS at actor origin.
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, MeshOffsetX=%.2f"),
-		XScale, SlopeLen, MeshDefaultLength, MeshOffsetX);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, RelLoc=(0,0,0)"),
+		XScale, SlopeLen, MeshDefaultLength);
 }
