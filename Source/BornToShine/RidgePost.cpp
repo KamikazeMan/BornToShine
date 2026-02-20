@@ -121,8 +121,14 @@ void ARidgePost::CreatePocketSocket()
 float ARidgePost::GetPitchRatio() const
 {
 	if (BuildingHalfWidthCm <= 0.0f) return 0.0f;
-	// Pitch = (rise / run) * 12 = (PostHeight / BuildingHalfWidthCm) * 12
-	return (PostHeight / BuildingHalfWidthCm) * 12.0f;
+	// PostHeight = rise + HAF, where HAF accounts for rafter depth alignment.
+	// Pitch must be computed from the actual roof RISE only (without HAF),
+	// otherwise the pitch is inflated (e.g. 6.6/12 instead of 6/12).
+	float ApproxAngle = FMath::Atan2(PostHeight, BuildingHalfWidthCm);
+	float RafterHalfDepth = 13.97f / 2.0f; // half of 2x6 rafter depth (5.5")
+	float HAF = RafterHalfDepth * FMath::Cos(ApproxAngle);
+	float Rise = PostHeight - HAF;
+	return (Rise / BuildingHalfWidthCm) * 12.0f;
 }
 
 FString ARidgePost::GetPitchDisplayString() const
