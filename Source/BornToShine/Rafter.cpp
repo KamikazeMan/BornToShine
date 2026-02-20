@@ -134,12 +134,15 @@ FVector ARafter::GetTailEndWorldPosition() const
 
 void ARafter::CreateRidgeEndSocket()
 {
-	// Ridge end at the actor origin (attachment point on ridge board).
-	// Actor is placed at the ridge board surface; board extends in +X toward tail.
+	// Ridge end at the min-X edge of the centered mesh.
+	// Mesh pivot is at center (no offset), so ridge end is at -SlopeLen/2.
+	// The snap system places the actor so this socket matches the ridge board target.
+	float HalfSlope = GetSlopeLengthCm() / 2.0f;
+
 	FConstructionSocket RidgeSocket;
 	RidgeSocket.SocketName = FName(TEXT("RafterRidge"));
 	RidgeSocket.SocketType = EConstructionSocketType::Rafter_Ridge;
-	RidgeSocket.LocalPosition = FVector(0.0f, 0.0f, 0.0f);
+	RidgeSocket.LocalPosition = FVector(-HalfSlope, 0.0f, 0.0f);
 	RidgeSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	RidgeSocket.Orientation = ESocketOrientation::Any;
 	RidgeSocket.bIsOccupied = false;
@@ -152,11 +155,14 @@ void ARafter::CreateBirdsmouthSocket()
 	float RiseTotal = (PitchRatio / 12.0f) * RunDistanceCm;
 	float MainSlope = FMath::Sqrt(RunDistanceCm * RunDistanceCm + RiseTotal * RiseTotal);
 
-	// Birdsmouth is MainSlope distance from ridge along the board (+X direction)
+	// Mesh is centered at actor origin, ridge end is at -HalfSlope.
+	// Birdsmouth is MainSlope distance from ridge end along the board.
+	float HalfSlope = GetSlopeLengthCm() / 2.0f;
+
 	FConstructionSocket BirdsmouthSocket;
 	BirdsmouthSocket.SocketName = FName(TEXT("RafterBirdsmouth"));
 	BirdsmouthSocket.SocketType = EConstructionSocketType::Rafter_BirdsMouth;
-	BirdsmouthSocket.LocalPosition = FVector(MainSlope, 0.0f, 0.0f);
+	BirdsmouthSocket.LocalPosition = FVector(-HalfSlope + MainSlope, 0.0f, 0.0f);
 	BirdsmouthSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	BirdsmouthSocket.Orientation = ESocketOrientation::Any;
 	BirdsmouthSocket.bIsOccupied = false;
@@ -165,13 +171,13 @@ void ARafter::CreateBirdsmouthSocket()
 
 void ARafter::CreateTailEndSocket()
 {
-	float SlopeLen = GetSlopeLengthCm();
+	// Tail end at +HalfSlope from actor origin (max-X edge of centered mesh)
+	float HalfSlope = GetSlopeLengthCm() / 2.0f;
 
-	// Tail end at SlopeLength from ridge along +X
 	FConstructionSocket TailSocket;
 	TailSocket.SocketName = FName(TEXT("RafterTail"));
 	TailSocket.SocketType = EConstructionSocketType::Rafter_Tail;
-	TailSocket.LocalPosition = FVector(SlopeLen, 0.0f, 0.0f);
+	TailSocket.LocalPosition = FVector(HalfSlope, 0.0f, 0.0f);
 	TailSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	TailSocket.Orientation = ESocketOrientation::Any;
 	TailSocket.bIsOccupied = false;
@@ -198,20 +204,15 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Offset mesh so the ridge end (min-X edge) aligns with the actor origin.
-	// The mesh origin may NOT be at the mesh center (e.g., Rhino meshes often
-	// have origin at one end). Use actual bounds to find the min-X edge position
-	// after X-scaling, then shift to place that edge at the actor origin (0,0,0).
-	// This way the actor origin IS the ridge attachment point — when the actor
-	// is pitched, the ridge end stays at the ridge board and the board slopes down.
-	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float MeshMinXScaled = (Bounds.Origin.X - Bounds.BoxExtent.X) * XScale;
-	float MeshOffsetX = -MeshMinXScaled;
-	MeshComponent->SetRelativeLocation(FVector(MeshOffsetX, 0.0f, 0.0f));
+	// Keep mesh centered at actor origin — NO X offset.
+	// The mesh center IS the actor pivot. When pitch rotation is applied,
+	// the mesh rotates around its center so no arc/sag is created.
+	// Socket positions are offset from center to mark the ridge end, birdsmouth, and tail.
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, MeshOffsetX=+%.2f"),
-		XScale, SlopeLen, MeshDefaultLength, MeshOffsetX);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm (no offset, pivot at center)"),
+		XScale, SlopeLen, MeshDefaultLength);
 }
