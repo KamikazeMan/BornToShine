@@ -1587,9 +1587,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			FVector PostLoc = Post->GetActorLocation();
 			float PocketCenterZ = Post->PostHeight - (Post->PocketDepth / 2.0f);
 
-			// Z = post base + pocket center. No additional correction needed —
-			// the Z chain diagnostic confirms ExpectedZ = PostActorZ + PocketSocketZ.
-			FinalLocation.Z = PostLoc.Z + PocketCenterZ;
+			// Z = post base + pocket center, adjusted for the ridge post mesh
+			// being shifted down 3.76cm from actor origin for base alignment.
+			FinalLocation.Z = PostLoc.Z + PocketCenterZ - 3.759796f;
 			FinalLocation.Y = PostLoc.Y;
 
 			// Auto-resize ridge board to span between the two ridge posts
