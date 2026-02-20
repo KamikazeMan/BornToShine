@@ -1059,18 +1059,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
 
-				// Find the other ridge post to determine board direction
+				// Find the closest other ridge post to determine board direction
+				// (closest ensures we pair posts on the same building, not across buildings)
 				FVector ThisPostLoc = TargetPiece->GetActorLocation();
 				FVector OtherPostLoc = FVector::ZeroVector;
 				bool bFoundOtherPost = false;
+				float BestPostDist = FLT_MAX;
 
 				for (ABuildablePiece* P : NearbyPieces)
 				{
 					if (P && P != TargetPiece && P->GetPieceType() == EPieceType::RidgePost)
 					{
-						OtherPostLoc = P->GetActorLocation();
-						bFoundOtherPost = true;
-						break;
+						float D = FVector::Dist(ThisPostLoc, P->GetActorLocation());
+						if (D < BestPostDist)
+						{
+							BestPostDist = D;
+							OtherPostLoc = P->GetActorLocation();
+							bFoundOtherPost = true;
+						}
 					}
 				}
 
@@ -1589,13 +1595,18 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				UGameplayStatics::GetAllActorsOfClass(GetWorld(), ARidgePost::StaticClass(), AllPosts);
 
 				ARidgePost* OtherPost = nullptr;
+				float BestDist = FLT_MAX;
 				for (AActor* A : AllPosts)
 				{
 					ARidgePost* RP = Cast<ARidgePost>(A);
 					if (RP && RP != Post)
 					{
-						OtherPost = RP;
-						break;
+						float D = FVector::Dist(PostLoc, RP->GetActorLocation());
+						if (D < BestDist)
+						{
+							BestDist = D;
+							OtherPost = RP;
+						}
 					}
 				}
 
@@ -1718,14 +1729,14 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Y -= 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 5.716945f;
+			FinalLocation.Z -= 7.016945f;
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Y += 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 5.716945f;
+			FinalLocation.Z -= 7.016945f;
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
