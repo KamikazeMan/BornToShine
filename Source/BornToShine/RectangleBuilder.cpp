@@ -2010,6 +2010,14 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         HalfWidth = FullWidth / 2.0f;
         UE_LOG(LogTemp, Warning, TEXT("RidgePost width: Measured from %d DTPs — FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
             DTPCount, FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
+
+        // Correct BuildingCenter2D perpendicular component to use the measured
+        // building center from ALL top plates, not just the two through boards.
+        // Without this, the ridge post centers on the through board span (8ft)
+        // instead of the full building width (16ft).
+        float MeasuredPerpCenter = (MinPerp + MaxPerp) / 2.0f;
+        float CurrentPerpProj = FVector::DotProduct(BuildingCenter2D, PerpDir);
+        BuildingCenter2D += PerpDir * (MeasuredPerpCenter - CurrentPerpProj);
     }
     else
     {
