@@ -2159,14 +2159,15 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
     }
 
-    // Default post height for 6/12 pitch: rise = (pitchRatio/12) * halfWidth + HAF
+    // Default post height: rise = tan(pitch) * halfWidth + HAF
     // HAF (Height Adjustment Factor) adds half-rafter-depth vertical component
     // so rafter top face aligns with ridge board top and birdsmouth bottom lands on DTP
-    float PitchRatio = 6.0f;
+    // Pitch must match the hardcoded rafter placement angle (24.5 degrees)
+    float PitchAngleDeg = 24.5f;
+    float PitchAngleRad = FMath::DegreesToRadians(PitchAngleDeg);
     float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm (half of 5.5" rafter depth)
-    float PitchAngleRad = FMath::Atan(PitchRatio / 12.0f);
-    float HAF = RafterHalfDepth * FMath::Cos(PitchAngleRad); // ~6.25cm at 6/12
-    float DefaultPostHeight = (PitchRatio / 12.0f) * HalfWidth + HAF;
+    float HAF = RafterHalfDepth * FMath::Cos(PitchAngleRad); // ~6.35cm at 24.5°
+    float DefaultPostHeight = FMath::Tan(PitchAngleRad) * HalfWidth + HAF;
     DefaultPostHeight = FMath::Clamp(DefaultPostHeight, 30.48f, 243.84f);
 
     // --- Find the Z position: top of double top plate ---
@@ -2279,8 +2280,48 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             (DefaultPostHeight / HalfWidth) * 12.0f, FlushInsetCm);
     }
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, default pitch=6/12)"),
-        RidgePostSuggestions.Num(), FullWidth, HalfWidth);
+    // --- Add intermediate ridge posts for buildings longer than 8ft ---
+    // Standard framing: ridge posts every ~243.84cm (8ft) along the ridge line.
+    // Compute the span between the two gable end boards and add intermediate
+    // posts evenly spaced between them.
+    const float PostSpacingCm = 243.84f; // 8ft
+    if (EndBoardA && EndBoardB)
+    {
+        FVector EndACenter = EndBoardA->GetActorLocation();
+        FVector EndBCenter = EndBoardB->GetActorLocation();
+        float ProjA = FVector::DotProduct(EndACenter - BuildingCenter2D, RidgeFwd);
+        float ProjB = FVector::DotProduct(EndBCenter - BuildingCenter2D, RidgeFwd);
+        float MinProj = FMath::Min(ProjA, ProjB);
+        float MaxProj = FMath::Max(ProjA, ProjB);
+        float RidgeSpan = MaxProj - MinProj;
+
+        if (RidgeSpan > PostSpacingCm * 1.5f)
+        {
+            int32 NumSegments = FMath::CeilToInt(RidgeSpan / PostSpacingCm);
+            float ActualSpacing = RidgeSpan / (float)NumSegments;
+
+            for (int32 s = 1; s < NumSegments; s++)
+            {
+                float IntermediateProj = MinProj + ActualSpacing * s;
+                FVector PostXY = BuildingCenter2D + RidgeFwd * IntermediateProj;
+
+                FRidgePostSuggestion Sug;
+                Sug.Position = FVector(PostXY.X, PostXY.Y, PostBaseZ);
+                Sug.Rotation = PostRotation;
+                Sug.PostHeightCm = DefaultPostHeight;
+                Sug.BuildingHalfWidthCm = HalfWidth;
+                Sug.PostIndex = 2 + s; // After gable end indices 0,1
+                Sug.bIsValid = true;
+                RidgePostSuggestions.Add(Sug);
+
+                UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: RidgePost[intermediate %d] Pos=(%.1f, %.1f, %.1f) Spacing=%.1fcm"),
+                    s, Sug.Position.X, Sug.Position.Y, Sug.Position.Z, ActualSpacing);
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, pitch=%.1f deg)"),
+        RidgePostSuggestions.Num(), FullWidth, HalfWidth, PitchAngleDeg);
 }
 
 bool URectangleBuilderComponent::HasRidgePostSuggestions() const
