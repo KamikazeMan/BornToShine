@@ -1728,13 +1728,15 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
-			FinalLocation.Z -= 5.873027f;
-			FinalRotation = FRotator(-25.3f, 90.0f, 0.0f);
+			FinalLocation.Y -= 3.0f;       // inward toward ridge board
+			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
+			FinalRotation = FRotator(-24.000001f, 90.0f, 0.0f);  // -25.3 + 1.299999
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
-			FinalLocation.Z -= 5.873027f;
-			FinalRotation = FRotator(-25.3f, -90.0f, 0.0f);
+			FinalLocation.Y += 3.0f;       // inward toward ridge board
+			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
+			FinalRotation = FRotator(-24.000001f, -90.0f, 0.0f); // -25.3 + 1.299999
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
