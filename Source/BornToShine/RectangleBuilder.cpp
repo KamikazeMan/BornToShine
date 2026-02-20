@@ -2001,7 +2001,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         float PProj = FVector::DotProduct(Loc, PerpDir);
         // Account for board half-length along each axis
         FVector BoardFwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
-        float HalfLen = Board->GetBoardLengthCm() / 2.0f;
+        float HalfLen = Board->GetEffectiveLength() / 2.0f;
         float RExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, RidgeFwd));
         float PExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, PerpDir));
         MinRidgeProj = FMath::Min(MinRidgeProj, RProj - RExtent);
