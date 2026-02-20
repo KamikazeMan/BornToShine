@@ -2159,15 +2159,14 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
     }
 
-    // Default post height: rise = tan(pitch) * halfWidth + HAF
+    // Default post height for 6/12 pitch: rise = (pitchRatio/12) * halfWidth + HAF
     // HAF (Height Adjustment Factor) adds half-rafter-depth vertical component
     // so rafter top face aligns with ridge board top and birdsmouth bottom lands on DTP
-    // Pitch must match the hardcoded rafter placement angle (24.5 degrees)
-    float PitchAngleDeg = 24.5f;
-    float PitchAngleRad = FMath::DegreesToRadians(PitchAngleDeg);
+    float PitchRatio = 6.0f;
     float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm (half of 5.5" rafter depth)
-    float HAF = RafterHalfDepth * FMath::Cos(PitchAngleRad); // ~6.35cm at 24.5°
-    float DefaultPostHeight = FMath::Tan(PitchAngleRad) * HalfWidth + HAF;
+    float PitchAngleRad = FMath::Atan(PitchRatio / 12.0f);
+    float HAF = RafterHalfDepth * FMath::Cos(PitchAngleRad); // ~6.25cm at 6/12
+    float DefaultPostHeight = (PitchRatio / 12.0f) * HalfWidth + HAF;
     DefaultPostHeight = FMath::Clamp(DefaultPostHeight, 30.48f, 243.84f);
 
     // --- Find the Z position: top of double top plate ---
@@ -2320,8 +2319,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         }
     }
 
-    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, pitch=%.1f deg)"),
-        RidgePostSuggestions.Num(), FullWidth, HalfWidth, PitchAngleDeg);
+    UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: Calculated %d ridge post suggestions (building width=%.1fcm, half=%.1fcm, default pitch=6/12)"),
+        RidgePostSuggestions.Num(), FullWidth, HalfWidth);
 }
 
 bool URectangleBuilderComponent::HasRidgePostSuggestions() const

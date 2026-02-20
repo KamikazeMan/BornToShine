@@ -1780,9 +1780,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			if (NearestPost && NearestPost->BuildingHalfWidthCm > 0.0f)
 			{
 				float ActualRun = NearestPost->BuildingHalfWidthCm;
-				// Use pitch ratio matching the hardcoded 24.5° rafter angle,
-				// NOT GetPitchRatio() which includes HAF and gives ~6.09/12.
-				float ActualPitch = FMath::Tan(FMath::DegreesToRadians(24.5f)) * 12.0f; // ~5.47/12
+				float ActualPitch = NearestPost->GetPitchRatio();
 				UE_LOG(LogTemp, Error, TEXT(">>> RAFTER SETTING RunDistanceCm=%.1f from RidgePost HalfWidth=%.1f, PitchRatio=%.1f"),
 					ActualRun, NearestPost->BuildingHalfWidthCm, ActualPitch);
 				if (!FMath::IsNearlyEqual(ActualRun, RafterSelf->RunDistanceCm, 0.1f) ||
