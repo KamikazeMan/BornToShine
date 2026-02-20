@@ -134,15 +134,12 @@ FVector ARafter::GetTailEndWorldPosition() const
 
 void ARafter::CreateRidgeEndSocket()
 {
-	// Ridge end at the min-X edge of the centered mesh.
-	// Mesh pivot is at center (no offset), so ridge end is at -SlopeLen/2.
-	// The snap system places the actor so this socket matches the ridge board target.
-	float HalfSlope = GetSlopeLengthCm() / 2.0f;
-
+	// Ridge end at actor origin. Mesh was exported with origin at the ridge end
+	// (X=0 to 243.84), so no offset is needed — the min-X edge IS at (0,0,0).
 	FConstructionSocket RidgeSocket;
 	RidgeSocket.SocketName = FName(TEXT("RafterRidge"));
 	RidgeSocket.SocketType = EConstructionSocketType::Rafter_Ridge;
-	RidgeSocket.LocalPosition = FVector(-HalfSlope, 0.0f, 0.0f);
+	RidgeSocket.LocalPosition = FVector(0.0f, 0.0f, 0.0f);
 	RidgeSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	RidgeSocket.Orientation = ESocketOrientation::Any;
 	RidgeSocket.bIsOccupied = false;
@@ -155,14 +152,12 @@ void ARafter::CreateBirdsmouthSocket()
 	float RiseTotal = (PitchRatio / 12.0f) * RunDistanceCm;
 	float MainSlope = FMath::Sqrt(RunDistanceCm * RunDistanceCm + RiseTotal * RiseTotal);
 
-	// Mesh is centered at actor origin, ridge end is at -HalfSlope.
-	// Birdsmouth is MainSlope distance from ridge end along the board.
-	float HalfSlope = GetSlopeLengthCm() / 2.0f;
-
+	// Birdsmouth is MainSlope distance from ridge end along the board (+X).
+	// Mesh origin is at ridge end, so birdsmouth is simply at (MainSlope, 0, 0).
 	FConstructionSocket BirdsmouthSocket;
 	BirdsmouthSocket.SocketName = FName(TEXT("RafterBirdsmouth"));
 	BirdsmouthSocket.SocketType = EConstructionSocketType::Rafter_BirdsMouth;
-	BirdsmouthSocket.LocalPosition = FVector(-HalfSlope + MainSlope, 0.0f, 0.0f);
+	BirdsmouthSocket.LocalPosition = FVector(MainSlope, 0.0f, 0.0f);
 	BirdsmouthSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	BirdsmouthSocket.Orientation = ESocketOrientation::Any;
 	BirdsmouthSocket.bIsOccupied = false;
@@ -171,13 +166,14 @@ void ARafter::CreateBirdsmouthSocket()
 
 void ARafter::CreateTailEndSocket()
 {
-	// Tail end at +HalfSlope from actor origin (max-X edge of centered mesh)
-	float HalfSlope = GetSlopeLengthCm() / 2.0f;
+	float SlopeLen = GetSlopeLengthCm();
 
+	// Tail end at SlopeLength from ridge end along +X.
+	// Mesh origin is at ridge end, so tail is at (SlopeLen, 0, 0).
 	FConstructionSocket TailSocket;
 	TailSocket.SocketName = FName(TEXT("RafterTail"));
 	TailSocket.SocketType = EConstructionSocketType::Rafter_Tail;
-	TailSocket.LocalPosition = FVector(HalfSlope, 0.0f, 0.0f);
+	TailSocket.LocalPosition = FVector(SlopeLen, 0.0f, 0.0f);
 	TailSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 	TailSocket.Orientation = ESocketOrientation::Any;
 	TailSocket.bIsOccupied = false;
@@ -204,10 +200,9 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Keep mesh centered at actor origin — NO X offset.
-	// The mesh center IS the actor pivot. When pitch rotation is applied,
-	// the mesh rotates around its center so no arc/sag is created.
-	// Socket positions are offset from center to mark the ridge end, birdsmouth, and tail.
+	// Mesh origin is at the ridge end (X=0 to 243.84 in Rhino).
+	// No X offset needed — the ridge end naturally sits at the actor origin.
+	// When the actor is pitched, it rotates around the ridge end. No arc/sag.
 	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
