@@ -1976,10 +1976,13 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FRotator PostRotation = RidgeRotation;
     PostRotation.Yaw += 90.0f;
 
-    // Building width: measure from PLACED TOP PLATES (or rim boards as fallback).
+    // Building width: measure from ALL top plates via global PhaseManager query.
     // Project each top plate position onto the axis perpendicular to the ridge.
     // The distance between the min and max projections = building width.
     // This works regardless of which boards are "through" vs "end."
+    // NOTE: Must use global query because PlacedTopPlates only tracks plates
+    // suggested by the rectangle builder (through-board direction), missing the
+    // end-board plates that define the full building width (e.g. 16ft vs 8ft).
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
@@ -1987,16 +1990,18 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     float MaxPerp = -MAX_FLT;
     int32 DTPCount = 0;
 
-    // Use THIS building's placed top plates (not a global query) so adjacent
-    // buildings don't pollute width/center calculations.
-    for (ATopPlate* Plate : PlacedTopPlates)
+    if (AConstructionPhaseManager::Instance)
     {
-        if (!Plate) continue;
-        FVector PieceLoc = Plate->GetActorLocation();
-        float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
-        MinPerp = FMath::Min(MinPerp, PerpDist);
-        MaxPerp = FMath::Max(MaxPerp, PerpDist);
-        DTPCount++;
+        TArray<ABuildablePiece*> AllTopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+        for (ABuildablePiece* Piece : AllTopPlates)
+        {
+            if (!Piece) continue;
+            FVector PieceLoc = Piece->GetActorLocation();
+            float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
+            MinPerp = FMath::Min(MinPerp, PerpDist);
+            MaxPerp = FMath::Max(MaxPerp, PerpDist);
+            DTPCount++;
+        }
     }
 
     float FullWidth;
@@ -2046,42 +2051,45 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     float DoubleTopPlateTopZ = 0.0f;
     bool bFoundDTP = false;
 
-    // Use THIS building's placed top plates for Z calculation.
+    // Use global PhaseManager query for Z calculation (matches width query approach).
     // Check for double top plates first, then fall back to single top plates.
-    for (ATopPlate* Plate : PlacedTopPlates)
+    if (AConstructionPhaseManager::Instance)
     {
-        if (!Plate) continue;
-
-        // Check if this is a double top plate (has the DoubleTopPlate tag/type)
-        ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Plate);
-        if (DTP)
+        TArray<ABuildablePiece*> DTPs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoubleTopPlate);
+        for (ABuildablePiece* Piece : DTPs)
         {
-            float PlateTopZ = Plate->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
-            if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+            if (!Piece) continue;
+            ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
+            if (DTP)
             {
-                DoubleTopPlateTopZ = PlateTopZ;
-                bFoundDTP = true;
+                float PlateTopZ = Piece->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
+                if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+                {
+                    DoubleTopPlateTopZ = PlateTopZ;
+                    bFoundDTP = true;
+                }
             }
         }
-    }
 
-    // Fallback: use single top plates if no DTP found
-    if (!bFoundDTP)
-    {
-        for (ATopPlate* Plate : PlacedTopPlates)
+        // Fallback: use single top plates if no DTP found
+        if (!bFoundDTP)
         {
-            if (!Plate) continue;
-            float PlateTopZ = Plate->GetActorLocation().Z + Plate->BoardHeight / 2.0f + 3.81f;
-            if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+            TArray<ABuildablePiece*> TopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+            for (ABuildablePiece* Piece : TopPlates)
             {
-                DoubleTopPlateTopZ = PlateTopZ;
-                bFoundDTP = true;
+                if (!Piece) continue;
+                float PlateTopZ = Piece->GetActorLocation().Z + 3.81f / 2.0f + 3.81f;
+                if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
+                {
+                    DoubleTopPlateTopZ = PlateTopZ;
+                    bFoundDTP = true;
+                }
             }
-        }
-        if (bFoundDTP)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: No DoubleTopPlate found, estimated DTP top from single TopPlate + 3.81cm = %.1f"),
-                DoubleTopPlateTopZ);
+            if (bFoundDTP)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: No DoubleTopPlate found, estimated DTP top from single TopPlate + 3.81cm = %.1f"),
+                    DoubleTopPlateTopZ);
+            }
         }
     }
 
