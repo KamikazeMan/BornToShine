@@ -1620,17 +1620,48 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
     // For each wall, find the highest StudTop/PostTop socket world Z
     // from placed wall studs and corner posts. Using socket positions
     // (not CalcBounds) ensures we match the snap system exactly.
+    // Filter by proximity to this building's rim board segments to
+    // avoid contamination from adjacent buildings.
     // ---------------------------------------------------------------
+    struct FRimSeg2D { FVector2D A; FVector2D B; };
+    TArray<FRimSeg2D> RimSegs;
+    for (ARimBoard* Board : CompletedRimBoards)
+    {
+        if (!Board) continue;
+        FVector Center = Board->GetActorLocation();
+        FVector Fwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
+        float HalfLen = Board->GetEffectiveLength() / 2.0f;
+        FVector EndA = Center - Fwd * HalfLen;
+        FVector EndB = Center + Fwd * HalfLen;
+        RimSegs.Add({ FVector2D(EndA.X, EndA.Y), FVector2D(EndB.X, EndB.Y) });
+    }
+    const float SegProx = 15.0f;
+    auto IsNearThisBuilding = [&RimSegs, SegProx](const FVector& Loc) -> bool
+    {
+        FVector2D P(Loc.X, Loc.Y);
+        for (const FRimSeg2D& Seg : RimSegs)
+        {
+            FVector2D AB = Seg.B - Seg.A;
+            float ABLenSq = AB.SizeSquared();
+            if (ABLenSq < KINDA_SMALL_NUMBER) continue;
+            float t = FMath::Clamp(FVector2D::DotProduct(P - Seg.A, AB) / ABLenSq, 0.0f, 1.0f);
+            FVector2D Closest = Seg.A + AB * t;
+            if (FVector2D::Distance(P, Closest) < SegProx) return true;
+        }
+        return false;
+    };
+
     float GlobalSocketTopZ = 0.0f;
     bool bFoundAnyPiece = false;
 
     if (AConstructionPhaseManager::Instance)
     {
-        // Scan placed wall studs for StudTop socket
+        // Scan placed wall studs for StudTop socket (filtered to this building)
         TArray<ABuildablePiece*> Studs = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WallStud);
         for (ABuildablePiece* Piece : Studs)
         {
             if (!Piece) continue;
+            if (!IsNearThisBuilding(Piece->GetActorLocation())) continue;
             TArray<FConstructionSocket> PieceSockets = Piece->GetAllSockets();
             for (const FConstructionSocket& Socket : PieceSockets)
             {
@@ -1647,11 +1678,12 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
             }
         }
 
-        // Scan placed corner posts for PostTop socket
+        // Scan placed corner posts for PostTop socket (filtered to this building)
         TArray<ABuildablePiece*> CornerPosts = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::CornerPost);
         for (ABuildablePiece* Piece : CornerPosts)
         {
             if (!Piece) continue;
+            if (!IsNearThisBuilding(Piece->GetActorLocation())) continue;
             TArray<FConstructionSocket> PieceSockets = Piece->GetAllSockets();
             for (const FConstructionSocket& Socket : PieceSockets)
             {
@@ -1668,8 +1700,8 @@ void URectangleBuilderComponent::CalculateTopPlateLayout()
             }
         }
 
-        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: SocketTop scan — GlobalSocketTopZ=%.2f from %d studs + %d corner posts"),
-            GlobalSocketTopZ, Studs.Num(), CornerPosts.Num());
+        UE_LOG(LogTemp, Log, TEXT("RectangleBuilder: SocketTop scan — GlobalSocketTopZ=%.2f from studs + corner posts (rim-segment filtered)"),
+            GlobalSocketTopZ);
     }
 
     TArray<float> WallTopZPerWall;
