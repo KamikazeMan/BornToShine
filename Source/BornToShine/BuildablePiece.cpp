@@ -1384,10 +1384,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				 TgtSocketType == EConstructionSocketType::TopPlate_Top) &&
 				TargetPiece)
 			{
-				const float FlushOffset = 2.30f; // 1.27 original + 1.03 additional from PIE testing
-
 				// The DTP's RIGHT vector is perpendicular to the wall surface.
-				// We need to shift the post along this axis toward the building interior.
+				// We need to move the post to the building center along this axis.
 				FVector WallRight = TargetPiece->GetActorRotation().RotateVector(FVector::RightVector);
 
 				// Find building center from same-building rim boards only.
@@ -1454,27 +1452,29 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector ToCenter = FrameCenter - CandidateLocation;
 					ToCenter.Z = 0.0f;
 
-					// Project onto wall's right vector to find which side is "inward"
+					// Project onto wall's right vector to get perpendicular distance to center
 					float DotPerp = FVector::DotProduct(ToCenter, WallRight);
 
 					FVector BeforeFlush = CandidateLocation;
 
+					// Move post to the building center (perpendicular to ridge line),
+					// not just a fixed 2.30cm nudge. This ensures the ridge post is
+					// centered between the two long walls regardless of building width.
 					if (FMath::Abs(DotPerp) > KINDA_SMALL_NUMBER)
 					{
-						// Shift post toward building center (inward) along wall perpendicular
-						CandidateLocation += WallRight * FMath::Sign(DotPerp) * FlushOffset;
+						CandidateLocation += WallRight * DotPerp;
 					}
 
 					UE_LOG(LogTemp, Warning,
-						TEXT("RidgePost flush: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
-						     "FrameCenter=(%.1f,%.1f) WallRight=(%.2f,%.2f) DotPerp=%.2f FlushOffset=%.2f RimCount=%d"),
+						TEXT("RidgePost center: DTP=[%s] pos=(%.1f,%.1f,%.1f) | Post BEFORE=(%.1f,%.1f,%.1f) AFTER=(%.1f,%.1f,%.1f) | "
+						     "FrameCenter=(%.1f,%.1f) WallRight=(%.2f,%.2f) DotPerp=%.2f RimCount=%d"),
 						*TargetPiece->GetName(),
 						TargetPiece->GetActorLocation().X, TargetPiece->GetActorLocation().Y, TargetPiece->GetActorLocation().Z,
 						BeforeFlush.X, BeforeFlush.Y, BeforeFlush.Z,
 						CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z,
 						FrameCenter.X, FrameCenter.Y,
 						WallRight.X, WallRight.Y,
-						DotPerp, FlushOffset, RimCount);
+						DotPerp, RimCount);
 				}
 			}
 
