@@ -1718,14 +1718,14 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Y -= 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
+			FinalLocation.Z -= 8.316945f;   // 7.016945 + 1.3
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Y += 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
+			FinalLocation.Z -= 8.316945f;   // 7.016945 + 1.3
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
 		}

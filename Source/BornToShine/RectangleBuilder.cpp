@@ -1983,30 +1983,20 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
-    // Max distance from building center to include a top plate — prevents
-    // mixing plates from multiple buildings in the same PIE session.
-    const float MaxDistFromCenter = 700.0f;
-
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
     int32 DTPCount = 0;
 
-    if (AConstructionPhaseManager::Instance)
+    // Use THIS building's placed top plates (not a global query) so adjacent
+    // buildings don't pollute width/center calculations.
+    for (ATopPlate* Plate : PlacedTopPlates)
     {
-        // NOTE: Double top plates are registered as EPieceType::TopPlate (not DoubleTopPlate).
-        // Filter to only top plates near THIS building's center (MaxDistFromCenter).
-        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
-        for (ABuildablePiece* Piece : DTPPieces)
-        {
-            if (!Piece) continue;
-            FVector PieceLoc = Piece->GetActorLocation();
-            float Dist2D = FVector::Dist2D(PieceLoc, BuildingCenter2D);
-            if (Dist2D > MaxDistFromCenter) continue; // skip plates from other buildings
-            float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
-            MinPerp = FMath::Min(MinPerp, PerpDist);
-            MaxPerp = FMath::Max(MaxPerp, PerpDist);
-            DTPCount++;
-        }
+        if (!Plate) continue;
+        FVector PieceLoc = Plate->GetActorLocation();
+        float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
+        MinPerp = FMath::Min(MinPerp, PerpDist);
+        MaxPerp = FMath::Max(MaxPerp, PerpDist);
+        DTPCount++;
     }
 
     float FullWidth;
@@ -2056,50 +2046,42 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     float DoubleTopPlateTopZ = 0.0f;
     bool bFoundDTP = false;
 
-    if (AConstructionPhaseManager::Instance)
+    // Use THIS building's placed top plates for Z calculation.
+    // Check for double top plates first, then fall back to single top plates.
+    for (ATopPlate* Plate : PlacedTopPlates)
     {
-        TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::DoubleTopPlate);
-        for (ABuildablePiece* Piece : DTPPieces)
-        {
-            if (!Piece) continue;
-            if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > MaxDistFromCenter) continue;
-            ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
-            if (!DTP) continue;
+        if (!Plate) continue;
 
-            float PlateTopZ = Piece->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
-            UE_LOG(LogTemp, Error, TEXT(">>> DTP Z CALC: DTP [%s] actorZ=%.2f, BoardHeight=%.2f, topZ=%.2f"),
-                *DTP->GetName(), Piece->GetActorLocation().Z, DTP->BoardHeight, PlateTopZ);
+        // Check if this is a double top plate (has the DoubleTopPlate tag/type)
+        ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Plate);
+        if (DTP)
+        {
+            float PlateTopZ = Plate->GetActorLocation().Z + DTP->BoardHeight / 2.0f;
             if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
             {
                 DoubleTopPlateTopZ = PlateTopZ;
                 bFoundDTP = true;
             }
         }
+    }
 
-        // Fallback: try single TopPlate if no DTP found yet
-        if (!bFoundDTP)
+    // Fallback: use single top plates if no DTP found
+    if (!bFoundDTP)
+    {
+        for (ATopPlate* Plate : PlacedTopPlates)
         {
-            TArray<ABuildablePiece*> TopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
-            for (ABuildablePiece* Piece : TopPlates)
+            if (!Plate) continue;
+            float PlateTopZ = Plate->GetActorLocation().Z + Plate->BoardHeight / 2.0f + 3.81f;
+            if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
             {
-                if (!Piece) continue;
-                if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > MaxDistFromCenter) continue;
-                ATopPlate* TP = Cast<ATopPlate>(Piece);
-                if (!TP) continue;
-
-                // Single top plate top + one board thickness (DTP sits on top)
-                float PlateTopZ = Piece->GetActorLocation().Z + TP->BoardHeight / 2.0f + 3.81f;
-                if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
-                {
-                    DoubleTopPlateTopZ = PlateTopZ;
-                    bFoundDTP = true;
-                }
+                DoubleTopPlateTopZ = PlateTopZ;
+                bFoundDTP = true;
             }
-            if (bFoundDTP)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: No DoubleTopPlate found, estimated DTP top from single TopPlate + 3.81cm = %.1f"),
-                    DoubleTopPlateTopZ);
-            }
+        }
+        if (bFoundDTP)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: No DoubleTopPlate found, estimated DTP top from single TopPlate + 3.81cm = %.1f"),
+                DoubleTopPlateTopZ);
         }
     }
 
