@@ -1973,6 +1973,17 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         return;
     }
 
+    UE_LOG(LogTemp, Error, TEXT(">>> CALC RIDGE POST: %d CompletedRimBoards, Through1=%s Through3=%s"),
+        CompletedRimBoards.Num(),
+        *ThroughBoard1->GetName(), *ThroughBoard3->GetName());
+    for (ARimBoard* Board : CompletedRimBoards)
+    {
+        if (!Board) continue;
+        UE_LOG(LogTemp, Error, TEXT(">>>   RimBoard [%s] Pos=(%.1f,%.1f) Len=%.1f Yaw=%.1f"),
+            *Board->GetName(), Board->GetActorLocation().X, Board->GetActorLocation().Y,
+            Board->GetEffectiveLength(), Board->GetActorRotation().Yaw);
+    }
+
     // --- Identify end boards (gable walls) from completed rim boards ---
     // ThroughBoard1 and ThroughBoard3 are the long parallel walls.
     // End boards are the other two in CompletedRimBoards.
@@ -2000,6 +2011,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     // Building center line (midpoint between the two long walls)
     FVector BuildingCenter2D = (Through1Center + Through3Center) / 2.0f;
 
+    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE CENTER: Through1=(%.1f,%.1f) Through3=(%.1f,%.1f) Center=(%.1f,%.1f)"),
+        Through1Center.X, Through1Center.Y, Through3Center.X, Through3Center.Y,
+        BuildingCenter2D.X, BuildingCenter2D.Y);
+
     // Ridge line direction (parallel to through boards)
     FRotator RidgeRotation = ThroughBoard1->GetActorRotation();
     FVector RidgeFwd = RidgeRotation.RotateVector(FVector::ForwardVector);
@@ -2020,6 +2035,9 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     // the width/center calculations.
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
+
+    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE DIRS: RidgeFwd=(%.3f,%.3f) PerpDir=(%.3f,%.3f)"),
+        RidgeFwd.X, RidgeFwd.Y, PerpDir.X, PerpDir.Y);
 
     // Build rim-board-segment proximity filter from this building's
     // CompletedRimBoards. A piece belongs to this building if its XY
@@ -2058,8 +2076,11 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         return false;
     };
 
-    UE_LOG(LogTemp, Log, TEXT("RidgePost: Rim-segment filter built from %d rim boards, proximity=%.1fcm"),
-        RimSegments.Num(), SegProximity);
+    for (int32 s = 0; s < RimSegments.Num(); s++)
+    {
+        UE_LOG(LogTemp, Error, TEXT(">>> RIM SEG[%d]: (%.1f,%.1f) -> (%.1f,%.1f)"),
+            s, RimSegments[s].A.X, RimSegments[s].A.Y, RimSegments[s].B.X, RimSegments[s].B.Y);
+    }
 
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
@@ -2068,23 +2089,34 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     if (AConstructionPhaseManager::Instance)
     {
         TArray<ABuildablePiece*> AllTopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+        UE_LOG(LogTemp, Error, TEXT(">>> TOP PLATE SCAN: %d total plates in world"), AllTopPlates.Num());
         for (ABuildablePiece* Piece : AllTopPlates)
         {
             if (!Piece) continue;
             FVector PieceLoc = Piece->GetActorLocation();
 
             // Skip top plates from other buildings (rim-segment proximity)
-            if (!IsNearRimSegment(PieceLoc)) continue;
+            if (!IsNearRimSegment(PieceLoc))
+            {
+                UE_LOG(LogTemp, Error, TEXT(">>>   REJECTED: pos=(%.1f,%.1f,%.1f) — not near any rim segment"),
+                    PieceLoc.X, PieceLoc.Y, PieceLoc.Z);
+                continue;
+            }
 
             float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
             MaxPerp = FMath::Max(MaxPerp, PerpDist);
             DTPCount++;
+            UE_LOG(LogTemp, Error, TEXT(">>>   PASSED: pos=(%.1f,%.1f,%.1f) PerpDist=%.1f"),
+                PieceLoc.X, PieceLoc.Y, PieceLoc.Z, PerpDist);
         }
     }
 
     float FullWidth;
     float HalfWidth;
+
+    UE_LOG(LogTemp, Error, TEXT(">>> WIDTH SCAN: DTPCount=%d MinPerp=%.1f MaxPerp=%.1f"),
+        DTPCount, MinPerp, MaxPerp);
 
     if (DTPCount >= 2 && MaxPerp > MinPerp)
     {
@@ -2100,7 +2132,11 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         // instead of the full building width (16ft).
         float MeasuredPerpCenter = (MinPerp + MaxPerp) / 2.0f;
         float CurrentPerpProj = FVector::DotProduct(BuildingCenter2D, PerpDir);
+        UE_LOG(LogTemp, Error, TEXT(">>> CENTER CORRECTION: MeasuredPerpCenter=%.1f CurrentPerpProj=%.1f Shift=%.1f"),
+            MeasuredPerpCenter, CurrentPerpProj, MeasuredPerpCenter - CurrentPerpProj);
         BuildingCenter2D += PerpDir * (MeasuredPerpCenter - CurrentPerpProj);
+        UE_LOG(LogTemp, Error, TEXT(">>> CENTER AFTER CORRECTION: (%.1f, %.1f)"),
+            BuildingCenter2D.X, BuildingCenter2D.Y);
     }
     else
     {
@@ -2251,6 +2287,16 @@ bool URectangleBuilderComponent::HasRidgePostSuggestions() const
 
 FRidgePostSuggestion URectangleBuilderComponent::GetNearestUnplacedRidgePostSuggestion(FVector NearPosition) const
 {
+    UE_LOG(LogTemp, Error, TEXT(">>> ALL RIDGE SUGGESTIONS (%d total, NearPos=(%.1f,%.1f,%.1f)):"),
+        RidgePostSuggestions.Num(), NearPosition.X, NearPosition.Y, NearPosition.Z);
+    for (int32 i = 0; i < RidgePostSuggestions.Num(); i++)
+    {
+        const FRidgePostSuggestion& S = RidgePostSuggestions[i];
+        UE_LOG(LogTemp, Error, TEXT(">>>   [%d] Pos=(%.1f,%.1f,%.1f) HW=%.1f Valid=%d Placed=%d Idx=%d"),
+            i, S.Position.X, S.Position.Y, S.Position.Z,
+            S.BuildingHalfWidthCm, S.bIsValid, S.bPlaced, S.PostIndex);
+    }
+
     FRidgePostSuggestion Best;
     float BestDist = FLT_MAX;
     for (const FRidgePostSuggestion& Sug : RidgePostSuggestions)
@@ -2264,6 +2310,9 @@ FRidgePostSuggestion URectangleBuilderComponent::GetNearestUnplacedRidgePostSugg
             Best = Sug;
         }
     }
+
+    UE_LOG(LogTemp, Error, TEXT(">>> CHOSEN SUGGESTION: Pos=(%.1f,%.1f,%.1f) Dist=%.1f"),
+        Best.Position.X, Best.Position.Y, Best.Position.Z, FMath::Sqrt(BestDist));
     return Best;
 }
 
