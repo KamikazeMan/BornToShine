@@ -943,7 +943,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Roll = 0.0f;
 
 				// Fixed pitch override
-				CandidateRotation.Pitch = -24.000001f;
+				CandidateRotation.Pitch = -25.3f;
 
 				// Get the target socket's local rotation to determine facing direction
 				FConstructionSocket TgtSocket;
@@ -975,7 +975,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Roll = 0.0f;
 
 				// Fixed pitch override
-				CandidateRotation.Pitch = -24.000001f;
+				CandidateRotation.Pitch = -25.3f;
 
 				// Yaw: perpendicular to wall plate, facing toward the ridge board.
 				// Find the nearest ridge board to determine direction.
@@ -1029,7 +1029,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Roll = 0.0f;
 
 				// Fixed pitch override
-				CandidateRotation.Pitch = -24.000001f;
+				CandidateRotation.Pitch = -25.3f;
 
 				// Get fascia socket facing direction
 				FConstructionSocket TgtSocket;
@@ -1710,7 +1710,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 
 		// Fixed pitch override — applies to ALL rafter placements regardless
 		// of building size or computed geometry.
-		FinalRotation.Pitch = -24.000001f;
+		FinalRotation.Pitch = -25.3f;
 
 		// Ridge board side sockets: additional position and yaw overrides.
 		// RidgeBoardSide_R* = right side, _L* = left side.
