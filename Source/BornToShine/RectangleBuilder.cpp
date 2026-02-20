@@ -2126,17 +2126,28 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         UE_LOG(LogTemp, Warning, TEXT("RidgePost width: Measured from %d DTPs — FullWidth=%.1fcm(%.1fft) HalfWidth=%.1fcm(%.1fft)"),
             DTPCount, FullWidth, FullWidth / 30.48f, HalfWidth, HalfWidth / 30.48f);
 
-        // Correct BuildingCenter2D perpendicular component to use the measured
-        // building center from ALL top plates, not just the two through boards.
-        // Without this, the ridge post centers on the through board span (8ft)
-        // instead of the full building width (16ft).
+        // Correct BuildingCenter2D perpendicular component ONLY if the
+        // measured center differs significantly from the through-board midpoint.
+        // Small shifts (< 5cm) are noise from asymmetric top plate offsets
+        // (e.g. shared walls between adjacent buildings where the plate sits
+        // on one building's side). The through-board midpoint is authoritative.
         float MeasuredPerpCenter = (MinPerp + MaxPerp) / 2.0f;
         float CurrentPerpProj = FVector::DotProduct(BuildingCenter2D, PerpDir);
+        float CenterShift = MeasuredPerpCenter - CurrentPerpProj;
         UE_LOG(LogTemp, Error, TEXT(">>> CENTER CORRECTION: MeasuredPerpCenter=%.1f CurrentPerpProj=%.1f Shift=%.1f"),
-            MeasuredPerpCenter, CurrentPerpProj, MeasuredPerpCenter - CurrentPerpProj);
-        BuildingCenter2D += PerpDir * (MeasuredPerpCenter - CurrentPerpProj);
-        UE_LOG(LogTemp, Error, TEXT(">>> CENTER AFTER CORRECTION: (%.1f, %.1f)"),
-            BuildingCenter2D.X, BuildingCenter2D.Y);
+            MeasuredPerpCenter, CurrentPerpProj, CenterShift);
+        if (FMath::Abs(CenterShift) > 5.0f)
+        {
+            // Large shift — building is wider than through-board span, apply correction
+            BuildingCenter2D += PerpDir * CenterShift;
+            UE_LOG(LogTemp, Error, TEXT(">>> CENTER AFTER CORRECTION: (%.1f, %.1f) [large shift applied]"),
+                BuildingCenter2D.X, BuildingCenter2D.Y);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT(">>> CENTER: Shift %.1fcm < 5cm threshold — using through-board midpoint (%.1f, %.1f)"),
+                CenterShift, BuildingCenter2D.X, BuildingCenter2D.Y);
+        }
     }
     else
     {
