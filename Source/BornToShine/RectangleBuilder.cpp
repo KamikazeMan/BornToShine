@@ -95,9 +95,9 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
         TopPlateSuggestions.Empty();
         PlacedTopPlateCount = 0;
         PlacedTopPlates.Empty();
-        RidgePostSuggestions.Empty();
-        PlacedRidgePostCount = 0;
-        PlacedRidgePosts.Empty();
+        // NOTE: Ridge post suggestions are NOT cleared on rectangle reset.
+        // They accumulate across buildings so players can place ridge posts
+        // on any previously completed building, not just the most recent one.
         CompletedRimBoards.Empty();
     }
 
@@ -1929,9 +1929,10 @@ bool URectangleBuilderComponent::OverlapsExistingPiece(EPieceType Type, const FV
 
 void URectangleBuilderComponent::CalculateRidgePostLayout()
 {
-    RidgePostSuggestions.Empty();
-    PlacedRidgePostCount = 0;
-    PlacedRidgePosts.Empty();
+    // Don't clear — suggestions accumulate across buildings so players can
+    // place ridge posts on any previously completed building.
+    // PlacedRidgePostCount is no longer the primary tracking mechanism;
+    // each suggestion has bPlaced to track placement individually.
 
     // Need completed rectangle geometry and through boards
     if (CompletedRimBoards.Num() < 4 || !ThroughBoard1 || !ThroughBoard3)
@@ -2199,40 +2200,56 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         RidgePostSuggestions.Num(), FullWidth, HalfWidth);
 }
 
+bool URectangleBuilderComponent::HasRidgePostSuggestions() const
+{
+    for (const FRidgePostSuggestion& Sug : RidgePostSuggestions)
+    {
+        if (Sug.bIsValid && !Sug.bPlaced &&
+            !OverlapsExistingPiece(EPieceType::RidgePost, Sug.Position, 30.0f))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+FRidgePostSuggestion URectangleBuilderComponent::GetNearestUnplacedRidgePostSuggestion(FVector NearPosition) const
+{
+    FRidgePostSuggestion Best;
+    float BestDist = FLT_MAX;
+    for (const FRidgePostSuggestion& Sug : RidgePostSuggestions)
+    {
+        if (!Sug.bIsValid || Sug.bPlaced) continue;
+        if (OverlapsExistingPiece(EPieceType::RidgePost, Sug.Position, 30.0f)) continue;
+        float Dist = FVector::DistSquared(NearPosition, Sug.Position);
+        if (Dist < BestDist)
+        {
+            BestDist = Dist;
+            Best = Sug;
+        }
+    }
+    return Best;
+}
+
 FRidgePostSuggestion URectangleBuilderComponent::GetNextRidgePostSuggestion() const
 {
-    if (PlacedRidgePostCount < RidgePostSuggestions.Num())
+    // Legacy: return first unplaced suggestion
+    for (const FRidgePostSuggestion& Sug : RidgePostSuggestions)
     {
-        return RidgePostSuggestions[PlacedRidgePostCount];
+        if (Sug.bIsValid && !Sug.bPlaced &&
+            !OverlapsExistingPiece(EPieceType::RidgePost, Sug.Position, 30.0f))
+        {
+            return Sug;
+        }
     }
     return FRidgePostSuggestion();
 }
 
-bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
+bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post, FVector PlayerPosition)
 {
     if (!Post || !HasRidgePostSuggestions()) return false;
 
-    // Skip suggestions that overlap with existing ridge posts
-    while (PlacedRidgePostCount < RidgePostSuggestions.Num())
-    {
-        FRidgePostSuggestion& NextSug = RidgePostSuggestions[PlacedRidgePostCount];
-        if (!NextSug.bIsValid) break;
-
-        if (!OverlapsExistingPiece(EPieceType::RidgePost, NextSug.Position, 30.0f))
-            break;
-
-        UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Skipping ridge post %d — overlaps existing at (%.1f, %.1f, %.1f)"),
-            PlacedRidgePostCount, NextSug.Position.X, NextSug.Position.Y, NextSug.Position.Z);
-        if (AConstructionPhaseManager::Instance)
-            AConstructionPhaseManager::Instance->IncrementCyclePieceCount(EPieceType::RidgePost);
-        PlacedRidgePostCount++;
-    }
-    if (PlacedRidgePostCount >= RidgePostSuggestions.Num())
-    {
-        return false;
-    }
-
-    FRidgePostSuggestion Suggestion = GetNextRidgePostSuggestion();
+    FRidgePostSuggestion Suggestion = GetNearestUnplacedRidgePostSuggestion(PlayerPosition);
     if (!Suggestion.bIsValid) return false;
 
     // Set building half-width for pitch calculation
@@ -2243,11 +2260,8 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
 
     // Position: Use snap pipeline position (includes flush offset from
     // DetectSnapCandidates AND correct DTP surface Z from the snap system).
-    // The suggestion Z was computed incorrectly (7.6cm too high), while
-    // the snap system already found the correct DTP top surface.
     if (Post->IsPlacementValid())
     {
-        // Keep full snap position — XY has flush offset, Z is correct DTP surface
         FVector SnappedPos = Post->GetActorLocation();
         Post->SetActorRotation(Suggestion.Rotation);
 
@@ -2256,7 +2270,6 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     }
     else
     {
-        // Fallback: use full suggestion position (includes FlushInsetCm along ridge)
         Post->SetActorLocation(Suggestion.Position);
         Post->SetActorRotation(Suggestion.Rotation);
 
@@ -2280,6 +2293,17 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
     PlacedRidgePosts.Add(Post);
     PlacedRidgePostCount++;
 
+    // Mark the suggestion as placed
+    for (FRidgePostSuggestion& Sug : RidgePostSuggestions)
+    {
+        if (Sug.bIsValid && !Sug.bPlaced &&
+            FVector::Dist(Sug.Position, Suggestion.Position) < 5.0f)
+        {
+            Sug.bPlaced = true;
+            break;
+        }
+    }
+
     FVector ActualPos = Post->GetActorLocation();
     UE_LOG(LogTemp, Warning, TEXT("RectangleBuilder: Placed ridge post %d/%d at ACTUAL(%.1f, %.1f, %.1f) SUGGESTION(%.1f, %.1f, %.1f) Yaw=%.1f Height=%.1fcm %s"),
         PlacedRidgePostCount, RidgePostSuggestions.Num(),
@@ -2287,11 +2311,6 @@ bool URectangleBuilderComponent::ApplyRidgePostSuggestion(ARidgePost* Post)
         Suggestion.Position.X, Suggestion.Position.Y, Suggestion.Position.Z,
         Suggestion.Rotation.Yaw, Suggestion.PostHeightCm,
         *Post->GetPitchDisplayString());
-
-    // Ridge post Z gap diagnostic: compare actual post Z to suggestion Z
-    float PostActorZ = ActualPos.Z;
-    UE_LOG(LogTemp, Error, TEXT(">>> RIDGE POST Z: PostActorZ=%.2f (snap), SuggestionZ=%.2f (wrong), diff=%.2f"),
-        PostActorZ, Suggestion.Position.Z, PostActorZ - Suggestion.Position.Z);
 
     return true;
 }

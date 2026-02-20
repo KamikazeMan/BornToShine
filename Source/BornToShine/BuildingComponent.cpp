@@ -397,15 +397,15 @@ void UBuildingComponent::UpdatePreviewPosition()
 	}
 
 	// RIDGE POST SUGGESTION OVERRIDE: When placing a ridge post and the RectangleBuilder
-	// has ridge post suggestions, position the preview at the next suggestion location.
-	// Without this override the ridge post falls through to generic snap detection,
-	// which finds multiple socket matches on nearby top plates and produces confusing
-	// multi-candidate previews.
+	// has ridge post suggestions, position the preview at the nearest unplaced suggestion.
+	// Uses player camera position for proximity lookup so multi-building scenarios work
+	// (suggestions accumulate across buildings).
 	if (RectangleBuilder &&
 		RectangleBuilder->HasRidgePostSuggestions() &&
 		CurrentPreviewPiece->GetPieceType() == EPieceType::RidgePost)
 	{
-		FRidgePostSuggestion RidgePostSug = RectangleBuilder->GetNextRidgePostSuggestion();
+		FVector PlayerPos = GetOwner() ? GetOwner()->GetActorLocation() : FVector::ZeroVector;
+		FRidgePostSuggestion RidgePostSug = RectangleBuilder->GetNearestUnplacedRidgePostSuggestion(PlayerPos);
 		if (RidgePostSug.bIsValid)
 		{
 			CurrentPreviewPiece->SetActorLocation(RidgePostSug.Position);
@@ -669,7 +669,8 @@ void UBuildingComponent::PlaceCurrentPiece()
 		CurrentPreviewPiece->GetPieceType() == EPieceType::RidgePost)
 	{
 		ARidgePost* Post = Cast<ARidgePost>(CurrentPreviewPiece);
-		if (Post && RectangleBuilder->ApplyRidgePostSuggestion(Post))
+		FVector PlacePos = GetOwner() ? GetOwner()->GetActorLocation() : FVector::ZeroVector;
+		if (Post && RectangleBuilder->ApplyRidgePostSuggestion(Post, PlacePos))
 		{
 			PlacedPieces.Add(CurrentPreviewPiece);
 			LastPlacedPiece = CurrentPreviewPiece;

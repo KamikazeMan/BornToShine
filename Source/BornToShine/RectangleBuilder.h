@@ -279,6 +279,9 @@ struct FRidgePostSuggestion
 
     bool bIsValid;
 
+    // True after a ridge post has been placed at this suggestion
+    bool bPlaced;
+
     FRidgePostSuggestion()
         : Position(FVector::ZeroVector)
         , Rotation(FRotator::ZeroRotator)
@@ -286,6 +289,7 @@ struct FRidgePostSuggestion
         , BuildingHalfWidthCm(121.92f)
         , PostIndex(0)
         , bIsValid(false)
+        , bPlaced(false)
     {}
 };
 
@@ -400,14 +404,17 @@ public:
 
     // --- Ridge Post Layout System ---
 
-    // Does the builder have ridge post suggestions ready?
-    bool HasRidgePostSuggestions() const { return RidgePostSuggestions.Num() > 0 && PlacedRidgePostCount < RidgePostSuggestions.Num(); }
+    // Does the builder have any unplaced ridge post suggestions?
+    bool HasRidgePostSuggestions() const;
 
-    // Get the next ridge post suggestion (first unplaced)
+    // Get the nearest unplaced ridge post suggestion to NearPosition
+    FRidgePostSuggestion GetNearestUnplacedRidgePostSuggestion(FVector NearPosition) const;
+
+    // Legacy: get the next sequential suggestion (uses first unplaced)
     FRidgePostSuggestion GetNextRidgePostSuggestion() const;
 
     // Apply a ridge post suggestion: sets position, rotation, height, building half-width
-    bool ApplyRidgePostSuggestion(ARidgePost* Post);
+    bool ApplyRidgePostSuggestion(ARidgePost* Post, FVector PlayerPosition);
 
     // Get all ridge post suggestions
     TArray<FRidgePostSuggestion> GetRidgePostSuggestions() const { return RidgePostSuggestions; }
