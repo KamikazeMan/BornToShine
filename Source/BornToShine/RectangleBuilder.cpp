@@ -2112,6 +2112,70 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         }
     }
 
+    // --- Broader scan: detect adjacent building sections forming a wider building ---
+    // When two 8ft sections share a wall to form a 16ft building, the rim-segment
+    // filter above only captures DTPs from THIS section (~8ft). Scan ALL top plates
+    // aligned with this building's ridge direction and expand the perp range outward
+    // through contiguous plates (no gap = shared wall between sections).
+    if (DTPCount >= 2 && AConstructionPhaseManager::Instance)
+    {
+        // Ridge-direction bounds from end boards (with 1ft tolerance)
+        float EndA_RidgeProj = FVector::DotProduct(EndBoardA->GetActorLocation(), RidgeFwd);
+        float EndB_RidgeProj = FVector::DotProduct(EndBoardB->GetActorLocation(), RidgeFwd);
+        float MinRidgeProj = FMath::Min(EndA_RidgeProj, EndB_RidgeProj) - 30.0f;
+        float MaxRidgeProj = FMath::Max(EndA_RidgeProj, EndB_RidgeProj) + 30.0f;
+
+        // Collect perp projections of all ridge-aligned top plates (no rim-segment filter)
+        TArray<float> AllPerpProjs;
+        TArray<ABuildablePiece*> BroadTopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
+        for (ABuildablePiece* Piece : BroadTopPlates)
+        {
+            if (!Piece) continue;
+            FVector PieceLoc = Piece->GetActorLocation();
+            float RidgeProj = FVector::DotProduct(PieceLoc, RidgeFwd);
+            if (RidgeProj < MinRidgeProj || RidgeProj > MaxRidgeProj) continue;
+            AllPerpProjs.Add(FVector::DotProduct(PieceLoc, PerpDir));
+        }
+
+        if (AllPerpProjs.Num() > DTPCount)
+        {
+            // Expand [MinPerp, MaxPerp] outward through contiguous plates.
+            // Plates on a shared wall have no gap; separate buildings have a gap.
+            const float GapThreshold = 30.0f; // ~1ft max gap between adjacent plates
+            float ExpandedMin = MinPerp;
+            float ExpandedMax = MaxPerp;
+
+            bool bExpanded = true;
+            while (bExpanded)
+            {
+                bExpanded = false;
+                for (float Proj : AllPerpProjs)
+                {
+                    if (Proj < ExpandedMin && (ExpandedMin - Proj) < GapThreshold)
+                    {
+                        ExpandedMin = Proj;
+                        bExpanded = true;
+                    }
+                    else if (Proj > ExpandedMax && (Proj - ExpandedMax) < GapThreshold)
+                    {
+                        ExpandedMax = Proj;
+                        bExpanded = true;
+                    }
+                }
+            }
+
+            float ExpandedWidth = ExpandedMax - ExpandedMin;
+            float OriginalWidth = MaxPerp - MinPerp;
+            if (ExpandedWidth > OriginalWidth * 1.3f)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RidgePost: Adjacent section detected — expanding width from %.1fcm(%.1fft) to %.1fcm(%.1fft)"),
+                    OriginalWidth, OriginalWidth / 30.48f, ExpandedWidth, ExpandedWidth / 30.48f);
+                MinPerp = ExpandedMin;
+                MaxPerp = ExpandedMax;
+            }
+        }
+    }
+
     float FullWidth;
     float HalfWidth;
 
