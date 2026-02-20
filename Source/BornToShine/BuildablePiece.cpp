@@ -1723,20 +1723,26 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// via local-space Z shift (perpendicular to slope). Actor origin
 		// stays at the snap position so birdsmouth Z is not affected.
 
-		// PIE-tuned rotation and position overrides.
+		// PIE-tuned pitch override — applies to ALL rafter placements
+		// regardless of which socket (ridge board side or birdsmouth).
+		FinalRotation.Pitch = -24.000001f;
+
+		// Ridge board side sockets: additional position and yaw overrides.
 		// RidgeBoardSide_R* = right side, _L* = left side.
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Y -= 3.0f;       // inward toward ridge board
 			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
-			FinalRotation = FRotator(-24.000001f, 90.0f, 0.0f);  // -25.3 + 1.299999
+			FinalRotation.Yaw = 90.0f;
+			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Y += 3.0f;       // inward toward ridge board
 			FinalLocation.Z -= 7.016945f;   // 5.873027 + 1.143918
-			FinalRotation = FRotator(-24.000001f, -90.0f, 0.0f); // -25.3 + 1.299999
+			FinalRotation.Yaw = -90.0f;
+			FinalRotation.Roll = 0.0f;
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
