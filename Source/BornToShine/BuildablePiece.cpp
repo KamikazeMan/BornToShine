@@ -942,12 +942,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Set pitch from rafter angle (negative = +X tilts down toward tail)
-				const ARafter* RafterSelf = Cast<const ARafter>(this);
-				if (RafterSelf)
-				{
-					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
-				}
+				// PIE-tuned pitch override (same value used in ApplySnap)
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Get the target socket's local rotation to determine facing direction
 				FConstructionSocket TgtSocket;
@@ -978,12 +974,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			{
 				CandidateRotation.Roll = 0.0f;
 
-				// Set pitch from rafter angle
-				const ARafter* RafterSelf = Cast<const ARafter>(this);
-				if (RafterSelf)
-				{
-					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
-				}
+				// PIE-tuned pitch override (same value used in ApplySnap)
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Yaw: perpendicular to wall plate, facing toward the ridge board.
 				// Find the nearest ridge board to determine direction.
@@ -1036,12 +1028,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Set pitch from rafter angle
-				const ARafter* RafterSelf = Cast<const ARafter>(this);
-				if (RafterSelf)
-				{
-					CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
-				}
+				// PIE-tuned pitch override (same value used in ApplySnap)
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Get fascia socket facing direction
 				FConstructionSocket TgtSocket;
@@ -2197,19 +2185,9 @@ bool ABuildablePiece::IsPlacementValid() const
 	if (PieceType != EPieceType::Foundation && !bIsSnapped)
 		return false;
 
-	// Rafters MUST be snapped to a ridge board side socket.
-	// Without this, a birdsmouth→DTP snap could place the rafter with P=0 Y=0
-	// (no pitch, no yaw) — a flat board sitting on the wall instead of sloping from ridge.
-	if (PieceType == EPieceType::Rafter)
-	{
-		if (CurrentSnapCandidate.TargetSocketType != EConstructionSocketType::RidgeBoard_Side ||
-			CurrentSnapCandidate.SourceSocketType != EConstructionSocketType::Rafter_Ridge)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Rafter placement BLOCKED: not snapped to ridge board side (src=%d tgt=%d)"),
-				(int32)CurrentSnapCandidate.SourceSocketType, (int32)CurrentSnapCandidate.TargetSocketType);
-			return false;
-		}
-	}
+	// Rafters can snap to either ridge board side or birdsmouth (top plate).
+	// The PIE-tuned pitch override in ApplySnap ensures correct pitch for all snap types.
+	// (Previously blocked birdsmouth snaps, but pitch override now handles that case.)
 
 	return true;
 }
