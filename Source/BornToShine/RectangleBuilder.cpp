@@ -95,6 +95,9 @@ void URectangleBuilderComponent::OnRimBoardPlaced(ARimBoard* Board)
         TopPlateSuggestions.Empty();
         PlacedTopPlateCount = 0;
         PlacedTopPlates.Empty();
+        RidgePostSuggestions.Empty();
+        PlacedRidgePostCount = 0;
+        PlacedRidgePosts.Empty();
         CompletedRimBoards.Empty();
     }
 
@@ -1980,6 +1983,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
+    // Max distance from building center to include a top plate — prevents
+    // mixing plates from multiple buildings in the same PIE session.
+    const float MaxDistFromCenter = 700.0f;
+
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
     int32 DTPCount = 0;
@@ -1987,13 +1994,15 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     if (AConstructionPhaseManager::Instance)
     {
         // NOTE: Double top plates are registered as EPieceType::TopPlate (not DoubleTopPlate).
-        // Search for ALL TopPlate pieces — both first and double plates are on the same
-        // wall lines so they give the same perpendicular width measurement.
+        // Filter to only top plates near THIS building's center (MaxDistFromCenter).
         TArray<ABuildablePiece*> DTPPieces = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
         for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
-            float PerpDist = FVector::DotProduct(Piece->GetActorLocation(), PerpDir);
+            FVector PieceLoc = Piece->GetActorLocation();
+            float Dist2D = FVector::Dist2D(PieceLoc, BuildingCenter2D);
+            if (Dist2D > MaxDistFromCenter) continue; // skip plates from other buildings
+            float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
             MaxPerp = FMath::Max(MaxPerp, PerpDist);
             DTPCount++;
@@ -2053,6 +2062,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         for (ABuildablePiece* Piece : DTPPieces)
         {
             if (!Piece) continue;
+            if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > MaxDistFromCenter) continue;
             ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
             if (!DTP) continue;
 
@@ -2073,6 +2083,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             for (ABuildablePiece* Piece : TopPlates)
             {
                 if (!Piece) continue;
+                if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > MaxDistFromCenter) continue;
                 ATopPlate* TP = Cast<ATopPlate>(Piece);
                 if (!TP) continue;
 

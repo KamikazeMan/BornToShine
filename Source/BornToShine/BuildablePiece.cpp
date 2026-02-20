@@ -942,12 +942,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Computed pitch from building geometry + PIE-tuned offset
-				{
-					const ARafter* RafterSelf = Cast<const ARafter>(this);
-					if (RafterSelf)
-						CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees() + 1.299999f;
-				}
+				// Fixed pitch override
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Get the target socket's local rotation to determine facing direction
 				FConstructionSocket TgtSocket;
@@ -978,12 +974,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			{
 				CandidateRotation.Roll = 0.0f;
 
-				// Computed pitch from building geometry + PIE-tuned offset
-				{
-					const ARafter* RafterSelf = Cast<const ARafter>(this);
-					if (RafterSelf)
-						CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees() + 1.299999f;
-				}
+				// Fixed pitch override
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Yaw: perpendicular to wall plate, facing toward the ridge board.
 				// Find the nearest ridge board to determine direction.
@@ -1036,12 +1028,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Computed pitch from building geometry + PIE-tuned offset
-				{
-					const ARafter* RafterSelf = Cast<const ARafter>(this);
-					if (RafterSelf)
-						CandidateRotation.Pitch = -RafterSelf->GetPitchAngleDegrees() + 1.299999f;
-				}
+				// Fixed pitch override
+				CandidateRotation.Pitch = -24.000001f;
 
 				// Get fascia socket facing direction
 				FConstructionSocket TgtSocket;
@@ -1708,9 +1696,6 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 					FVector SocketLocalOffset(0.0f, 0.0f, 0.0f); // Ridge socket still at origin
 					FVector SocketWorldOffset = FinalRotation.RotateVector(SocketLocalOffset);
 					FinalLocation = Candidate.SnapLocation - SocketWorldOffset;
-
-					// Update pitch rotation
-					FinalRotation.Pitch = -RafterSelf->GetPitchAngleDegrees();
 				}
 			}
 
@@ -1723,13 +1708,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		// via local-space Z shift (perpendicular to slope). Actor origin
 		// stays at the snap position so birdsmouth Z is not affected.
 
-		// Use the computed pitch from building geometry + PIE-tuned offset.
-		// The rafter's internal PitchRatio is set from the ridge post and gives
-		// the correct geometric angle. Apply a +1.3° offset on top for visual fit.
-		if (RafterSelf)
-		{
-			FinalRotation.Pitch = -RafterSelf->GetPitchAngleDegrees() + 1.299999f;
-		}
+		// Fixed pitch override — applies to ALL rafter placements regardless
+		// of building size or computed geometry.
+		FinalRotation.Pitch = -24.000001f;
 
 		// Ridge board side sockets: additional position and yaw overrides.
 		// RidgeBoardSide_R* = right side, _L* = left side.
