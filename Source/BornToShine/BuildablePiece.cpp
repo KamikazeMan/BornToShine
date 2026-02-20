@@ -750,15 +750,71 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
 
-				FVector FrameCenterRot = FVector::ZeroVector;
-				int32 RimCountRot = 0;
+				// Find rim boards belonging to the SAME building by flood-filling
+				// from rim board corners nearest to the snap location.
+				// This prevents rim boards from adjacent buildings from
+				// pulling the frame center to the wrong position.
+				TSet<ABuildablePiece*> SameBuildingRims;
+				TArray<ABuildablePiece*> FloodQueue;
+
+				// Seed: rim boards with corner sockets near the snap point
 				for (ABuildablePiece* P : NearbyPieces)
 				{
-					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					if (!P || P->GetPieceType() != EPieceType::RimBoard) continue;
+					TArray<FConstructionSocket> PSocks = P->GetAllSockets();
+					for (const FConstructionSocket& PS : PSocks)
 					{
-						FrameCenterRot += P->GetActorLocation();
-						RimCountRot++;
+						if (PS.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+						{
+							FVector CornerWorld = P->GetActorTransform().TransformPosition(PS.LocalPosition);
+							if (FVector::Dist2D(CornerWorld, SnapLoc) < 50.0f)
+							{
+								if (!SameBuildingRims.Contains(P))
+								{
+									SameBuildingRims.Add(P);
+									FloodQueue.Add(P);
+								}
+							}
+						}
 					}
+				}
+
+				// Flood-fill: add rim boards connected via matching corner sockets
+				while (FloodQueue.Num() > 0)
+				{
+					ABuildablePiece* Cur = FloodQueue.Pop();
+					TArray<FConstructionSocket> CurSocks = Cur->GetAllSockets();
+					for (const FConstructionSocket& CS : CurSocks)
+					{
+						if (CS.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
+						FVector CurCorner = Cur->GetActorTransform().TransformPosition(CS.LocalPosition);
+
+						for (ABuildablePiece* P : NearbyPieces)
+						{
+							if (!P || P->GetPieceType() != EPieceType::RimBoard || SameBuildingRims.Contains(P)) continue;
+							TArray<FConstructionSocket> PSocks = P->GetAllSockets();
+							for (const FConstructionSocket& PS : PSocks)
+							{
+								if (PS.SocketType == EConstructionSocketType::RimBoard_End_Corner)
+								{
+									FVector PCorner = P->GetActorTransform().TransformPosition(PS.LocalPosition);
+									if (FVector::Dist(CurCorner, PCorner) < 20.0f)
+									{
+										SameBuildingRims.Add(P);
+										FloodQueue.Add(P);
+									}
+								}
+							}
+						}
+					}
+				}
+
+				FVector FrameCenterRot = FVector::ZeroVector;
+				int32 RimCountRot = 0;
+				for (ABuildablePiece* P : SameBuildingRims)
+				{
+					FrameCenterRot += P->GetActorLocation();
+					RimCountRot++;
 				}
 				if (RimCountRot > 0)
 				{
@@ -1729,14 +1785,14 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Y -= 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 7.016945f;
+			FinalLocation.Z -= 5.716945f;
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Y += 3.0f;       // inward toward ridge board
-			FinalLocation.Z -= 7.016945f;
+			FinalLocation.Z -= 5.716945f;
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
