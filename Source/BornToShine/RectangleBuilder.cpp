@@ -1988,19 +1988,34 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     FVector PerpDir = FVector(-RidgeFwd.Y, RidgeFwd.X, 0.0f); // 90 degrees from ridge
     PerpDir.Normalize();
 
-    // Compute filter radius from rim board positions — only include top plates
-    // belonging to THIS building, not an adjacent one built in the same line.
-    float MaxRimDist = 0.0f;
+    // Compute tight rectangular filter from rim board extents along
+    // the ridge and perpendicular axes. This prevents adjacent buildings'
+    // top plates from polluting the width/center calculations.
+    float MinRidgeProj = MAX_FLT, MaxRidgeProj = -MAX_FLT;
+    float MinPerpProj = MAX_FLT, MaxPerpProj = -MAX_FLT;
     for (ARimBoard* Board : CompletedRimBoards)
     {
         if (!Board) continue;
-        float Dist = FVector::Dist2D(Board->GetActorLocation(), BuildingCenter2D);
-        MaxRimDist = FMath::Max(MaxRimDist, Dist);
+        FVector Loc = Board->GetActorLocation();
+        float RProj = FVector::DotProduct(Loc, RidgeFwd);
+        float PProj = FVector::DotProduct(Loc, PerpDir);
+        // Account for board half-length along each axis
+        FVector BoardFwd = Board->GetActorRotation().RotateVector(FVector::ForwardVector);
+        float HalfLen = Board->GetBoardLengthCm() / 2.0f;
+        float RExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, RidgeFwd));
+        float PExtent = FMath::Abs(FVector::DotProduct(BoardFwd * HalfLen, PerpDir));
+        MinRidgeProj = FMath::Min(MinRidgeProj, RProj - RExtent);
+        MaxRidgeProj = FMath::Max(MaxRidgeProj, RProj + RExtent);
+        MinPerpProj = FMath::Min(MinPerpProj, PProj - PExtent);
+        MaxPerpProj = FMath::Max(MaxPerpProj, PProj + PExtent);
     }
-    // Add generous margin: rim board half-length (~244cm for 8ft) + top plate overhang
-    float FilterRadius = MaxRimDist + 300.0f;
-    UE_LOG(LogTemp, Log, TEXT("RidgePost: FilterRadius=%.1fcm (MaxRimDist=%.1f + 300) Center=(%.1f,%.1f)"),
-        FilterRadius, MaxRimDist, BuildingCenter2D.X, BuildingCenter2D.Y);
+    const float RectMargin = 30.0f; // ~12" margin around building perimeter
+    MinRidgeProj -= RectMargin;
+    MaxRidgeProj += RectMargin;
+    MinPerpProj -= RectMargin;
+    MaxPerpProj += RectMargin;
+    UE_LOG(LogTemp, Log, TEXT("RidgePost: OBB filter Ridge=[%.1f,%.1f] Perp=[%.1f,%.1f] Center=(%.1f,%.1f)"),
+        MinRidgeProj, MaxRidgeProj, MinPerpProj, MaxPerpProj, BuildingCenter2D.X, BuildingCenter2D.Y);
 
     float MinPerp = MAX_FLT;
     float MaxPerp = -MAX_FLT;
@@ -2014,9 +2029,11 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             if (!Piece) continue;
             FVector PieceLoc = Piece->GetActorLocation();
 
-            // Skip top plates from other buildings
-            float DistFromCenter = FVector::Dist2D(PieceLoc, BuildingCenter2D);
-            if (DistFromCenter > FilterRadius) continue;
+            // Skip top plates from other buildings (rectangular OBB filter)
+            float PlateRidge = FVector::DotProduct(PieceLoc, RidgeFwd);
+            float PlatePerp = FVector::DotProduct(PieceLoc, PerpDir);
+            if (PlateRidge < MinRidgeProj || PlateRidge > MaxRidgeProj ||
+                PlatePerp < MinPerpProj || PlatePerp > MaxPerpProj) continue;
 
             float PerpDist = FVector::DotProduct(PieceLoc, PerpDir);
             MinPerp = FMath::Min(MinPerp, PerpDist);
@@ -2072,8 +2089,8 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
     float DoubleTopPlateTopZ = 0.0f;
     bool bFoundDTP = false;
 
-    // Use global PhaseManager query for Z calculation, filtered by proximity
-    // to THIS building (same FilterRadius used for width measurement).
+    // Use global PhaseManager query for Z calculation, filtered by rectangular
+    // OBB to THIS building (same bounds used for width measurement).
     // Check for double top plates first, then fall back to single top plates.
     if (AConstructionPhaseManager::Instance)
     {
@@ -2081,7 +2098,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         for (ABuildablePiece* Piece : DTPs)
         {
             if (!Piece) continue;
-            if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > FilterRadius) continue;
+            FVector DLoc = Piece->GetActorLocation();
+            float DR = FVector::DotProduct(DLoc, RidgeFwd);
+            float DP = FVector::DotProduct(DLoc, PerpDir);
+            if (DR < MinRidgeProj || DR > MaxRidgeProj || DP < MinPerpProj || DP > MaxPerpProj) continue;
             ADoubleTopPlate* DTP = Cast<ADoubleTopPlate>(Piece);
             if (DTP)
             {
@@ -2101,8 +2121,11 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             for (ABuildablePiece* Piece : TopPlates)
             {
                 if (!Piece) continue;
-                if (FVector::Dist2D(Piece->GetActorLocation(), BuildingCenter2D) > FilterRadius) continue;
-                float PlateTopZ = Piece->GetActorLocation().Z + 3.81f / 2.0f + 3.81f;
+                FVector TLoc = Piece->GetActorLocation();
+                float TR = FVector::DotProduct(TLoc, RidgeFwd);
+                float TP = FVector::DotProduct(TLoc, PerpDir);
+                if (TR < MinRidgeProj || TR > MaxRidgeProj || TP < MinPerpProj || TP > MaxPerpProj) continue;
+                float PlateTopZ = TLoc.Z + 3.81f / 2.0f + 3.81f;
                 if (!bFoundDTP || PlateTopZ > DoubleTopPlateTopZ)
                 {
                     DoubleTopPlateTopZ = PlateTopZ;
