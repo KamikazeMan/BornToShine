@@ -998,10 +998,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Calculate pitch from rafter's actual PitchRatio (rise per 12 run)
-				ARafter* RafterPreview = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
-				float PreviewPitch = RafterPreview ? RafterPreview->PitchRatio : 6.0f;
-				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(PreviewPitch, 12.0f));
+				CandidateRotation.Pitch = -24.5f;
 				FConstructionSocket TgtSocket;
 				float SocketYawOffset = 90.0f; // fallback
 				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
@@ -1030,10 +1027,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 			{
 				CandidateRotation.Roll = 0.0f;
 
-				// Calculate pitch from rafter's actual PitchRatio
-				ARafter* RafterBM = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
-				float BMPitch = RafterBM ? RafterBM->PitchRatio : 6.0f;
-				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(BMPitch, 12.0f));
+				CandidateRotation.Pitch = -24.5f;
 				// Find the nearest ridge board to determine direction.
 				float PlateYaw = TargetPiece->GetActorRotation().Yaw;
 				FVector PlateRight = FRotator(0, PlateYaw, 0).RotateVector(FVector::RightVector);
@@ -1084,10 +1078,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				FRotator TargetActorRotation = TargetPiece->GetActorRotation();
 				CandidateRotation.Roll = 0.0f;
 
-				// Calculate pitch from rafter's actual PitchRatio
-				ARafter* RafterTail = Cast<ARafter>(const_cast<ABuildablePiece*>(this));
-				float TailPitch = RafterTail ? RafterTail->PitchRatio : 6.0f;
-				CandidateRotation.Pitch = -FMath::RadiansToDegrees(FMath::Atan2(TailPitch, 12.0f));
+				CandidateRotation.Pitch = -24.5f;
 				FConstructionSocket TgtSocket;
 				float SocketYawOffset = -90.0f; // fallback
 				if (TargetPiece->GetSocketByNameSafe(TargetSocketName, TgtSocket))
@@ -1814,10 +1805,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
 		}
 
-		// Calculate pitch from rafter's actual PitchRatio instead of hardcoded angle.
-		float ActualPitchDeg = RafterSelf
-			? FMath::RadiansToDegrees(FMath::Atan2(RafterSelf->PitchRatio, 12.0f))
-			: 26.565f; // 6/12 fallback
+		float ActualPitchDeg = 24.5f;
 		FinalRotation.Pitch = -ActualPitchDeg;
 
 		// Z offset: lower rafter center so rafter TOP aligns with ridge board top.
