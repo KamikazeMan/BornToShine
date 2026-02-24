@@ -1805,7 +1805,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
 		}
 
-		float ActualPitchDeg = 24.5f;
+		float ActualPitchDeg = RafterSelf ? RafterSelf->GetPitchAngleDegrees() : FMath::RadiansToDegrees(FMath::Atan2(6.0f, 12.0f));
 		FinalRotation.Pitch = -ActualPitchDeg;
 
 		// Z offset: lower rafter center so rafter TOP aligns with ridge board top.
