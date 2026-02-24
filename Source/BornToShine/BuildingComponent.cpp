@@ -487,9 +487,9 @@ void UBuildingComponent::UpdatePreviewPosition()
 	bool bValidHit = GetPlacementLocation(PlacementLocation, PlacementNormal, &HitActor);
 
 	// Window/door frames should NOT snap when the cursor hits floor-level
-	// pieces (rim boards, joists, plywood). These sit directly below the
-	// bottom plates, so the snap search radius picks up the plate above and
-	// makes the frame appear to "snap to the rim board."
+	// pieces (rim boards, joists, foundation). The bottom plate sits on
+	// plywood so aiming at plywood IS valid, but rim boards / joists /
+	// foundations are below the floor and should not trigger a snap.
 	if (bValidHit && HitActor)
 	{
 		EPieceType PreviewType = CurrentPreviewPiece->GetPieceType();
@@ -501,7 +501,6 @@ void UBuildingComponent::UpdatePreviewPosition()
 				EPieceType HitType = HitPiece->GetPieceType();
 				if (HitType == EPieceType::RimBoard ||
 					HitType == EPieceType::FloorJoist ||
-					HitType == EPieceType::Plywood ||
 					HitType == EPieceType::Foundation)
 				{
 					bValidHit = false; // Treat as no-hit — frame floats in front of camera
