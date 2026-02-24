@@ -482,40 +482,14 @@ void UBuildingComponent::UpdatePreviewPosition()
 	// Normal path: raycast + snap detection
 	FVector PlacementLocation;
 	FVector PlacementNormal;
-	AActor* HitActor = nullptr;
 
-	bool bValidHit = GetPlacementLocation(PlacementLocation, PlacementNormal, &HitActor);
-
-	// Window/door frames should NOT snap when the cursor hits floor-level
-	// pieces (rim boards, joists, foundation). The bottom plate sits on
-	// plywood so aiming at plywood IS valid, but rim boards / joists /
-	// foundations are below the floor and should not trigger a snap.
-	if (bValidHit && HitActor)
-	{
-		EPieceType PreviewType = CurrentPreviewPiece->GetPieceType();
-		if (PreviewType == EPieceType::WindowFrame || PreviewType == EPieceType::DoorFrame)
-		{
-			ABuildablePiece* HitPiece = Cast<ABuildablePiece>(HitActor);
-			if (HitPiece)
-			{
-				EPieceType HitType = HitPiece->GetPieceType();
-				if (HitType == EPieceType::RimBoard ||
-					HitType == EPieceType::FloorJoist ||
-					HitType == EPieceType::Foundation)
-				{
-					bValidHit = false; // Treat as no-hit — frame floats in front of camera
-				}
-			}
-		}
-	}
-
-	if (bValidHit)
+	if (GetPlacementLocation(PlacementLocation, PlacementNormal))
 	{
 		CurrentPreviewPiece->UpdatePreviewPosition(PlacementLocation, PreviewRotation);
 	}
 	else
 	{
-		// No valid hit (or hit a floor-level piece), place in front of camera
+		// No valid hit, place in front of camera
 		UCameraComponent* Camera = GetOwnerCamera();
 		if (Camera)
 		{
@@ -527,7 +501,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 	}
 }
 
-bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal, AActor** OutHitActor)
+bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal)
 {
 	UCameraComponent* Camera = GetOwnerCamera();
 	if (!Camera) return false;
@@ -556,7 +530,6 @@ bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& Out
 	{
 		OutLocation = HitResult.Location;
 		OutNormal = HitResult.Normal;
-		if (OutHitActor) *OutHitActor = HitResult.GetActor();
 		return true;
 	}
 

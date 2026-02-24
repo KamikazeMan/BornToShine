@@ -10,7 +10,7 @@ AWindowFrame::AWindowFrame()
 	PieceType = EPieceType::WindowFrame;
 
 	// Default dimensions — overridden by actual mesh bounds in BeginPlay
-	FrameHeight = 243.84f;          // 96" = 8ft (king studs match wall stud height)
+	FrameHeight = 235.27f;          // 92-5/8" (standard 8ft wall stud height)
 	RoughOpeningWidth = 69.85f;     // 27.5" rough opening (gap between trimmers)
 	FrameOverallWidth = 166.441f;   // 65.52" = 5 studs at 16" OC
 	RoughOpeningHeight = 88.304f;   // 34.77" rough opening height
@@ -174,59 +174,17 @@ void AWindowFrame::AdjustSocketsToMeshBounds()
 			FrameOverallWidth = MeshHalfX * 2.0f;
 		}
 
-		// Sockets at wall stud height, NOT mesh bounds.
-		// The mesh BB (245.75cm) extends beyond the visible king stud
-		// geometry, so using mesh bounds puts sockets too far from the
-		// actual stud ends.  King studs must match wall stud height
-		// exactly: 243.84cm = 96" = 8ft minus two plate thicknesses.
-		const float WallStudHalfHeight = 243.84f / 2.0f; // 121.92cm
 		for (FConstructionSocket& Socket : Sockets)
 		{
 			if (Socket.SocketName == FName("FrameBottom"))
-				Socket.LocalPosition.Z = -WallStudHalfHeight;
+				Socket.LocalPosition.Z = MeshBottomZ;
 			else if (Socket.SocketName == FName("FrameTop"))
-				Socket.LocalPosition.Z = WallStudHalfHeight;
+				Socket.LocalPosition.Z = MeshTopZ;
 		}
 
 		UE_LOG(LogTemp, Log,
-			TEXT("WindowFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, SocketZ=[%.2f, %.2f] (stud height), FrameOverall=%.2fcm"),
-			MeshBottomZ, MeshTopZ, ActualHeight, -WallStudHalfHeight, WallStudHalfHeight, FrameOverallWidth);
-	}
-}
-
-// ---------------------------------------------------------------------------
-// UpdatePreviewPosition — only follow cursor to valid snap positions.
-// Window frames must snap to a bottom plate; don't let the preview land
-// on non-snappable surfaces (rim boards, joists, ground, etc.).
-// ---------------------------------------------------------------------------
-void AWindowFrame::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
-{
-	if (PieceState != EPieceState::Preview) return;
-
-	// Save current position in case no snap is found
-	FVector PrevLocation = GetActorLocation();
-	FRotator PrevRotation = GetActorRotation();
-
-	// Temporarily move to cursor position so snap detection searches
-	// for nearby pieces around the aimed-at location
-	SetActorLocation(NewLocation);
-	SetActorRotation(NewRotation);
-
-	TArray<FSnapCandidate> Candidates = DetectSnapCandidates();
-	FSnapCandidate Best = SelectBestCandidate(Candidates);
-
-	if (Best.IsValid())
-	{
-		ApplySnap(Best);
-	}
-	else
-	{
-		// No valid snap — restore previous position so the frame
-		// doesn't sit on rim boards or other non-wall surfaces.
-		bIsSnapped = false;
-		CurrentSnapCandidate = FSnapCandidate();
-		SetActorLocation(PrevLocation);
-		SetActorRotation(PrevRotation);
+			TEXT("WindowFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, FrameOverall=%.2fcm, RoughOpening=%.2fcm"),
+			MeshBottomZ, MeshTopZ, ActualHeight, FrameOverallWidth, RoughOpeningWidth);
 	}
 }
 

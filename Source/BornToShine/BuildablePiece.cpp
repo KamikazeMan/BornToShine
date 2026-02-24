@@ -674,14 +674,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), (int32)TargetPiece->GetPieceType());
 				continue;
 			}
-			// WindowFrame_Bottom sockets ONLY snap to bottom plates (WallPlate).
-			// Rim boards share nearby sockets and must be rejected here.
-			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom)
+			if (PieceType == EPieceType::WindowFrame && TargetPiece &&
+				TargetPiece->GetPieceType() != EPieceType::WallPlate)
 			{
-				if (!TargetPiece || TargetPiece->GetPieceType() != EPieceType::WallPlate)
-				{
-					continue; // Window frame bottom only snaps to bottom plates
-				}
+				continue;
 			}
 
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
@@ -1386,19 +1382,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
 			}
 
-			// Window frame centering: center on the plate, Z from plate top face.
-			// Window frame sits ON the plate (unlike door frame which sits on plywood).
+			// Window frame centering: same as door frame — center on the plate.
 			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
-				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
-				CandidateLocation.Z = PlateTopZ - Socket.LocalPosition.Z;
-
 				FVector PlateCenter = TargetPiece->GetActorLocation();
+				float SavedZ = CandidateLocation.Z;
 				CandidateLocation.X = PlateCenter.X;
 				CandidateLocation.Y = PlateCenter.Y;
+				CandidateLocation.Z = SavedZ;
 			}
 
 			// Ridge post flush alignment: offset inward so outer face aligns
