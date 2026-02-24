@@ -174,17 +174,21 @@ void AWindowFrame::AdjustSocketsToMeshBounds()
 			FrameOverallWidth = MeshHalfX * 2.0f;
 		}
 
+		// Sockets at wall stud height (92-5/8" = 235.27cm), NOT mesh bounds.
+		// The mesh BB extends beyond the visible stud geometry, so using
+		// mesh bounds puts sockets too far from the actual stud ends.
+		const float WallStudHalfHeight = 235.27f / 2.0f; // 117.635cm
 		for (FConstructionSocket& Socket : Sockets)
 		{
 			if (Socket.SocketName == FName("FrameBottom"))
-				Socket.LocalPosition.Z = MeshBottomZ;
+				Socket.LocalPosition.Z = -WallStudHalfHeight;
 			else if (Socket.SocketName == FName("FrameTop"))
-				Socket.LocalPosition.Z = MeshTopZ;
+				Socket.LocalPosition.Z = WallStudHalfHeight;
 		}
 
 		UE_LOG(LogTemp, Log,
-			TEXT("WindowFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, FrameOverall=%.2fcm, RoughOpening=%.2fcm"),
-			MeshBottomZ, MeshTopZ, ActualHeight, FrameOverallWidth, RoughOpeningWidth);
+			TEXT("WindowFrame: Mesh bounds Z=[%.2f, %.2f] height=%.2fcm, SocketZ=[%.2f, %.2f] (stud height), FrameOverall=%.2fcm"),
+			MeshBottomZ, MeshTopZ, ActualHeight, -WallStudHalfHeight, WallStudHalfHeight, FrameOverallWidth);
 	}
 }
 

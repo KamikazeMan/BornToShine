@@ -1382,22 +1382,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
 			}
 
-			// Window frame centering: same as door frame — center on the plate.
+			// Window frame centering: center on the plate, Z from plate top face.
+			// Window frame sits ON the plate (unlike door frame which sits on plywood).
 			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				// Drop Z by half plate height — the snap aligns the mesh bottom
-				// with the plate top, but the mesh extends 1.905cm below the
-				// actual stud bottoms (plate geometry baked into the mesh).
 				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
-				CandidateLocation.Z -= PlateHalfHeight;
+				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
+				CandidateLocation.Z = PlateTopZ - Socket.LocalPosition.Z;
 
 				FVector PlateCenter = TargetPiece->GetActorLocation();
-				float SavedZ = CandidateLocation.Z;
 				CandidateLocation.X = PlateCenter.X;
 				CandidateLocation.Y = PlateCenter.Y;
-				CandidateLocation.Z = SavedZ;
 			}
 
 			// Ridge post flush alignment: offset inward so outer face aligns
