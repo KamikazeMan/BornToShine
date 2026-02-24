@@ -2114,10 +2114,10 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
 
     // --- Broader scan: detect adjacent building sections forming a wider building ---
     // When two 8ft sections share a wall to form a 16ft building, the rim-segment
-    // filter above only captures DTPs from THIS section (~8ft). Scan ALL top plates
-    // aligned with this building's ridge direction and take the full perpendicular
-    // span. Top plates only exist at wall edges, so contiguous expansion won't work
-    // (there's a ~8ft gap between a building's two walls with no plates in between).
+    // filter above only captures DTPs from THIS section (~8ft). Scan top plates
+    // aligned with this building's ridge direction that are NEAR this building
+    // (within one building-width of either edge). This catches adjacent sections
+    // sharing a wall but excludes separate buildings further away.
     if (DTPCount >= 2 && AConstructionPhaseManager::Instance)
     {
         // Ridge-direction bounds from end boards (with 1ft tolerance)
@@ -2126,7 +2126,14 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         float MinRidgeProj = FMath::Min(EndA_RidgeProj, EndB_RidgeProj) - 30.0f;
         float MaxRidgeProj = FMath::Max(EndA_RidgeProj, EndB_RidgeProj) + 30.0f;
 
-        // Find min/max perp projection of all ridge-aligned top plates
+        // Perpendicular bounds: only include plates within one building-width
+        // of the current building's edges. This detects ONE adjacent section
+        // (e.g. 8ft + 8ft = 16ft) but not separate buildings further away.
+        float OriginalWidth = MaxPerp - MinPerp;
+        float BroadPerpMin = MinPerp - OriginalWidth - 30.0f;
+        float BroadPerpMax = MaxPerp + OriginalWidth + 30.0f;
+
+        // Find min/max perp projection of nearby ridge-aligned top plates
         float BroadMin = MAX_FLT;
         float BroadMax = -MAX_FLT;
         int32 BroadCount = 0;
@@ -2138,15 +2145,16 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             float RidgeProj = FVector::DotProduct(PieceLoc, RidgeFwd);
             if (RidgeProj < MinRidgeProj || RidgeProj > MaxRidgeProj) continue;
             float PerpProj = FVector::DotProduct(PieceLoc, PerpDir);
+            // Exclude plates from separate buildings (beyond one building-width from edges)
+            if (PerpProj < BroadPerpMin || PerpProj > BroadPerpMax) continue;
             BroadMin = FMath::Min(BroadMin, PerpProj);
             BroadMax = FMath::Max(BroadMax, PerpProj);
             BroadCount++;
         }
 
-        float OriginalWidth = MaxPerp - MinPerp;
         float BroadWidth = BroadMax - BroadMin;
-        UE_LOG(LogTemp, Warning, TEXT("RidgePost: Broad DTP scan found %d plates — BroadWidth=%.1fcm(%.1fft) vs RimFiltered=%.1fcm(%.1fft)"),
-            BroadCount, BroadWidth, BroadWidth / 30.48f, OriginalWidth, OriginalWidth / 30.48f);
+        UE_LOG(LogTemp, Warning, TEXT("RidgePost: Broad DTP scan found %d plates — BroadWidth=%.1fcm(%.1fft) vs RimFiltered=%.1fcm(%.1fft) [PerpRange=%.1f..%.1f]"),
+            BroadCount, BroadWidth, BroadWidth / 30.48f, OriginalWidth, OriginalWidth / 30.48f, BroadPerpMin, BroadPerpMax);
 
         if (BroadCount > DTPCount && BroadWidth > OriginalWidth * 1.3f)
         {
