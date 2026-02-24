@@ -26,6 +26,7 @@ enum class EPieceType : uint8
 	Header				UMETA(DisplayName = "Header"),
 	Rafter				UMETA(DisplayName = "Rafter"),
 	DoorFrame			UMETA(DisplayName = "Door Frame"),
+	WindowFrame			UMETA(DisplayName = "Window Frame"),
 	TopPlate			UMETA(DisplayName = "Top Plate"),
 	DoubleTopPlate		UMETA(DisplayName = "Double Top Plate"),
 	RidgePost			UMETA(DisplayName = "Ridge Post"),
@@ -90,6 +91,10 @@ enum class EConstructionSocketType : uint8
 	// Door Frame Sockets
 	DoorFrame_Bottom			UMETA(DisplayName = "Door Frame Bottom"),
 	DoorFrame_Top				UMETA(DisplayName = "Door Frame Top"),
+
+	// Window Frame Sockets
+	WindowFrame_Bottom			UMETA(DisplayName = "Window Frame Bottom"),
+	WindowFrame_Top				UMETA(DisplayName = "Window Frame Top"),
 
 	// Top Plate Sockets (first top plate, sits on studs/posts)
 	TopPlate_Bottom				UMETA(DisplayName = "Top Plate Bottom"),

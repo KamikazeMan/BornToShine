@@ -74,6 +74,7 @@ protected:
 	void CreateWallStudRules();
 	void CreateCornerPostRules();
 	void CreateDoorFrameRules();
+	void CreateWindowFrameRules();
 	void CreateTopPlateRules();
 	void CreateDoubleTopPlateRules();
 	void CreateRidgePostRules();

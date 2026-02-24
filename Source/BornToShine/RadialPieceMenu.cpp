@@ -107,6 +107,7 @@ void URadialPieceMenu::BuildCategories()
 		case EPieceType::TopPlate:
 		case EPieceType::DoubleTopPlate:
 		case EPieceType::DoorFrame:
+		case EPieceType::WindowFrame:
 		case EPieceType::Header:
 			Walls.PieceIndices.Add(i); break;
 		case EPieceType::RidgePost:

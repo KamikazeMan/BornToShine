@@ -43,6 +43,7 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 	case EPieceType::WallStud:
 	case EPieceType::CornerPost:
 	case EPieceType::DoorFrame:
+	case EPieceType::WindowFrame:
 		return GetCyclePieceCount(EPieceType::WallPlate) >= 1;
 
 	case EPieceType::Header:
@@ -99,6 +100,7 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 	case EPieceType::WallStud:
 	case EPieceType::CornerPost:
 	case EPieceType::DoorFrame:
+	case EPieceType::WindowFrame:
 		return TEXT("Place bottom plates first");
 
 	case EPieceType::Header:

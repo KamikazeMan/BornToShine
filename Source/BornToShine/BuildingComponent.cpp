@@ -9,6 +9,7 @@
 #include "WallStud.h"
 #include "TopPlate.h"
 #include "DoorFrame.h"
+#include "WindowFrame.h"
 #include "RidgePost.h"
 #include "RidgeBoard.h"
 #include "Rafter.h"
@@ -84,6 +85,11 @@ void UBuildingComponent::BeginPlay()
 		AvailablePieceTypes.Add(ADoorFrame::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added DoorFrame to AvailablePieceTypes"));
 	}
+	if (!HasPieceType(EPieceType::WindowFrame))
+	{
+		AvailablePieceTypes.Add(AWindowFrame::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added WindowFrame to AvailablePieceTypes"));
+	}
 	if (!HasPieceType(EPieceType::TopPlate))
 	{
 		AvailablePieceTypes.Add(ATopPlate::StaticClass());
@@ -122,6 +128,7 @@ void UBuildingComponent::BeginPlay()
 		switch (EditorInfo.PieceType)
 		{
 		case EPieceType::DoorFrame:       AutoClass = ADoorFrame::StaticClass(); break;
+		case EPieceType::WindowFrame:     AutoClass = AWindowFrame::StaticClass(); break;
 		case EPieceType::WallStud:        AutoClass = AWallStud::StaticClass(); break;
 		case EPieceType::WallPlate:       AutoClass = ABottomPlate::StaticClass(); break;
 		case EPieceType::Plywood:         AutoClass = APlywoodSheet::StaticClass(); break;
@@ -798,6 +805,22 @@ void UBuildingComponent::PlaceCurrentPiece()
 				M->SetCollisionResponseToAllChannels(ECR_Ignore);
 			}
 		}
+
+		TArray<ABuildablePiece*> AllWindows =
+			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::WindowFrame);
+		for (ABuildablePiece* P : AllWindows)
+		{
+			if (!P) continue;
+			UStaticMeshComponent* M = P->GetMeshComponent();
+			if (M && M->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("WINDOWFRAME COLLISION CORRUPTION detected after placement! [%s] CollisionEnabled=%d. Forcing NoCollision."),
+					*P->GetName(), (int32)M->GetCollisionEnabled());
+				M->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				M->SetCollisionResponseToAllChannels(ECR_Ignore);
+			}
+		}
 	}
 }
 
@@ -1170,6 +1193,7 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::WallStud:    Info.Subtitle = TEXT("92-5/8\""); break;
 				case EPieceType::CornerPost:      Info.Subtitle = TEXT("4-Stud"); break;
 				case EPieceType::DoorFrame:       Info.Subtitle = TEXT("36\""); break;
+				case EPieceType::WindowFrame:     Info.Subtitle = TEXT("27.5\""); break;
 				case EPieceType::TopPlate:        Info.Subtitle = TEXT("2x4"); break;
 				case EPieceType::RidgePost:       Info.Subtitle = TEXT("3-2x6"); break;
 				case EPieceType::RidgeBoard:      Info.Subtitle = TEXT("2x8"); break;

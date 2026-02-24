@@ -32,6 +32,7 @@ void ASnapRuleTable::InitializeRules()
 	AddBottomPlateRules();
 	AddTopPlateRules();
 	AddDoorFrameRules();
+	AddWindowFrameRules();
 	AddRafterRules();
 	AddRidgeBoardRules();
 }
@@ -470,6 +471,24 @@ void ASnapRuleTable::AddTopPlateRules()
 		RuleTable.Add(Key, Rule);
 	}
 
+	// TOP PLATE BOTTOM -> WINDOW FRAME TOP
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::TopPlate_Bottom,
+			EConstructionSocketType::WindowFrame_Top
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 800;
+		RuleTable.Add(Key, Rule);
+	}
+
 	// TOP PLATE END -> TOP PLATE END (corner: Left-Left)
 	{
 		FSnapRuleKey Key(
@@ -569,6 +588,30 @@ void ASnapRuleTable::AddDoorFrameRules()
 	}
 
 	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added door frame rules (Bottom->Plate=%d)"), 900);
+}
+
+void ASnapRuleTable::AddWindowFrameRules()
+{
+	// WINDOW FRAME BOTTOM -> WALL BOTTOM PLATE
+	// Priority 900: same as door frame
+	{
+		FSnapRuleKey Key(
+			/*SrcLeft=*/ false,
+			/*TgtLeft=*/ false,
+			EConstructionSocketType::WindowFrame_Bottom,
+			EConstructionSocketType::Wall_Bottom_Plate
+		);
+
+		FSnapRule Rule;
+		Rule.ConnectionType = ESnapConnectionType::TopFace;
+		Rule.YawOffset = 0.0f;
+		Rule.bYawSignFromPlayerIntent = false;
+		Rule.FlushOffset = FVector::ZeroVector;
+		Rule.Priority = 900;
+		RuleTable.Add(Key, Rule);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("SnapRuleTable: Added window frame rules (Bottom->Plate=%d)"), 900);
 }
 
 void ASnapRuleTable::AddRafterRules()

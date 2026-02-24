@@ -31,6 +31,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateWallStudRules();
 	CreateCornerPostRules();
 	CreateDoorFrameRules();
+	CreateWindowFrameRules();
 	CreateTopPlateRules();
 	CreateDoubleTopPlateRules();
 	CreateRidgePostRules();
@@ -268,6 +269,31 @@ void ASocketManager::CreateDoorFrameRules()
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added door frame compatibility rules"));
 }
 
+void ASocketManager::CreateWindowFrameRules()
+{
+	// Window frame bottom socket snaps to Wall_Bottom_Plate sockets (same as door frame).
+	FSocketCompatibilityRule WinBottomRule;
+	WinBottomRule.SourceSocketType = EConstructionSocketType::WindowFrame_Bottom;
+	WinBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Bottom_Plate);
+	WinBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
+	WinBottomRule.SnapDistance = 250.0f;
+	WinBottomRule.bCheckAlignment = false;
+	WinBottomRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(WinBottomRule);
+
+	// Reverse: Wall_Bottom_Plate accepts WindowFrame_Bottom
+	FSocketCompatibilityRule PlateTopWinRule;
+	PlateTopWinRule.SourceSocketType = EConstructionSocketType::Wall_Bottom_Plate;
+	PlateTopWinRule.CompatibleSocketTypes.Add(EConstructionSocketType::WindowFrame_Bottom);
+	PlateTopWinRule.RequiredPhase = EConstructionPhase::WallFrame;
+	PlateTopWinRule.SnapDistance = 250.0f;
+	PlateTopWinRule.bCheckAlignment = false;
+	PlateTopWinRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PlateTopWinRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added window frame compatibility rules"));
+}
+
 bool ASocketManager::AreSocketsCompatible(EConstructionSocketType SourceSocket, EConstructionSocketType TargetSocket, EConstructionPhase CurrentPhase) const
 {
 	for (const FSocketCompatibilityRule& Rule : CompatibilityRules)
@@ -351,7 +377,8 @@ bool ASocketManager::FindBestSnapPoint(
 				bool bTopPlateSource = (SourceSocket.SocketType == EConstructionSocketType::TopPlate_Bottom);
 				bool bStudPostTopTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Top ||
 				                           TargetSocket.SocketType == EConstructionSocketType::CornerPost_Top ||
-				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top);
+				                           TargetSocket.SocketType == EConstructionSocketType::DoorFrame_Top ||
+				                           TargetSocket.SocketType == EConstructionSocketType::WindowFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
 				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
@@ -528,6 +555,7 @@ void ASocketManager::CreateTopPlateRules()
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Top);
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::CornerPost_Top);
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::DoorFrame_Top);
+	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::WindowFrame_Top);
 	TopPlateBottomRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Top);
 	TopPlateBottomRule.RequiredPhase = EConstructionPhase::WallFrame;
 	TopPlateBottomRule.SnapDistance = 250.0f;
@@ -562,6 +590,15 @@ void ASocketManager::CreateTopPlateRules()
 	DoorTopRule.bCheckAlignment = false;
 	DoorTopRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(DoorTopRule);
+
+	FSocketCompatibilityRule WinTopRule;
+	WinTopRule.SourceSocketType = EConstructionSocketType::WindowFrame_Top;
+	WinTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::TopPlate_Bottom);
+	WinTopRule.RequiredPhase = EConstructionPhase::WallFrame;
+	WinTopRule.SnapDistance = 250.0f;
+	WinTopRule.bCheckAlignment = false;
+	WinTopRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(WinTopRule);
 
 	// Top plate end-to-end (corners)
 	FSocketCompatibilityRule TopPlateEndRule;

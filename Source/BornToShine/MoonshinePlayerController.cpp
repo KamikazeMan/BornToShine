@@ -9,6 +9,7 @@
 #include "FloorJoist.h"
 #include "BottomPlate.h"
 #include "DoorFrame.h"
+#include "WindowFrame.h"
 #include "TopPlate.h"
 #include "DoubleTopPlate.h"
 #include "SocketManager.h"
@@ -637,6 +638,15 @@ void AMoonshinePlayerController::QuickLoad()
 			if (ADoorFrame* Door = Cast<ADoorFrame>(Piece))
 			{
 				Door->SetHasAutoDeleted(true);
+			}
+		}
+
+		// Window frames: mark stud deletion as already done on load
+		if (PType == EPieceType::WindowFrame)
+		{
+			if (AWindowFrame* Win = Cast<AWindowFrame>(Piece))
+			{
+				Win->SetHasAutoDeleted(true);
 			}
 		}
 
