@@ -107,7 +107,7 @@ protected:
 	void UpdatePreviewPosition();
 
 	// Get placement location from raycast
-	bool GetPlacementLocation(FVector& OutLocation, FVector& OutNormal);
+	bool GetPlacementLocation(FVector& OutLocation, FVector& OutNormal, AActor** OutHitActor = nullptr);
 
 	// Get owner's camera
 	class UCameraComponent* GetOwnerCamera() const;

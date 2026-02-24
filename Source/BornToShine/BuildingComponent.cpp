@@ -482,14 +482,41 @@ void UBuildingComponent::UpdatePreviewPosition()
 	// Normal path: raycast + snap detection
 	FVector PlacementLocation;
 	FVector PlacementNormal;
+	AActor* HitActor = nullptr;
 
-	if (GetPlacementLocation(PlacementLocation, PlacementNormal))
+	bool bValidHit = GetPlacementLocation(PlacementLocation, PlacementNormal, &HitActor);
+
+	// Window/door frames should NOT snap when the cursor hits floor-level
+	// pieces (rim boards, joists, plywood). These sit directly below the
+	// bottom plates, so the snap search radius picks up the plate above and
+	// makes the frame appear to "snap to the rim board."
+	if (bValidHit && HitActor)
+	{
+		EPieceType PreviewType = CurrentPreviewPiece->GetPieceType();
+		if (PreviewType == EPieceType::WindowFrame || PreviewType == EPieceType::DoorFrame)
+		{
+			ABuildablePiece* HitPiece = Cast<ABuildablePiece>(HitActor);
+			if (HitPiece)
+			{
+				EPieceType HitType = HitPiece->GetPieceType();
+				if (HitType == EPieceType::RimBoard ||
+					HitType == EPieceType::FloorJoist ||
+					HitType == EPieceType::Plywood ||
+					HitType == EPieceType::Foundation)
+				{
+					bValidHit = false; // Treat as no-hit — frame floats in front of camera
+				}
+			}
+		}
+	}
+
+	if (bValidHit)
 	{
 		CurrentPreviewPiece->UpdatePreviewPosition(PlacementLocation, PreviewRotation);
 	}
 	else
 	{
-		// No valid hit, place in front of camera
+		// No valid hit (or hit a floor-level piece), place in front of camera
 		UCameraComponent* Camera = GetOwnerCamera();
 		if (Camera)
 		{
@@ -501,7 +528,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 	}
 }
 
-bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal)
+bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal, AActor** OutHitActor)
 {
 	UCameraComponent* Camera = GetOwnerCamera();
 	if (!Camera) return false;
@@ -530,6 +557,7 @@ bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& Out
 	{
 		OutLocation = HitResult.Location;
 		OutNormal = HitResult.Normal;
+		if (OutHitActor) *OutHitActor = HitResult.GetActor();
 		return true;
 	}
 
