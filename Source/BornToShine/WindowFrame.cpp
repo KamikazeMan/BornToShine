@@ -10,7 +10,7 @@ AWindowFrame::AWindowFrame()
 	PieceType = EPieceType::WindowFrame;
 
 	// Default dimensions — overridden by actual mesh bounds in BeginPlay
-	FrameHeight = 235.27f;          // 92-5/8" (standard 8ft wall stud height)
+	FrameHeight = 243.84f;          // 96" = 8ft (king studs match wall stud height)
 	RoughOpeningWidth = 69.85f;     // 27.5" rough opening (gap between trimmers)
 	FrameOverallWidth = 166.441f;   // 65.52" = 5 studs at 16" OC
 	RoughOpeningHeight = 88.304f;   // 34.77" rough opening height
@@ -174,10 +174,12 @@ void AWindowFrame::AdjustSocketsToMeshBounds()
 			FrameOverallWidth = MeshHalfX * 2.0f;
 		}
 
-		// Sockets at wall stud height (92-5/8" = 235.27cm), NOT mesh bounds.
-		// The mesh BB extends beyond the visible stud geometry, so using
-		// mesh bounds puts sockets too far from the actual stud ends.
-		const float WallStudHalfHeight = 235.27f / 2.0f; // 117.635cm
+		// Sockets at wall stud height, NOT mesh bounds.
+		// The mesh BB (245.75cm) extends beyond the visible king stud
+		// geometry, so using mesh bounds puts sockets too far from the
+		// actual stud ends.  King studs must match wall stud height
+		// exactly: 243.84cm = 96" = 8ft minus two plate thicknesses.
+		const float WallStudHalfHeight = 243.84f / 2.0f; // 121.92cm
 		for (FConstructionSocket& Socket : Sockets)
 		{
 			if (Socket.SocketName == FName("FrameBottom"))

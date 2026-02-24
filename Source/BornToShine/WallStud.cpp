@@ -11,9 +11,9 @@ AWallStud::AWallStud()
 	StudWidth = 3.81f;    // 1.5 inches (along wall)
 	StudDepth = 8.89f;    // 3.5 inches (in/out, perpendicular to wall)
 
-	// Standard stud height for 8ft walls: 92-5/8"
-	// (8ft wall = 96" total, minus 1.5" bottom plate, minus 1.5" top plate, minus 3/8" gap)
-	StudHeight = 235.27f; // 92.625 inches in cm
+	// Wall stud height: 96" = 243.84cm (8ft minus two plate thicknesses).
+	// Must match window frame king stud height exactly.
+	StudHeight = 243.84f; // 96 inches = 8ft
 
 	// Scene root for clean actor transform (same pattern as RimBoard/BottomPlate)
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
@@ -45,47 +45,9 @@ void AWallStud::BeginPlay()
 	// matches the real mesh top regardless of Rhino export pivot position.
 	AdjustSocketsToMeshBounds();
 
-	UE_LOG(LogTemp, Log, TEXT("WallStud: UNSCALED mesh height: %.2fcm (%.2f in)"),
-		StudHeight, StudHeight / 2.54f);
-
-	// Scale mesh Z to match door frame king stud height (247.66cm).
-	// The Rhino stud mesh is shorter — stretch Z to the correct wall height.
-	const float TargetHeight = 247.66f; // Door frame king stud height
-	if (MeshComponent && MeshComponent->GetStaticMesh() &&
-		!FMath::IsNearlyEqual(StudHeight, TargetHeight, 0.1f) && StudHeight > 1.0f)
-	{
-		FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-		float UnscaledHeight = Bounds.BoxExtent.Z * 2.0f;
-
-		if (UnscaledHeight > 1.0f)
-		{
-			float ScaleZ = TargetHeight / UnscaledHeight;
-			MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, ScaleZ));
-
-			// Recompute socket positions for the scaled mesh
-			FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
-			float NewBottomZ = (Bounds.Origin.Z - Bounds.BoxExtent.Z) * ScaleZ + MeshRelLoc.Z;
-			float NewTopZ    = (Bounds.Origin.Z + Bounds.BoxExtent.Z) * ScaleZ + MeshRelLoc.Z;
-
-			StudHeight = NewTopZ - NewBottomZ;
-
-			for (FConstructionSocket& Socket : Sockets)
-			{
-				if (Socket.SocketName == FName("StudBottom"))
-					Socket.LocalPosition.Z = NewBottomZ;
-				else if (Socket.SocketName == FName("StudTop"))
-					Socket.LocalPosition.Z = NewTopZ;
-			}
-
-			UE_LOG(LogTemp, Log,
-				TEXT("WallStud: Scaled Z by %.4f → height now %.2fcm (target %.2fcm)"),
-				ScaleZ, StudHeight, TargetHeight);
-		}
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("WallStud: FINAL height: %.2fcm (%.2f in)"),
-		StudHeight, StudHeight / 2.54f);
-
+	// Wall stud uses natural mesh height — no Z-scaling.
+	// The Rhino mesh should match the window frame king stud height
+	// so wall studs and window frame studs are the same height.
 	UE_LOG(LogTemp, Log, TEXT("WallStud: BeginPlay - Height=%.1fcm (%.2f in), Total sockets: %d"),
 		StudHeight, GetStudHeightInches(), Sockets.Num());
 }

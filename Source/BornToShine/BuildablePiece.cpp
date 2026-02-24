@@ -674,10 +674,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), (int32)TargetPiece->GetPieceType());
 				continue;
 			}
-			if (PieceType == EPieceType::WindowFrame && TargetPiece &&
-				TargetPiece->GetPieceType() != EPieceType::WallPlate)
+			// WindowFrame_Bottom sockets ONLY snap to bottom plates (WallPlate).
+			// Rim boards share nearby sockets and must be rejected here.
+			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom)
 			{
-				continue;
+				if (!TargetPiece || TargetPiece->GetPieceType() != EPieceType::WallPlate)
+				{
+					continue; // Window frame bottom only snaps to bottom plates
+				}
 			}
 
 			float Dist = FVector::Dist(SocketWorldLocation, SnapLoc);
