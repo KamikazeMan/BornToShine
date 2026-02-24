@@ -1387,6 +1387,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
+				// Drop Z by half plate height — the snap aligns the mesh bottom
+				// with the plate top, but the mesh extends 1.905cm below the
+				// actual stud bottoms (plate geometry baked into the mesh).
+				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
+				CandidateLocation.Z -= PlateHalfHeight;
+
 				FVector PlateCenter = TargetPiece->GetActorLocation();
 				float SavedZ = CandidateLocation.Z;
 				CandidateLocation.X = PlateCenter.X;
