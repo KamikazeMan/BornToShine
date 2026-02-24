@@ -60,6 +60,11 @@ public:
 	/** Disable scroll-wheel scaling. */
 	virtual void ScalePiece(float ScaleDelta) override;
 
+	/** Window frames only follow the cursor to valid snap positions (bottom plates).
+	 *  When no snap is found, the preview stays put instead of landing on
+	 *  non-snappable surfaces like rim boards. */
+	virtual void UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation) override;
+
 	/** Override placement to trigger auto-delete of overlapping studs. */
 	virtual bool TryPlace() override;
 

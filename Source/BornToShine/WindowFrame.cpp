@@ -193,6 +193,42 @@ void AWindowFrame::AdjustSocketsToMeshBounds()
 }
 
 // ---------------------------------------------------------------------------
+// UpdatePreviewPosition — only follow cursor to valid snap positions.
+// Window frames must snap to a bottom plate; don't let the preview land
+// on non-snappable surfaces (rim boards, joists, ground, etc.).
+// ---------------------------------------------------------------------------
+void AWindowFrame::UpdatePreviewPosition(const FVector& NewLocation, const FRotator& NewRotation)
+{
+	if (PieceState != EPieceState::Preview) return;
+
+	// Save current position in case no snap is found
+	FVector PrevLocation = GetActorLocation();
+	FRotator PrevRotation = GetActorRotation();
+
+	// Temporarily move to cursor position so snap detection searches
+	// for nearby pieces around the aimed-at location
+	SetActorLocation(NewLocation);
+	SetActorRotation(NewRotation);
+
+	TArray<FSnapCandidate> Candidates = DetectSnapCandidates();
+	FSnapCandidate Best = SelectBestCandidate(Candidates);
+
+	if (Best.IsValid())
+	{
+		ApplySnap(Best);
+	}
+	else
+	{
+		// No valid snap — restore previous position so the frame
+		// doesn't sit on rim boards or other non-wall surfaces.
+		bIsSnapped = false;
+		CurrentSnapCandidate = FSnapCandidate();
+		SetActorLocation(PrevLocation);
+		SetActorRotation(PrevRotation);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ScalePiece — disabled (no scroll wheel resizing)
 // ---------------------------------------------------------------------------
 void AWindowFrame::ScalePiece(float ScaleDelta)
