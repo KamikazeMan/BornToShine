@@ -2137,6 +2137,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
         float BroadMin = MAX_FLT;
         float BroadMax = -MAX_FLT;
         int32 BroadCount = 0;
+        TArray<float> BroadPerps; // Collect perp projections for gap analysis
         TArray<ABuildablePiece*> BroadTopPlates = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::TopPlate);
         for (ABuildablePiece* Piece : BroadTopPlates)
         {
@@ -2149,6 +2150,7 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
             if (PerpProj < BroadPerpMin || PerpProj > BroadPerpMax) continue;
             BroadMin = FMath::Min(BroadMin, PerpProj);
             BroadMax = FMath::Max(BroadMax, PerpProj);
+            BroadPerps.Add(PerpProj);
             BroadCount++;
         }
 
@@ -2158,10 +2160,33 @@ void URectangleBuilderComponent::CalculateRidgePostLayout()
 
         if (BroadCount > DTPCount && BroadWidth > OriginalWidth * 1.3f)
         {
-            UE_LOG(LogTemp, Warning, TEXT("RidgePost: Adjacent section detected — expanding width from %.1fcm(%.1fft) to %.1fcm(%.1fft)"),
-                OriginalWidth, OriginalWidth / 30.48f, BroadWidth, BroadWidth / 30.48f);
-            MinPerp = BroadMin;
-            MaxPerp = BroadMax;
+            // Verify plates form a continuous distribution (no large gap).
+            // Truly adjacent sections sharing a wall have plates spread
+            // evenly across the combined width. Separate inline buildings
+            // across a gap produce a hole in the distribution that is close
+            // to a full section width.
+            BroadPerps.Sort();
+            const float MaxAllowedGap = OriginalWidth * 0.6f;
+            bool bContinuous = true;
+            for (int32 g = 1; g < BroadPerps.Num(); g++)
+            {
+                float Gap = BroadPerps[g] - BroadPerps[g - 1];
+                if (Gap > MaxAllowedGap)
+                {
+                    bContinuous = false;
+                    UE_LOG(LogTemp, Warning, TEXT("RidgePost: Adjacent section NOT confirmed — gap of %.1fcm between plates at perp=%.1f and perp=%.1f (threshold=%.1f)"),
+                        Gap, BroadPerps[g - 1], BroadPerps[g], MaxAllowedGap);
+                    break;
+                }
+            }
+
+            if (bContinuous)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("RidgePost: Adjacent section detected — expanding width from %.1fcm(%.1fft) to %.1fcm(%.1fft)"),
+                    OriginalWidth, OriginalWidth / 30.48f, BroadWidth, BroadWidth / 30.48f);
+                MinPerp = BroadMin;
+                MaxPerp = BroadMax;
+            }
         }
     }
 
