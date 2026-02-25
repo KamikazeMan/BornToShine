@@ -500,20 +500,15 @@ void AWindowFrame::CreateTopExtensions()
 	}
 	TopExtensions.Empty();
 
-	// Frame top Z (from socket position, which is at the top plate bottom face)
+	// Frame top Z is at the mesh top (half the mesh height above origin)
 	float FrameTopZ = FrameHeight / 2.0f;
-	for (const FConstructionSocket& S : Sockets)
-	{
-		if (S.SocketName == FName("FrameTop"))
-		{
-			FrameTopZ = S.LocalPosition.Z;
-			break;
-		}
-	}
 
-	// Extension height: above-header gap
-	const float ExtHeight = 24.227f; // top of header to bottom of first top plate
-	if (ExtHeight < 1.0f) return;
+	// Gap between mesh top and top plate bottom.
+	// Wall cavity = 247.66cm (bottom plate top to first top plate bottom).
+	// The mesh doesn't quite reach the top plate, so fill the gap.
+	const float WallCavityHeight = 247.66f;
+	float ExtHeight = WallCavityHeight - FrameHeight;
+	if (ExtHeight < 0.5f) return; // No gap to fill
 
 	// Get the extension mesh dimensions for scaling
 	FBoxSphereBounds StudBounds = ExtensionMesh->GetBounds();
@@ -521,7 +516,7 @@ void AWindowFrame::CreateTopExtensions()
 	if (StudMeshHeight < 1.0f) return;
 
 	float ScaleZ = ExtHeight / StudMeshHeight;
-	float ExtCenterZ = FrameTopZ - ExtHeight / 2.0f;
+	float ExtCenterZ = FrameTopZ + ExtHeight / 2.0f;
 
 	// Calculate cripple stud X positions at 16" OC within the rough opening
 	const float StudSpacing = 40.64f; // 16 inches in cm
