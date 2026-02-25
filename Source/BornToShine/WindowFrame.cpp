@@ -11,10 +11,10 @@ AWindowFrame::AWindowFrame()
 
 	// Default dimensions — overridden by actual mesh bounds in BeginPlay
 	FrameHeight = 235.27f;          // 92-5/8" (standard 8ft wall stud height)
-	RoughOpeningWidth = 147.32f;    // 58" rough opening (gap between trimmers)
-	FrameOverallWidth = 162.56f;    // 64" = 5 studs at 16" OC
-	RoughOpeningHeight = 137.16f;   // 54" rough opening height
-	RoughSillHeight = 91.44f;       // 36" sill height from bottom plate
+	RoughOpeningWidth = 69.85f;     // 27.5" rough opening (gap between trimmers)
+	FrameOverallWidth = 166.441f;   // 65.52" = 5 studs at 16" OC
+	RoughOpeningHeight = 88.304f;   // 34.77" rough opening height
+	RoughSillHeight = 30.0f;        // 11.81" sill height from bottom plate
 
 	// SceneRoot decouples mesh scale from actor transform
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));

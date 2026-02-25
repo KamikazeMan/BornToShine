@@ -43,11 +43,11 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = "Construction|Dimensions")
 	float FrameOverallWidth;
 
-	/** Rough opening height. Default 137.16cm = 54" */
+	/** Rough opening height. Default 88.304cm = 34.77" */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float RoughOpeningHeight;
 
-	/** Rough sill height from bottom plate. Default 91.44cm = 36" */
+	/** Rough sill height from bottom plate. Default 30.0cm = 11.81" */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float RoughSillHeight;
 

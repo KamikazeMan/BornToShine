@@ -1193,7 +1193,7 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::WallStud:    Info.Subtitle = TEXT("92-5/8\""); break;
 				case EPieceType::CornerPost:      Info.Subtitle = TEXT("4-Stud"); break;
 				case EPieceType::DoorFrame:       Info.Subtitle = TEXT("36\""); break;
-				case EPieceType::WindowFrame:     Info.Subtitle = TEXT("64\""); break;
+				case EPieceType::WindowFrame:     Info.Subtitle = TEXT("27.5\""); break;
 				case EPieceType::TopPlate:        Info.Subtitle = TEXT("2x4"); break;
 				case EPieceType::RidgePost:       Info.Subtitle = TEXT("3-2x6"); break;
 				case EPieceType::RidgeBoard:      Info.Subtitle = TEXT("2x8"); break;
