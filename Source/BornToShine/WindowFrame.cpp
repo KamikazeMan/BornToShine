@@ -86,6 +86,10 @@ AWindowFrame::AWindowFrame()
 	bAutoSizeCollisionBoxes = false;
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+
+	// Bottom extension defaults
+	BottomExtensionMesh = nullptr;
+	bEnableBottomExtensions = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,8 +114,11 @@ void AWindowFrame::BeginPlay()
 		SetupCollisionBoxes();
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("WindowFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, FrameOverall=%.1fcm, SillH=%.1fcm, Sockets: %d"),
-		FrameHeight, RoughOpeningWidth, FrameOverallWidth, RoughSillHeight, Sockets.Num());
+	// Create bottom cripple stud extensions to fill gap to bottom plate
+	CreateBottomExtensions();
+
+	UE_LOG(LogTemp, Log, TEXT("WindowFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, FrameOverall=%.1fcm, SillH=%.1fcm, Sockets: %d, BottomExts: %d"),
+		FrameHeight, RoughOpeningWidth, FrameOverallWidth, RoughSillHeight, Sockets.Num(), BottomExtensions.Num());
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +228,9 @@ void AWindowFrame::SetPreviewMode(bool bIsPreview)
 
 	// Kill mesh collision that base class may have re-enabled
 	KillMeshCollision();
+
+	// Update extension stud visibility for preview vs placed
+	SetExtensionPreviewMode(bIsPreview);
 
 	if (!bIsPreview)
 	{
@@ -378,6 +388,115 @@ void AWindowFrame::EnableWindowCollision(bool bEnable)
 			RightPostCollision ? TEXT("ON") : TEXT("null"),
 			HeaderCollision ? TEXT("ON") : TEXT("null"),
 			SillCollision ? TEXT("ON") : TEXT("null"));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CreateBottomExtensions — spawn cripple stud meshes from the frame bottom
+// (bottom plate top face) up to the rough sill height.  These fill the
+// visual gap that the pre-modeled mesh leaves at the very bottom.
+// ---------------------------------------------------------------------------
+void AWindowFrame::CreateBottomExtensions()
+{
+	if (!bEnableBottomExtensions || !BottomExtensionMesh) return;
+
+	// Clean up any previous extensions
+	for (UStaticMeshComponent* Ext : BottomExtensions)
+	{
+		if (Ext) { Ext->DestroyComponent(); }
+	}
+	BottomExtensions.Empty();
+
+	// Frame bottom Z (from socket position, which is at the bottom plate top face)
+	float FrameBottomZ = -FrameHeight / 2.0f;
+	for (const FConstructionSocket& S : Sockets)
+	{
+		if (S.SocketName == FName("FrameBottom"))
+		{
+			FrameBottomZ = S.LocalPosition.Z;
+			break;
+		}
+	}
+
+	// Extension height: from frame bottom up to the rough sill
+	float ExtHeight = RoughSillHeight;
+	if (ExtHeight < 1.0f) return;
+
+	// Get the extension mesh dimensions for scaling
+	FBoxSphereBounds StudBounds = BottomExtensionMesh->GetBounds();
+	float StudMeshHeight = StudBounds.BoxExtent.Z * 2.0f;
+	if (StudMeshHeight < 1.0f) return;
+
+	float ScaleZ = ExtHeight / StudMeshHeight;
+	float ExtCenterZ = FrameBottomZ + ExtHeight / 2.0f;
+
+	// Calculate cripple stud X positions at 16" OC within the rough opening
+	const float StudSpacing = 40.64f; // 16 inches in cm
+	float HalfOpening = RoughOpeningWidth / 2.0f;
+	const float StudHalfWidth = 1.905f; // half of 3.81cm (1.5" stud face)
+
+	TArray<float> StudXPositions;
+
+	// Center stud first
+	StudXPositions.Add(0.0f);
+
+	// Additional studs at 16" OC on each side of center
+	for (float Offset = StudSpacing; Offset < HalfOpening - StudHalfWidth; Offset += StudSpacing)
+	{
+		StudXPositions.Add(Offset);
+		StudXPositions.Add(-Offset);
+	}
+
+	// Create an extension component for each stud position
+	for (int32 i = 0; i < StudXPositions.Num(); i++)
+	{
+		UStaticMeshComponent* ExtComp = NewObject<UStaticMeshComponent>(this);
+		ExtComp->SetStaticMesh(BottomExtensionMesh);
+		ExtComp->SetupAttachment(SceneRoot);
+		ExtComp->SetRelativeLocation(FVector(StudXPositions[i], 0.0f, ExtCenterZ));
+		ExtComp->SetRelativeScale3D(FVector(1.0f, 1.0f, ScaleZ));
+		ExtComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ExtComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		ExtComp->RegisterComponent();
+
+		BottomExtensions.Add(ExtComp);
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("WindowFrame: Created %d bottom extensions — ExtH=%.1fcm  ScaleZ=%.3f  CenterZ=%.1f  OpeningW=%.1f"),
+		BottomExtensions.Num(), ExtHeight, ScaleZ, ExtCenterZ, RoughOpeningWidth);
+}
+
+// ---------------------------------------------------------------------------
+// SetExtensionPreviewMode — toggle extension stud visibility / material
+// for preview (ghost) vs placed (opaque) states.
+// ---------------------------------------------------------------------------
+void AWindowFrame::SetExtensionPreviewMode(bool bIsPreview)
+{
+	for (UStaticMeshComponent* Ext : BottomExtensions)
+	{
+		if (!Ext) continue;
+
+		if (bIsPreview)
+		{
+			// Use the same preview material as the main mesh
+			if (DynamicMaterial)
+			{
+				Ext->SetMaterial(0, DynamicMaterial);
+			}
+		}
+		else
+		{
+			// Restore original material (slot 0 from the static mesh asset)
+			if (Ext->GetStaticMesh())
+			{
+				UMaterialInterface* OrigMat = Ext->GetStaticMesh()->GetMaterial(0);
+				if (OrigMat)
+				{
+					Ext->SetMaterial(0, OrigMat);
+				}
+			}
+		}
 	}
 }
 

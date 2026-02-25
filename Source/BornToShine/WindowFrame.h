@@ -79,6 +79,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
 	bool bAutoSizeCollisionBoxes;
 
+	// --- Bottom Cripple Stud Extensions ---
+
+	/** Static mesh for bottom extension studs (assign a 2x4 stud mesh in Blueprint). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Extensions")
+	UStaticMesh* BottomExtensionMesh;
+
+	/** Enable auto-generated bottom cripple stud extensions from bottom plate
+	 *  up to the rough sill.  The extensions fill the gap that the pre-modeled
+	 *  mesh leaves at the bottom of the frame. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Extensions")
+	bool bEnableBottomExtensions;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;
@@ -106,6 +118,16 @@ private:
 
 	/** Prevents AutoDeleteOverlappingStuds from running more than once. */
 	bool bHasAutoDeleted = false;
+
+	/** Dynamically created bottom extension stud components. */
+	UPROPERTY()
+	TArray<UStaticMeshComponent*> BottomExtensions;
+
+	/** Spawn bottom cripple stud extensions from bottom plate to rough sill. */
+	void CreateBottomExtensions();
+
+	/** Update extension visibility/material for preview vs placed state. */
+	void SetExtensionPreviewMode(bool bIsPreview);
 
 	/** Override: hook into placement to trigger auto-delete. */
 	virtual void SetPreviewMode(bool bIsPreview) override;
