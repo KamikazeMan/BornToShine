@@ -1382,6 +1382,23 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					*TargetPiece->GetName(), PlateCenter.X, PlateCenter.Y, SavedZ);
 			}
 
+			// Window frame Z correction — same as door frame.
+			// Window frame king studs sit on the bottom plate (not on plywood),
+			// so place the frame bottom at the plate top surface.
+			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
+				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
+				CandidateLocation.Z = PlateTopZ - Socket.LocalPosition.Z;
+
+				UE_LOG(LogTemp, Log,
+					TEXT("WindowFrame Z-fix: PlateCenter=%.2f PlateHalfH=%.2f PlateTop=%.2f FrameSocketZ=%.2f -> ActorZ=%.2f"),
+					TargetPiece->GetActorLocation().Z, PlateHalfHeight,
+					PlateTopZ, Socket.LocalPosition.Z, CandidateLocation.Z);
+			}
+
 			// Window frame centering: same as door frame — center on the plate.
 			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom &&
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
