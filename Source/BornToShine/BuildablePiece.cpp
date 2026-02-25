@@ -738,12 +738,23 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Window frame snaps to bottom plate the same way as wall studs
+			if (Socket.SocketType == EConstructionSocketType::WindowFrame_Bottom &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Top plate snaps to wall stud/corner post/door frame tops.
 			// Plate matches the target's yaw (runs along the wall), forced flat.
 			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom &&
 				(TgtSocketType == EConstructionSocketType::Wall_Stud_Top ||
 				 TgtSocketType == EConstructionSocketType::CornerPost_Top ||
-				 TgtSocketType == EConstructionSocketType::DoorFrame_Top) &&
+				 TgtSocketType == EConstructionSocketType::DoorFrame_Top ||
+				 TgtSocketType == EConstructionSocketType::WindowFrame_Top) &&
 				TargetPiece)
 			{
 				CandidateRotation.Pitch = 0.0f;
@@ -1461,18 +1472,29 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 750;
 	}
 
+	// Window frame bottom to bottom plate top (same priority as wall studs)
+	if ((SocketA == EConstructionSocketType::WindowFrame_Bottom &&
+		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
+		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
+		 SocketB == EConstructionSocketType::WindowFrame_Bottom))
+	{
+		return 750;
+	}
+
 	// Top plate bottom to wall stud/corner post/door frame tops
 	// HIGHEST priority for top plates — each plate sits on its wall's studs
 	if (SocketA == EConstructionSocketType::TopPlate_Bottom &&
 		(SocketB == EConstructionSocketType::Wall_Stud_Top ||
 		 SocketB == EConstructionSocketType::CornerPost_Top ||
-		 SocketB == EConstructionSocketType::DoorFrame_Top))
+		 SocketB == EConstructionSocketType::DoorFrame_Top ||
+		 SocketB == EConstructionSocketType::WindowFrame_Top))
 	{
 		return 950;
 	}
 	if ((SocketA == EConstructionSocketType::Wall_Stud_Top ||
 		 SocketA == EConstructionSocketType::CornerPost_Top ||
-		 SocketA == EConstructionSocketType::DoorFrame_Top) &&
+		 SocketA == EConstructionSocketType::DoorFrame_Top ||
+		 SocketA == EConstructionSocketType::WindowFrame_Top) &&
 		SocketB == EConstructionSocketType::TopPlate_Bottom)
 	{
 		return 950;

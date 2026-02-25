@@ -80,6 +80,7 @@ protected:
 	void CreateRidgeBoardRules();
 	void CreateRafterRules();
 	void CreateFasciaBoardRules();
+	void CreateWindowFrameRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(

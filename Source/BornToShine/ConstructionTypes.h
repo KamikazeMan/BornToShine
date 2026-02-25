@@ -30,7 +30,8 @@ enum class EPieceType : uint8
 	DoubleTopPlate		UMETA(DisplayName = "Double Top Plate"),
 	RidgePost			UMETA(DisplayName = "Ridge Post"),
 	RidgeBoard			UMETA(DisplayName = "Ridge Board"),
-	FasciaBoard			UMETA(DisplayName = "Fascia Board")
+	FasciaBoard			UMETA(DisplayName = "Fascia Board"),
+	WindowFrame			UMETA(DisplayName = "Window Frame")
 };
 
 /**
@@ -90,6 +91,10 @@ enum class EConstructionSocketType : uint8
 	// Door Frame Sockets
 	DoorFrame_Bottom			UMETA(DisplayName = "Door Frame Bottom"),
 	DoorFrame_Top				UMETA(DisplayName = "Door Frame Top"),
+
+	// Window Frame Sockets
+	WindowFrame_Bottom			UMETA(DisplayName = "Window Frame Bottom"),
+	WindowFrame_Top				UMETA(DisplayName = "Window Frame Top"),
 
 	// Top Plate Sockets (first top plate, sits on studs/posts)
 	TopPlate_Bottom				UMETA(DisplayName = "Top Plate Bottom"),
