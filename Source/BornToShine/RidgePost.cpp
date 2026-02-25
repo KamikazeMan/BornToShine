@@ -121,11 +121,11 @@ void ARidgePost::CreatePocketSocket()
 float ARidgePost::GetPitchRatio() const
 {
 	if (BuildingHalfWidthCm <= 0.0f) return 0.0f;
-	// Full PostHeight is the actual rise from plate to ridge board top.
-	// This gives ~6.6/12 for a nominal 6/12 building because the post
-	// height includes HAF for rafter depth alignment — that's correct,
-	// the rafter must slope at the steeper angle to reach the ridge.
-	return (PostHeight / BuildingHalfWidthCm) * 12.0f;
+	// Subtract the HAF (Height Above Fascia) so the pitch ratio reflects
+	// the true geometric rise, not the inflated post height.
+	const float HAF = 6.25f;
+	float TrueRise = FMath::Max(PostHeight - HAF, 0.0f);
+	return (TrueRise / BuildingHalfWidthCm) * 12.0f;
 }
 
 FString ARidgePost::GetPitchDisplayString() const

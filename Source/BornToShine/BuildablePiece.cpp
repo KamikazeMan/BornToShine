@@ -1834,7 +1834,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 				RafterSelf->GetSlopeLengthCm(), RafterSelf->PitchRatio);
 		}
 
-		float ActualPitchDeg = 24.5f;
+		float ActualPitchDeg = RafterSelf ? RafterSelf->GetPitchAngleDegrees() : 26.57f;
 		FinalRotation.Pitch = -ActualPitchDeg;
 
 		// Z offset: lower rafter center so rafter TOP aligns with ridge board top.
@@ -1844,19 +1844,25 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		float PitchRad = FMath::DegreesToRadians(ActualPitchDeg);
 		float ZOffset = RafterHalfDepth * FMath::Cos(PitchRad);
 
+		float RafterHalfWidth = RafterSelf ? (RafterSelf->RafterWidth / 2.0f) : 1.905f;
+		float InwardShift = 1.905f + RafterHalfWidth;
+
+		UE_LOG(LogTemp, Warning, TEXT("Rafter: Calculated pitch=%.2f deg (PitchRatio=%.2f/12, Run=%.1fcm) ZOffset=%.2f InwardShift=%.2f"),
+			ActualPitchDeg, RafterSelf ? RafterSelf->PitchRatio : 0.0f, RafterSelf ? RafterSelf->RunDistanceCm : 0.0f, ZOffset, InwardShift);
+
 		// Ridge board side sockets: additional position and yaw overrides.
 		// RidgeBoardSide_R* = right side, _L* = left side.
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
-			FinalLocation.Y -= 3.0f;       // inward toward ridge board
+			FinalLocation.Y -= InwardShift;
 			FinalLocation.Z -= ZOffset;
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
-			FinalLocation.Y += 3.0f;       // inward toward ridge board
+			FinalLocation.Y += InwardShift;
 			FinalLocation.Z -= ZOffset;
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
