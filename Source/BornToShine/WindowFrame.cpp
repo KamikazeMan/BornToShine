@@ -230,9 +230,6 @@ void AWindowFrame::SetPreviewMode(bool bIsPreview)
 	// Kill mesh collision that base class may have re-enabled
 	KillMeshCollision();
 
-	// Update extension stud visibility for preview vs placed
-	SetExtensionPreviewMode(bIsPreview);
-
 	if (!bIsPreview)
 	{
 		AutoDeleteOverlappingStuds();
@@ -242,6 +239,9 @@ void AWindowFrame::SetPreviewMode(bool bIsPreview)
 	{
 		EnableWindowCollision(false);
 	}
+
+	// Update extension stud materials last — ensures extensions exist before iterating
+	SetExtensionPreviewMode(bIsPreview);
 }
 
 // ---------------------------------------------------------------------------
@@ -467,6 +467,16 @@ void AWindowFrame::CreateBottomExtensions()
 		ExtComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 		ExtComp->RegisterComponent();
 
+		// If already placed, apply the real material (not the preview ghost)
+		if (PieceState != EPieceState::Preview && ExtComp->GetStaticMesh())
+		{
+			UMaterialInterface* OrigMat = ExtComp->GetStaticMesh()->GetMaterial(0);
+			if (OrigMat)
+			{
+				ExtComp->SetMaterial(0, OrigMat);
+			}
+		}
+
 		BottomExtensions.Add(ExtComp);
 	}
 
@@ -548,6 +558,16 @@ void AWindowFrame::CreateTopExtensions()
 		ExtComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		ExtComp->SetCollisionResponseToAllChannels(ECR_Ignore);
 		ExtComp->RegisterComponent();
+
+		// If already placed, apply the real material (not the preview ghost)
+		if (PieceState != EPieceState::Preview && ExtComp->GetStaticMesh())
+		{
+			UMaterialInterface* OrigMat = ExtComp->GetStaticMesh()->GetMaterial(0);
+			if (OrigMat)
+			{
+				ExtComp->SetMaterial(0, OrigMat);
+			}
+		}
 
 		TopExtensions.Add(ExtComp);
 	}
