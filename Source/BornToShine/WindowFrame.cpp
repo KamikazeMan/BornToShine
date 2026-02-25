@@ -87,9 +87,9 @@ AWindowFrame::AWindowFrame()
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	// Bottom extension defaults
-	BottomExtensionMesh = nullptr;
-	bEnableBottomExtensions = true;
+	// Extension defaults
+	ExtensionMesh = nullptr;
+	bEnableExtensions = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,11 +114,12 @@ void AWindowFrame::BeginPlay()
 		SetupCollisionBoxes();
 	}
 
-	// Create bottom cripple stud extensions to fill gap to bottom plate
+	// Create extension studs to fill gaps to bottom plate and top plate
 	CreateBottomExtensions();
+	CreateTopExtensions();
 
-	UE_LOG(LogTemp, Log, TEXT("WindowFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, FrameOverall=%.1fcm, SillH=%.1fcm, Sockets: %d, BottomExts: %d"),
-		FrameHeight, RoughOpeningWidth, FrameOverallWidth, RoughSillHeight, Sockets.Num(), BottomExtensions.Num());
+	UE_LOG(LogTemp, Log, TEXT("WindowFrame: BeginPlay - Height=%.1fcm, RoughOpening=%.1fcm, FrameOverall=%.1fcm, SillH=%.1fcm, Sockets: %d, BottomExts: %d, TopExts: %d"),
+		FrameHeight, RoughOpeningWidth, FrameOverallWidth, RoughSillHeight, Sockets.Num(), BottomExtensions.Num(), TopExtensions.Num());
 }
 
 // ---------------------------------------------------------------------------
@@ -398,7 +399,7 @@ void AWindowFrame::EnableWindowCollision(bool bEnable)
 // ---------------------------------------------------------------------------
 void AWindowFrame::CreateBottomExtensions()
 {
-	if (!bEnableBottomExtensions || !BottomExtensionMesh) return;
+	if (!bEnableExtensions || !ExtensionMesh) return;
 
 	// Clean up any previous extensions
 	for (UStaticMeshComponent* Ext : BottomExtensions)
@@ -419,11 +420,11 @@ void AWindowFrame::CreateBottomExtensions()
 	}
 
 	// Extension height: from frame bottom up to the rough sill
-	float ExtHeight = RoughSillHeight;
+	const float ExtHeight = 30.748f; // below-sill gap in cm
 	if (ExtHeight < 1.0f) return;
 
 	// Get the extension mesh dimensions for scaling
-	FBoxSphereBounds StudBounds = BottomExtensionMesh->GetBounds();
+	FBoxSphereBounds StudBounds = ExtensionMesh->GetBounds();
 	float StudMeshHeight = StudBounds.BoxExtent.Z * 2.0f;
 	if (StudMeshHeight < 1.0f) return;
 
@@ -434,24 +435,31 @@ void AWindowFrame::CreateBottomExtensions()
 	const float StudSpacing = 40.64f; // 16 inches in cm
 	float HalfOpening = RoughOpeningWidth / 2.0f;
 	const float StudHalfWidth = 1.905f; // half of 3.81cm (1.5" stud face)
+	const float KingStudWidth = 3.81f;  // 1.5" 2x4 face
 
 	TArray<float> StudXPositions;
 
-	// Center stud first
+	// Center cripple stud first
 	StudXPositions.Add(0.0f);
 
-	// Additional studs at 16" OC on each side of center
+	// Additional cripple studs at 16" OC on each side of center
 	for (float Offset = StudSpacing; Offset < HalfOpening - StudHalfWidth; Offset += StudSpacing)
 	{
 		StudXPositions.Add(Offset);
 		StudXPositions.Add(-Offset);
 	}
 
+	// King stud extensions on left and right sides (outermost studs)
+	float LeftKingX  = -(FrameOverallWidth / 2.0f) + (KingStudWidth / 2.0f);
+	float RightKingX =  (FrameOverallWidth / 2.0f) - (KingStudWidth / 2.0f);
+	StudXPositions.Add(LeftKingX);
+	StudXPositions.Add(RightKingX);
+
 	// Create an extension component for each stud position
 	for (int32 i = 0; i < StudXPositions.Num(); i++)
 	{
 		UStaticMeshComponent* ExtComp = NewObject<UStaticMeshComponent>(this);
-		ExtComp->SetStaticMesh(BottomExtensionMesh);
+		ExtComp->SetStaticMesh(ExtensionMesh);
 		ExtComp->SetupAttachment(SceneRoot);
 		ExtComp->SetRelativeLocation(FVector(StudXPositions[i], 0.0f, ExtCenterZ));
 		ExtComp->SetRelativeScale3D(FVector(1.0f, 1.0f, ScaleZ));
@@ -463,8 +471,90 @@ void AWindowFrame::CreateBottomExtensions()
 	}
 
 	UE_LOG(LogTemp, Log,
-		TEXT("WindowFrame: Created %d bottom extensions — ExtH=%.1fcm  ScaleZ=%.3f  CenterZ=%.1f  OpeningW=%.1f"),
+		TEXT("WindowFrame: Created %d bottom extensions (cripples + king studs) — ExtH=%.1fcm  ScaleZ=%.3f  CenterZ=%.1f  OpeningW=%.1f"),
 		BottomExtensions.Num(), ExtHeight, ScaleZ, ExtCenterZ, RoughOpeningWidth);
+}
+
+// ---------------------------------------------------------------------------
+// CreateTopExtensions — spawn cripple stud + king stud meshes from the
+// header top up to the top plate (bottom of first top plate).
+// ---------------------------------------------------------------------------
+void AWindowFrame::CreateTopExtensions()
+{
+	if (!bEnableExtensions || !ExtensionMesh) return;
+
+	// Clean up any previous top extensions
+	for (UStaticMeshComponent* Ext : TopExtensions)
+	{
+		if (Ext) { Ext->DestroyComponent(); }
+	}
+	TopExtensions.Empty();
+
+	// Frame top Z (from socket position, which is at the top plate bottom face)
+	float FrameTopZ = FrameHeight / 2.0f;
+	for (const FConstructionSocket& S : Sockets)
+	{
+		if (S.SocketName == FName("FrameTop"))
+		{
+			FrameTopZ = S.LocalPosition.Z;
+			break;
+		}
+	}
+
+	// Extension height: above-header gap
+	const float ExtHeight = 24.227f; // top of header to bottom of first top plate
+	if (ExtHeight < 1.0f) return;
+
+	// Get the extension mesh dimensions for scaling
+	FBoxSphereBounds StudBounds = ExtensionMesh->GetBounds();
+	float StudMeshHeight = StudBounds.BoxExtent.Z * 2.0f;
+	if (StudMeshHeight < 1.0f) return;
+
+	float ScaleZ = ExtHeight / StudMeshHeight;
+	float ExtCenterZ = FrameTopZ - ExtHeight / 2.0f;
+
+	// Calculate cripple stud X positions at 16" OC within the rough opening
+	const float StudSpacing = 40.64f; // 16 inches in cm
+	float HalfOpening = RoughOpeningWidth / 2.0f;
+	const float StudHalfWidth = 1.905f; // half of 3.81cm (1.5" stud face)
+	const float KingStudWidth = 3.81f;  // 1.5" 2x4 face
+
+	TArray<float> StudXPositions;
+
+	// Center cripple stud first
+	StudXPositions.Add(0.0f);
+
+	// Additional cripple studs at 16" OC on each side of center
+	for (float Offset = StudSpacing; Offset < HalfOpening - StudHalfWidth; Offset += StudSpacing)
+	{
+		StudXPositions.Add(Offset);
+		StudXPositions.Add(-Offset);
+	}
+
+	// King stud extensions on left and right sides (outermost studs)
+	float LeftKingX  = -(FrameOverallWidth / 2.0f) + (KingStudWidth / 2.0f);
+	float RightKingX =  (FrameOverallWidth / 2.0f) - (KingStudWidth / 2.0f);
+	StudXPositions.Add(LeftKingX);
+	StudXPositions.Add(RightKingX);
+
+	// Create an extension component for each stud position
+	for (int32 i = 0; i < StudXPositions.Num(); i++)
+	{
+		UStaticMeshComponent* ExtComp = NewObject<UStaticMeshComponent>(this);
+		ExtComp->SetStaticMesh(ExtensionMesh);
+		ExtComp->SetupAttachment(SceneRoot);
+		ExtComp->SetRelativeLocation(FVector(StudXPositions[i], 0.0f, ExtCenterZ));
+		ExtComp->SetRelativeScale3D(FVector(1.0f, 1.0f, ScaleZ));
+		ExtComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ExtComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		ExtComp->RegisterComponent();
+
+		TopExtensions.Add(ExtComp);
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("WindowFrame: Created %d top extensions (cripples + king studs) — ExtH=%.1fcm  ScaleZ=%.3f  CenterZ=%.1f  OpeningW=%.1f"),
+		TopExtensions.Num(), ExtHeight, ScaleZ, ExtCenterZ, RoughOpeningWidth);
 }
 
 // ---------------------------------------------------------------------------
@@ -473,13 +563,12 @@ void AWindowFrame::CreateBottomExtensions()
 // ---------------------------------------------------------------------------
 void AWindowFrame::SetExtensionPreviewMode(bool bIsPreview)
 {
-	for (UStaticMeshComponent* Ext : BottomExtensions)
+	auto ApplyMaterial = [this, bIsPreview](UStaticMeshComponent* Ext)
 	{
-		if (!Ext) continue;
+		if (!Ext) return;
 
 		if (bIsPreview)
 		{
-			// Use the same preview material as the main mesh
 			if (DynamicMaterial)
 			{
 				Ext->SetMaterial(0, DynamicMaterial);
@@ -487,7 +576,6 @@ void AWindowFrame::SetExtensionPreviewMode(bool bIsPreview)
 		}
 		else
 		{
-			// Restore original material (slot 0 from the static mesh asset)
 			if (Ext->GetStaticMesh())
 			{
 				UMaterialInterface* OrigMat = Ext->GetStaticMesh()->GetMaterial(0);
@@ -497,6 +585,16 @@ void AWindowFrame::SetExtensionPreviewMode(bool bIsPreview)
 				}
 			}
 		}
+	};
+
+	for (UStaticMeshComponent* Ext : BottomExtensions)
+	{
+		ApplyMaterial(Ext);
+	}
+
+	for (UStaticMeshComponent* Ext : TopExtensions)
+	{
+		ApplyMaterial(Ext);
 	}
 }
 

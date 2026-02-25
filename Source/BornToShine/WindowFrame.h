@@ -79,17 +79,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Collision")
 	bool bAutoSizeCollisionBoxes;
 
-	// --- Bottom Cripple Stud Extensions ---
+	// --- Extension Studs (bottom cripples + king studs, top cripples + king studs) ---
 
-	/** Static mesh for bottom extension studs (assign a 2x4 stud mesh in Blueprint). */
+	/** Static mesh for all extension studs (assign a 2x4 stud mesh in Blueprint). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Extensions")
-	UStaticMesh* BottomExtensionMesh;
+	UStaticMesh* ExtensionMesh;
 
-	/** Enable auto-generated bottom cripple stud extensions from bottom plate
-	 *  up to the rough sill.  The extensions fill the gap that the pre-modeled
-	 *  mesh leaves at the bottom of the frame. */
+	/** Enable auto-generated extension studs (bottom cripples, top cripples,
+	 *  and king stud extensions) that fill the gaps the pre-modeled mesh
+	 *  leaves at the bottom plate and top plate. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Extensions")
-	bool bEnableBottomExtensions;
+	bool bEnableExtensions;
 
 protected:
 	virtual void BeginPlay() override;
@@ -119,12 +119,19 @@ private:
 	/** Prevents AutoDeleteOverlappingStuds from running more than once. */
 	bool bHasAutoDeleted = false;
 
-	/** Dynamically created bottom extension stud components. */
+	/** Dynamically created bottom extension stud components (cripples + king studs). */
 	UPROPERTY()
 	TArray<UStaticMeshComponent*> BottomExtensions;
 
-	/** Spawn bottom cripple stud extensions from bottom plate to rough sill. */
+	/** Dynamically created top extension stud components (cripples + king studs). */
+	UPROPERTY()
+	TArray<UStaticMeshComponent*> TopExtensions;
+
+	/** Spawn bottom cripple stud + king stud extensions from bottom plate to rough sill. */
 	void CreateBottomExtensions();
+
+	/** Spawn top cripple stud + king stud extensions from header top to top plate. */
+	void CreateTopExtensions();
 
 	/** Update extension visibility/material for preview vs placed state. */
 	void SetExtensionPreviewMode(bool bIsPreview);
