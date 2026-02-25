@@ -389,7 +389,7 @@ void AMoonshinePlayerController::QuickSave()
 	TArray<TSharedPtr<FJsonValue>> PiecesArray;
 
 	// Walk every piece type and serialize each placed piece
-	for (uint8 t = 0; t <= (uint8)EPieceType::DoubleTopPlate; t++)
+	for (uint8 t = 0; t <= (uint8)EPieceType::FasciaBoard; t++)
 	{
 		TArray<ABuildablePiece*> Pieces =
 			AConstructionPhaseManager::Instance->GetPiecesOfType((EPieceType)t);
@@ -438,6 +438,21 @@ void AMoonshinePlayerController::QuickSave()
 			else if (ADoubleTopPlate* DblPlate = Cast<ADoubleTopPlate>(Piece))
 			{
 				Obj->SetNumberField(TEXT("lengthFeet"), DblPlate->GetBoardLengthFeet());
+			}
+			else if (AWindowFrame* WinFrame = Cast<AWindowFrame>(Piece))
+			{
+				Obj->SetNumberField(TEXT("frameHeight"),       WinFrame->FrameHeight);
+				Obj->SetNumberField(TEXT("roughOpeningWidth"),  WinFrame->RoughOpeningWidth);
+				Obj->SetNumberField(TEXT("frameOverallWidth"),  WinFrame->FrameOverallWidth);
+				Obj->SetNumberField(TEXT("roughOpeningHeight"), WinFrame->RoughOpeningHeight);
+				Obj->SetNumberField(TEXT("roughSillHeight"),    WinFrame->RoughSillHeight);
+			}
+			else if (ADoorFrame* DoorFr = Cast<ADoorFrame>(Piece))
+			{
+				Obj->SetNumberField(TEXT("frameHeight"),       DoorFr->FrameHeight);
+				Obj->SetNumberField(TEXT("roughOpeningWidth"),  DoorFr->RoughOpeningWidth);
+				Obj->SetNumberField(TEXT("frameOverallWidth"),  DoorFr->FrameOverallWidth);
+				Obj->SetNumberField(TEXT("roughOpeningHeight"), DoorFr->RoughOpeningHeight);
 			}
 
 			PiecesArray.Add(MakeShared<FJsonValueObject>(Obj));
@@ -493,7 +508,7 @@ void AMoonshinePlayerController::QuickLoad()
 	// ---- Destroy all existing placed pieces ----
 	if (AConstructionPhaseManager::Instance)
 	{
-		for (uint8 t = 0; t <= (uint8)EPieceType::DoubleTopPlate; t++)
+		for (uint8 t = 0; t <= (uint8)EPieceType::FasciaBoard; t++)
 		{
 			// GetPiecesOfType returns a copy, safe to iterate while destroying
 			TArray<ABuildablePiece*> Pieces =
@@ -631,21 +646,39 @@ void AMoonshinePlayerController::QuickLoad()
 		}
 		// CornerPost and all other types: no mesh extension, load at (1,1,1)
 
-		// Door frames: mark overlap deletion as already done so SetPreviewMode
-		// doesn't re-split the remnant plates that were already restored above.
+		// Door frames: restore dimensions and mark overlap deletion as already done
+		// so SetPreviewMode doesn't re-split the remnant plates.
 		if (PType == EPieceType::DoorFrame)
 		{
 			if (ADoorFrame* Door = Cast<ADoorFrame>(Piece))
 			{
+				if (Obj->HasField(TEXT("frameHeight")))
+					Door->FrameHeight = Obj->GetNumberField(TEXT("frameHeight"));
+				if (Obj->HasField(TEXT("roughOpeningWidth")))
+					Door->RoughOpeningWidth = Obj->GetNumberField(TEXT("roughOpeningWidth"));
+				if (Obj->HasField(TEXT("frameOverallWidth")))
+					Door->FrameOverallWidth = Obj->GetNumberField(TEXT("frameOverallWidth"));
+				if (Obj->HasField(TEXT("roughOpeningHeight")))
+					Door->RoughOpeningHeight = Obj->GetNumberField(TEXT("roughOpeningHeight"));
 				Door->SetHasAutoDeleted(true);
 			}
 		}
 
-		// Window frames: mark stud deletion as already done on load
+		// Window frames: restore dimensions and mark stud deletion as already done
 		if (PType == EPieceType::WindowFrame)
 		{
 			if (AWindowFrame* Win = Cast<AWindowFrame>(Piece))
 			{
+				if (Obj->HasField(TEXT("frameHeight")))
+					Win->FrameHeight = Obj->GetNumberField(TEXT("frameHeight"));
+				if (Obj->HasField(TEXT("roughOpeningWidth")))
+					Win->RoughOpeningWidth = Obj->GetNumberField(TEXT("roughOpeningWidth"));
+				if (Obj->HasField(TEXT("frameOverallWidth")))
+					Win->FrameOverallWidth = Obj->GetNumberField(TEXT("frameOverallWidth"));
+				if (Obj->HasField(TEXT("roughOpeningHeight")))
+					Win->RoughOpeningHeight = Obj->GetNumberField(TEXT("roughOpeningHeight"));
+				if (Obj->HasField(TEXT("roughSillHeight")))
+					Win->RoughSillHeight = Obj->GetNumberField(TEXT("roughSillHeight"));
 				Win->SetHasAutoDeleted(true);
 			}
 		}
