@@ -501,7 +501,7 @@ void UBuildingComponent::UpdatePreviewPosition()
 	}
 }
 
-bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal)
+bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& OutNormal, AActor** OutHitActor)
 {
 	UCameraComponent* Camera = GetOwnerCamera();
 	if (!Camera) return false;
@@ -530,6 +530,10 @@ bool UBuildingComponent::GetPlacementLocation(FVector& OutLocation, FVector& Out
 	{
 		OutLocation = HitResult.Location;
 		OutNormal = HitResult.Normal;
+		if (OutHitActor)
+		{
+			*OutHitActor = HitResult.GetActor();
+		}
 		return true;
 	}
 
