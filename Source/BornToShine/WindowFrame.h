@@ -9,9 +9,8 @@
 #include "WindowFrame.generated.h"
 
 /**
- * Window Frame — single mesh containing 5 studs at 16" OC, king studs,
- * trimmers, header, rough sill, and cripple studs.  Assigned in Blueprint
- * (BP_WindowFrame).
+ * Window Frame -- single mesh containing king studs, trimmers, header,
+ * rough sill, and cripple studs.  Assigned in Blueprint (BP_WindowFrame).
  *
  * Placement:
  *   - Snaps to bottom plate top face (Wall_Bottom_Plate sockets),
@@ -20,8 +19,8 @@
  *     fall within the window frame's width on the same wall.
  *
  * Socket Layout:
- *   - Bottom (1): WindowFrame_Bottom — snaps to Wall_Bottom_Plate
- *   - Top (1): WindowFrame_Top — for top plate attachment
+ *   - Bottom (1): WindowFrame_Bottom -- snaps to Wall_Bottom_Plate
+ *   - Top (1): WindowFrame_Top -- for top plate attachment
  */
 UCLASS()
 class BORNTOSHINE_API AWindowFrame : public ABuildablePiece
