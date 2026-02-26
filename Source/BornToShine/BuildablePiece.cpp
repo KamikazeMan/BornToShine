@@ -1411,6 +1411,41 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z = SavedZ;
 			}
 
+			// Fascia board position correction: move inward toward ridge and up slightly.
+			// PIE-tested values from David's manual adjustment.
+			if (Socket.SocketType == EConstructionSocketType::Fascia_RafterTail &&
+				TgtSocketType == EConstructionSocketType::Rafter_Tail &&
+				TargetPiece)
+			{
+				// Find building center from ridge posts to determine inward direction
+				FVector InwardDir = FVector::ZeroVector;
+				float BestRidgeDist = FLT_MAX;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RidgePost)
+					{
+						FVector ToRidge = P->GetActorLocation() - CandidateLocation;
+						ToRidge.Z = 0.0f;
+						float D = ToRidge.Size();
+						if (D < BestRidgeDist && D > 1.0f)
+						{
+							BestRidgeDist = D;
+							InwardDir = ToRidge.GetSafeNormal();
+						}
+					}
+				}
+
+				if (BestRidgeDist < FLT_MAX)
+				{
+					CandidateLocation += InwardDir * 5.0f; // 5cm inward toward ridge
+				}
+				CandidateLocation.Z += 0.385f; // PIE-tested Z correction
+
+				UE_LOG(LogTemp, Log,
+					TEXT("Fascia snap correction: Inward=5.0cm toward ridge, Z+=0.385cm, FinalPos=(%.1f,%.1f,%.1f)"),
+					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
+			}
+
 			// Ridge post flush alignment: offset inward so outer face aligns
 			// with the double top plate outer face (post is wider than plate).
 			// PostWidth=11.43cm (3x1.5"), PlateWidth=8.89cm (3.5") → 1.27cm offset.
@@ -1752,7 +1787,9 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 					float PostDist = FVector::Dist2D(PostLoc, OtherLoc);
 					// Board spans pocket-to-pocket plus one PostWidth so ends are
 					// flush with the outer faces of both posts.
-					float NeededLengthCm = PostDist + Post->PostWidth;
+					// Add 12" (30.48cm) overhang on each end for gable overhang
+					const float GableOverhangCm = 30.48f; // 12 inches per side
+					float NeededLengthCm = PostDist + Post->PostWidth + (GableOverhangCm * 2.0f);
 
 					RBoard->SetBoardLengthCm(NeededLengthCm);
 

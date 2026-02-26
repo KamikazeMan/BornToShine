@@ -218,3 +218,45 @@ void ARafter::UpdateRafterLength()
 	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, RelLoc=(0,0,0)"),
 		XScale, SlopeLen, MeshDefaultLength);
 }
+
+void ARafter::TrimToFasciaFace(float FasciaFaceWorldZ, const FVector& FasciaLocation, const FVector& FasciaForward)
+{
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return;
+	if (MeshDefaultLength < 1.0f) return;
+
+	// Calculate where the fascia face intersects this rafter's slope line.
+	// The rafter extends from actor origin (ridge end) along +X rotated by yaw/pitch.
+	// We want to find the distance along the rafter where it hits the fascia plane.
+
+	// Get the rafter's slope direction in world space
+	FVector RafterDir = GetActorRotation().RotateVector(FVector::ForwardVector);
+
+	// Project fascia location onto rafter line to find trim distance
+	FVector RafterOrigin = GetActorLocation();
+	FVector ToFascia = FasciaLocation - RafterOrigin;
+	float TrimDist = FVector::DotProduct(ToFascia, RafterDir);
+
+	// Add fascia board thickness (1.905cm = 3/4") so rafter ends at fascia back face
+	const float FasciaThickness = 1.905f;
+	TrimDist += FasciaThickness;
+
+	if (TrimDist < 10.0f || TrimDist > GetSlopeLengthCm()) return; // Sanity check
+
+	// Re-scale mesh X to the trimmed length
+	float NewXScale = TrimDist / MeshDefaultLength;
+	FVector CurrentScale3D = MeshComponent->GetRelativeScale3D();
+	MeshComponent->SetRelativeScale3D(FVector(NewXScale, CurrentScale3D.Y, CurrentScale3D.Z));
+
+	// Update tail socket position
+	for (FConstructionSocket& Socket : Sockets)
+	{
+		if (Socket.SocketName == FName("RafterTail"))
+		{
+			Socket.LocalPosition.X = TrimDist;
+		}
+	}
+
+	UE_LOG(LogTemp, Log,
+		TEXT("Rafter trimmed: OldSlope=%.1f NewLength=%.1f XScale=%.3f"),
+		GetSlopeLengthCm(), TrimDist, NewXScale);
+}

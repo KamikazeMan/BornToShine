@@ -70,6 +70,10 @@ public:
 	// Get tail end position in world space (for fascia board attachment)
 	FVector GetTailEndWorldPosition() const;
 
+	/** Trim the rafter mesh so it ends at the given world X distance from the ridge end.
+	 *  Used by fascia board to cut off tails that poke through. */
+	void TrimToFasciaFace(float FasciaFaceWorldZ, const FVector& FasciaLocation, const FVector& FasciaForward);
+
 	// Get the pitch angle in radians
 	float GetPitchAngleRadians() const;
 

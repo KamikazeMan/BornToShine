@@ -1,6 +1,8 @@
 // Born To Shine - Fascia Board Implementation
 
 #include "FasciaBoard.h"
+#include "ConstructionPhaseManager.h"
+#include "Rafter.h"
 #include "Components/StaticMeshComponent.h"
 
 AFasciaBoard::AFasciaBoard()
@@ -157,6 +159,51 @@ void AFasciaBoard::ScalePiece(float ScaleDelta)
 {
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+}
+
+bool AFasciaBoard::TryPlace()
+{
+	if (!Super::TryPlace()) return false;
+
+	// Trim rafter tails that extend past the fascia face
+	if (AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> Rafters =
+			AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Rafter);
+
+		FVector FasciaLoc = GetActorLocation();
+		FVector FasciaFwd = GetActorRotation().RotateVector(FVector::ForwardVector);
+		FVector FasciaNormal = GetActorRotation().RotateVector(FVector::RightVector);
+
+		const float TrimRadius = 500.0f; // Only trim nearby rafters
+
+		for (ABuildablePiece* Piece : Rafters)
+		{
+			ARafter* Raft = Cast<ARafter>(Piece);
+			if (!Raft) continue;
+
+			// Check if this rafter's tail end is near the fascia
+			FVector TailPos = Raft->GetTailEndWorldPosition();
+			float Dist = FVector::Dist(TailPos, FasciaLoc);
+
+			if (Dist < TrimRadius)
+			{
+				// Check if the tail is on the fascia's side (not behind it)
+				FVector ToTail = TailPos - FasciaLoc;
+				float BehindDist = FVector::DotProduct(ToTail, FasciaNormal);
+
+				// Trim if the tail extends past the fascia (positive = past)
+				if (FMath::Abs(BehindDist) < 50.0f) // Within 50cm of fascia plane
+				{
+					Raft->TrimToFasciaFace(FasciaLoc.Z, FasciaLoc, FasciaFwd);
+				}
+			}
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("Fascia: Trimmed nearby rafter tails"));
+	}
+
+	return true;
 }
 
 void AFasciaBoard::RegenerateSockets()

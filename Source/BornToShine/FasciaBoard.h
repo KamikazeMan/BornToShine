@@ -58,6 +58,9 @@ public:
 	// Override scale to disable scroll wheel
 	virtual void ScalePiece(float ScaleDelta) override;
 
+	/** Override placement to trim rafter tails that extend past the fascia face. */
+	virtual bool TryPlace() override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;
