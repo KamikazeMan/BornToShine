@@ -200,27 +200,23 @@ void ARafter::UpdateRafterLength()
 	float XScale = SlopeLen / MeshDefaultLength;
 	MeshComponent->SetRelativeScale3D(FVector(XScale, 1.0f, 1.0f));
 
-	// Compensate for mesh Z-center offset so the rafter TOP edge aligns
-	// with the component origin Z. This prevents visual "sag" when pitched —
-	// the ApplySnap ZOffset assumes the mesh top is at Z=0.
+	// Diagnostic: log mesh bounds to verify the mesh origin.
+	// Re-exported mesh should have: Origin.X ≈ 121.92, Extent.X ≈ 121.92, MinX ≈ 0
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float MeshTopZ = Bounds.Origin.Z + Bounds.BoxExtent.Z;
 	float MeshMinX = Bounds.Origin.X - Bounds.BoxExtent.X;
 
-	// Shift mesh down so its TOP edge is at Z=0 (component origin).
-	// The mesh cross-section center may not be at Z=0 if exported off-center.
-	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, -MeshTopZ));
+	UE_LOG(LogTemp, Error, TEXT(">>> RAFTER MESH BOUNDS: Origin.X=%.2f Extent.X=%.2f MinX=%.2f"),
+		Bounds.Origin.X, Bounds.BoxExtent.X, MeshMinX);
 
-	UE_LOG(LogTemp, Log, TEXT("Rafter: MeshBounds Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f) MinX=%.2f TopZ=%.2f → RelLocZ=%.2f"),
-		Bounds.Origin.X, Bounds.Origin.Y, Bounds.Origin.Z,
-		Bounds.BoxExtent.X, Bounds.BoxExtent.Y, Bounds.BoxExtent.Z,
-		MeshMinX, MeshTopZ, -MeshTopZ);
+	// Mesh was re-exported from Rhino with origin at the ridge end (MinX=0).
+	// No offset needed — ridge end IS at actor origin.
+	MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
 
 	SetActorScale3D(FVector(1.0f, 1.0f, 1.0f));
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
 
-	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, RelLocZ=%.2f"),
-		XScale, SlopeLen, MeshDefaultLength, -MeshTopZ);
+	UE_LOG(LogTemp, Warning, TEXT("Rafter: XScale=%.3f, SlopeLen=%.1fcm, MeshDefault=%.1fcm, RelLoc=(0,0,0)"),
+		XScale, SlopeLen, MeshDefaultLength);
 }
 
 void ARafter::TrimToFasciaFace(float FasciaFaceWorldZ, const FVector& FasciaLocation, const FVector& FasciaForward)
