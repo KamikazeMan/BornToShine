@@ -165,7 +165,7 @@ bool AFasciaBoard::TryPlace()
 {
 	if (!Super::TryPlace()) return false;
 
-	// Trim rafter tails that extend past the fascia face
+	// Trim rafter tails that extend past the fascia board face
 	if (AConstructionPhaseManager::Instance)
 	{
 		TArray<ABuildablePiece*> Rafters =
@@ -173,9 +173,8 @@ bool AFasciaBoard::TryPlace()
 
 		FVector FasciaLoc = GetActorLocation();
 		FVector FasciaFwd = GetActorRotation().RotateVector(FVector::ForwardVector);
-		FVector FasciaNormal = GetActorRotation().RotateVector(FVector::RightVector);
 
-		const float TrimRadius = 500.0f; // Only trim nearby rafters
+		int32 TrimCount = 0;
 
 		for (ABuildablePiece* Piece : Rafters)
 		{
@@ -184,23 +183,52 @@ bool AFasciaBoard::TryPlace()
 
 			// Check if this rafter's tail end is near the fascia
 			FVector TailPos = Raft->GetTailEndWorldPosition();
-			float Dist = FVector::Dist(TailPos, FasciaLoc);
+			float Dist = FVector::Dist2D(TailPos, FasciaLoc);
 
-			if (Dist < TrimRadius)
+			if (Dist < 100.0f) // Within 1m of fascia
 			{
-				// Check if the tail is on the fascia's side (not behind it)
-				FVector ToTail = TailPos - FasciaLoc;
-				float BehindDist = FVector::DotProduct(ToTail, FasciaNormal);
+				// Get rafter direction and find where it intersects fascia plane
+				FVector RafterOrigin = Raft->GetActorLocation();
+				FVector RafterDir = Raft->GetActorRotation().RotateVector(FVector::ForwardVector);
 
-				// Trim if the tail extends past the fascia (positive = past)
-				if (FMath::Abs(BehindDist) < 50.0f) // Within 50cm of fascia plane
+				// Fascia plane: perpendicular to rafter direction, at fascia location
+				// We want the rafter to end at the fascia's back face (inside face)
+				FVector ToFascia = FasciaLoc - RafterOrigin;
+				float TrimDist = FVector::DotProduct(ToFascia, RafterDir);
+
+				if (TrimDist > 10.0f) // Sanity: rafter must extend at least 10cm
 				{
-					Raft->TrimToFasciaFace(FasciaLoc.Z, FasciaLoc, FasciaFwd);
+					// Add fascia thickness so rafter ends at back face
+					const float FasciaThickness = 1.905f; // 3/4"
+					TrimDist += FasciaThickness;
+
+					float CurrentSlope = Raft->GetSlopeLengthCm();
+					if (TrimDist < CurrentSlope) // Only trim if actually shorter
+					{
+						// Re-scale rafter mesh X to trimmed length
+						UStaticMeshComponent* RaftMesh = Raft->GetMeshComponent();
+						if (RaftMesh && RaftMesh->GetStaticMesh())
+						{
+							FBoxSphereBounds RBounds = RaftMesh->GetStaticMesh()->GetBounds();
+							float MeshDefaultLen = RBounds.BoxExtent.X * 2.0f;
+							if (MeshDefaultLen > 1.0f)
+							{
+								float NewXScale = TrimDist / MeshDefaultLen;
+								FVector CurScale = RaftMesh->GetRelativeScale3D();
+								RaftMesh->SetRelativeScale3D(FVector(NewXScale, CurScale.Y, CurScale.Z));
+								TrimCount++;
+
+								UE_LOG(LogTemp, Log,
+									TEXT("Fascia: Trimmed rafter %s from %.1f to %.1f cm (XScale=%.3f)"),
+									*Raft->GetName(), CurrentSlope, TrimDist, NewXScale);
+							}
+						}
+					}
 				}
 			}
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("Fascia: Trimmed nearby rafter tails"));
+		UE_LOG(LogTemp, Warning, TEXT("Fascia: Trimmed %d rafter tails"), TrimCount);
 	}
 
 	return true;

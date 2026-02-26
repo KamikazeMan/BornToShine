@@ -74,44 +74,36 @@ void ARidgeBoard::CreateEndSockets()
 
 void ARidgeBoard::CreateSideSockets()
 {
-	// Create side sockets at 16" OC (40.64cm) intervals for rafter attachment.
-	// Sockets must align with wall stud positions below.
-	// Wall studs are placed at 16" OC starting from the plate ends.
-	// The ridge board may extend past the ridge posts (gable overhang),
-	// so we need to place sockets only within the building span
-	// (between the two ridge posts), starting from one end.
-
 	const float Spacing = 40.64f; // 16" OC
-	const float GableOverhangCm = 30.48f; // 12" overhang per side
+	const float GableOverhangCm = 30.48f; // 12" per side
 	float HalfLen = BoardLength / 2.0f;
 
-	// The building span (between ridge posts) is the board length minus both overhangs.
-	// If no overhang has been added yet (board fits exactly between posts + post width),
-	// we still want sockets across the full board.
+	// Building span between ridge posts (exclude overhang)
 	float BuildingSpan = BoardLength - (GableOverhangCm * 2.0f);
-	if (BuildingSpan < Spacing) BuildingSpan = BoardLength; // Fallback for short boards
-
-	// First socket starts at the left building edge (left overhang boundary)
 	float BuildingStartX = -HalfLen + GableOverhangCm;
 
-	// If the board doesn't have overhangs yet (BuildingSpan would be negative),
-	// fall back to starting from the left end of the board
-	if (BuildingSpan >= BoardLength)
+	// If board doesn't have overhangs, use full length
+	if (BuildingSpan < Spacing)
 	{
 		BuildingStartX = -HalfLen;
 		BuildingSpan = BoardLength;
 	}
 
-	// Generate sockets at 16" OC across the building span
-	// Start at the building edge, then every 16" until we reach the other edge
-	float SideSocketLocalZ = BoardHeight / 2.0f;
-	int32 SocketIndex = 0;
+	// Center sockets within the building span (matching how wall studs are centered)
+	int32 NumSockets = FMath::Max(2, FMath::FloorToInt(BuildingSpan / Spacing) + 1);
+	float TotalSpan = (NumSockets - 1) * Spacing;
+	float SpanCenterX = BuildingStartX + BuildingSpan / 2.0f;
+	float StartX = SpanCenterX - TotalSpan / 2.0f;
 
-	for (float XPos = BuildingStartX; XPos <= BuildingStartX + BuildingSpan + 0.1f; XPos += Spacing)
+	float SideSocketLocalZ = BoardHeight / 2.0f;
+
+	for (int32 i = 0; i < NumSockets; i++)
 	{
+		float XPos = StartX + i * Spacing;
+
 		// Left side (negative Y)
 		FConstructionSocket LeftSide;
-		LeftSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_L%d"), SocketIndex));
+		LeftSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_L%d"), i));
 		LeftSide.SocketType = EConstructionSocketType::RidgeBoard_Side;
 		LeftSide.LocalPosition = FVector(XPos, -BoardWidth / 2.0f, SideSocketLocalZ);
 		LeftSide.LocalRotation = FRotator(0.0f, -90.0f, 0.0f);
@@ -121,19 +113,63 @@ void ARidgeBoard::CreateSideSockets()
 
 		// Right side (positive Y)
 		FConstructionSocket RightSide;
-		RightSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_R%d"), SocketIndex));
+		RightSide.SocketName = FName(*FString::Printf(TEXT("RidgeBoardSide_R%d"), i));
 		RightSide.SocketType = EConstructionSocketType::RidgeBoard_Side;
 		RightSide.LocalPosition = FVector(XPos, BoardWidth / 2.0f, SideSocketLocalZ);
 		RightSide.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
 		RightSide.Orientation = ESocketOrientation::Horizontal;
 		RightSide.bIsOccupied = false;
 		Sockets.Add(RightSide);
-
-		SocketIndex++;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RidgeBoard: Created %d side socket pairs, BuildingSpan=%.1f, BoardLen=%.1f, StartX=%.1f"),
-		SocketIndex, BuildingSpan, BoardLength, BuildingStartX);
+	// --- END SOCKETS for gable-end rafters ---
+	// Add sockets at the very ends of the ridge board (at the overhang tips)
+	// so rafters can attach at the gable ends.
+	float EndLeftX = -HalfLen;
+	float EndRightX = HalfLen;
+
+	{
+		FConstructionSocket LeftSideEnd;
+		LeftSideEnd.SocketName = FName(TEXT("RidgeBoardSide_EndL_Left"));
+		LeftSideEnd.SocketType = EConstructionSocketType::RidgeBoard_Side;
+		LeftSideEnd.LocalPosition = FVector(EndLeftX, -BoardWidth / 2.0f, SideSocketLocalZ);
+		LeftSideEnd.LocalRotation = FRotator(0.0f, -90.0f, 0.0f);
+		LeftSideEnd.Orientation = ESocketOrientation::Horizontal;
+		LeftSideEnd.bIsOccupied = false;
+		Sockets.Add(LeftSideEnd);
+
+		FConstructionSocket RightSideEnd;
+		RightSideEnd.SocketName = FName(TEXT("RidgeBoardSide_EndL_Right"));
+		RightSideEnd.SocketType = EConstructionSocketType::RidgeBoard_Side;
+		RightSideEnd.LocalPosition = FVector(EndLeftX, BoardWidth / 2.0f, SideSocketLocalZ);
+		RightSideEnd.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
+		RightSideEnd.Orientation = ESocketOrientation::Horizontal;
+		RightSideEnd.bIsOccupied = false;
+		Sockets.Add(RightSideEnd);
+	}
+
+	{
+		FConstructionSocket LeftSideEnd;
+		LeftSideEnd.SocketName = FName(TEXT("RidgeBoardSide_EndR_Left"));
+		LeftSideEnd.SocketType = EConstructionSocketType::RidgeBoard_Side;
+		LeftSideEnd.LocalPosition = FVector(EndRightX, -BoardWidth / 2.0f, SideSocketLocalZ);
+		LeftSideEnd.LocalRotation = FRotator(0.0f, -90.0f, 0.0f);
+		LeftSideEnd.Orientation = ESocketOrientation::Horizontal;
+		LeftSideEnd.bIsOccupied = false;
+		Sockets.Add(LeftSideEnd);
+
+		FConstructionSocket RightSideEnd;
+		RightSideEnd.SocketName = FName(TEXT("RidgeBoardSide_EndR_Right"));
+		RightSideEnd.SocketType = EConstructionSocketType::RidgeBoard_Side;
+		RightSideEnd.LocalPosition = FVector(EndRightX, BoardWidth / 2.0f, SideSocketLocalZ);
+		RightSideEnd.LocalRotation = FRotator(0.0f, 90.0f, 0.0f);
+		RightSideEnd.Orientation = ESocketOrientation::Horizontal;
+		RightSideEnd.bIsOccupied = false;
+		Sockets.Add(RightSideEnd);
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("RidgeBoard: Created %d OC socket pairs + 4 end sockets, BuildingSpan=%.1f, BoardLen=%.1f"),
+		NumSockets, BuildingSpan, BoardLength);
 }
 
 void ARidgeBoard::SetBoardLengthCm(float LengthCm)
