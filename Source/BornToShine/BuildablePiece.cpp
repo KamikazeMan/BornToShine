@@ -1438,12 +1438,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 				if (BestRidgeDist < FLT_MAX)
 				{
-					CandidateLocation += InwardDir * 5.0f; // 5cm inward toward ridge
+					CandidateLocation += InwardDir * 3.0f; // 3cm inward toward ridge
 				}
-				CandidateLocation.Z += 0.385f; // PIE-tested Z correction
+				CandidateLocation.Z += 1.737422f; // PIE-tested Z correction
 
 				UE_LOG(LogTemp, Log,
-					TEXT("Fascia snap correction: Inward=5.0cm toward ridge, Z+=0.385cm, FinalPos=(%.1f,%.1f,%.1f)"),
+					TEXT("Fascia snap correction: Inward=3.0cm toward ridge, Z+=1.737cm, FinalPos=(%.1f,%.1f,%.1f)"),
 					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 			}
 
@@ -1981,14 +1981,18 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
 			FinalLocation.Y += InwardShift;
+			FinalLocation.Y -= 3.485002f; // PIE-tested inward correction
 			FinalLocation.Z -= ZOffset;
+			FinalLocation.Z += 0.668055f; // PIE-tested upward correction
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
 			FinalLocation.Y -= InwardShift;
+			FinalLocation.Y += 3.485002f; // PIE-tested inward correction
 			FinalLocation.Z -= ZOffset;
+			FinalLocation.Z += 0.668055f; // PIE-tested upward correction
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
