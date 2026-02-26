@@ -1980,14 +1980,14 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FString TargetSocketStr = Candidate.TargetSocketName.ToString();
 		if (TargetSocketStr.Contains(TEXT("_R")))
 		{
-			FinalLocation.Y -= InwardShift;
+			FinalLocation.Y += InwardShift;
 			FinalLocation.Z -= ZOffset;
 			FinalRotation.Yaw = 90.0f;
 			FinalRotation.Roll = 0.0f;
 		}
 		else if (TargetSocketStr.Contains(TEXT("_L")))
 		{
-			FinalLocation.Y += InwardShift;
+			FinalLocation.Y -= InwardShift;
 			FinalLocation.Z -= ZOffset;
 			FinalRotation.Yaw = -90.0f;
 			FinalRotation.Roll = 0.0f;
