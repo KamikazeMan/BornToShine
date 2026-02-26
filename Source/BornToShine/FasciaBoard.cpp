@@ -181,11 +181,15 @@ bool AFasciaBoard::TryPlace()
 			ARafter* Raft = Cast<ARafter>(Piece);
 			if (!Raft) continue;
 
-			// Check if this rafter's tail end is near the fascia
+			// Check if this rafter's tail end is near the fascia using
+			// along-fascia projection + perpendicular distance.
 			FVector TailPos = Raft->GetTailEndWorldPosition();
-			float Dist = FVector::Dist2D(TailPos, FasciaLoc);
+			FVector ToTail = TailPos - FasciaLoc;
+			float AlongFascia = FMath::Abs(FVector::DotProduct(ToTail, FasciaFwd));
+			FVector Perp = ToTail - FasciaFwd * FVector::DotProduct(ToTail, FasciaFwd);
+			float Dist = Perp.Size();
 
-			if (Dist < 100.0f) // Within 1m of fascia
+			if (Dist < 50.0f && AlongFascia < BoardLength / 2.0f + 20.0f)
 			{
 				// Get rafter direction and find where it intersects fascia plane
 				FVector RafterOrigin = Raft->GetActorLocation();

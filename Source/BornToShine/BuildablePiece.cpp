@@ -18,6 +18,7 @@
 #include "Rafter.h"
 #include "WindowFrame.h"
 #include "DoubleTopPlate.h"
+#include "FasciaBoard.h"
 #include "Kismet/GameplayStatics.h"
 
 ABuildablePiece::ABuildablePiece()
@@ -1818,6 +1819,73 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		}
 	}
 
+	// Fascia board auto-resize: measure rafter tail span along the fascia direction
+	// and resize the board so it is flush with the outermost rafter tails.
+	if (PieceType == EPieceType::FasciaBoard)
+	{
+		AFasciaBoard* FasciaSelf = Cast<AFasciaBoard>(this);
+		if (FasciaSelf && AConstructionPhaseManager::Instance)
+		{
+			TArray<ABuildablePiece*> Rafters =
+				AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Rafter);
+
+			if (Rafters.Num() > 0)
+			{
+				// Fascia direction vector (along the board length = actor +X)
+				FVector FasciaDir = FinalRotation.RotateVector(FVector::ForwardVector);
+
+				// Collect rafter tail positions projected onto fascia direction
+				TArray<float> TailProjections;
+				FVector FasciaCenter = FinalLocation;
+
+				for (ABuildablePiece* Piece : Rafters)
+				{
+					ARafter* Raft = Cast<ARafter>(Piece);
+					if (!Raft) continue;
+
+					FVector TailPos = Raft->GetTailEndWorldPosition();
+					FVector ToTail = TailPos - FasciaCenter;
+
+					// Perpendicular distance from fascia line — filter out far-side rafters
+					float AlongFascia = FVector::DotProduct(ToTail, FasciaDir);
+					FVector Perp = ToTail - FasciaDir * AlongFascia;
+					float PerpDist = Perp.Size();
+
+					if (PerpDist < 50.0f) // Within 50cm of fascia line
+					{
+						TailProjections.Add(AlongFascia);
+					}
+				}
+
+				if (TailProjections.Num() >= 2)
+				{
+					float MinProj = FLT_MAX, MaxProj = -FLT_MAX;
+					for (float Proj : TailProjections)
+					{
+						MinProj = FMath::Min(MinProj, Proj);
+						MaxProj = FMath::Max(MaxProj, Proj);
+					}
+
+					float Span = MaxProj - MinProj;
+					// Add one rafter width (1.5" = 3.81cm) margin per end so fascia
+					// is flush with the outer face of the end rafters.
+					float Margin = 3.81f;
+					float NeededLength = Span + Margin * 2.0f;
+
+					FasciaSelf->SetBoardLengthCm(NeededLength);
+
+					// Re-center fascia at the midpoint of the tail span
+					float MidProj = (MinProj + MaxProj) / 2.0f;
+					FinalLocation += FasciaDir * MidProj;
+
+					UE_LOG(LogTemp, Warning,
+						TEXT("Fascia auto-resize: %d tails, Span=%.1fcm, Length=%.1fcm, CenterOffset=%.1f"),
+						TailProjections.Num(), Span, NeededLength, MidProj);
+				}
+			}
+		}
+	}
+
 	// Rafter alignment — PIE-tuned rotations applied relative to the ridge board.
 	// Original PIE values:
 	//   Right side: Pos=(363.888735, 120.824998, 349.0) Rot=(-23.840288, 90, 0)
@@ -1892,11 +1960,14 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		FinalRotation.Pitch = -ActualPitchDeg;
 
 		// Z offset: lower rafter center so rafter TOP aligns with ridge board top.
-		// Offset = RafterHalfDepth * cos(pitch) — the vertical component of the
-		// rafter's half-depth perpendicular to the slope.
+		// At the ridge the rafter is nearly vertical in cross-section, so the full
+		// half-depth is the correct drop.  At the birdsmouth (wall plate) the
+		// cross-section is tilted by the pitch angle, so the vertical component
+		// of the half-depth is RafterHalfDepth * cos(pitch).
 		float RafterHalfDepth = RafterSelf ? (RafterSelf->RafterDepth / 2.0f) : 6.985f;
 		float PitchRad = FMath::DegreesToRadians(ActualPitchDeg);
-		float ZOffset = RafterHalfDepth * FMath::Cos(PitchRad);
+		bool bIsRidgeSnap = (Candidate.SourceSocketName == FName("RafterRidge"));
+		float ZOffset = bIsRidgeSnap ? RafterHalfDepth : (RafterHalfDepth * FMath::Cos(PitchRad));
 
 		float RafterHalfWidth = RafterSelf ? (RafterSelf->RafterWidth / 2.0f) : 1.905f;
 		float InwardShift = 1.905f + RafterHalfWidth;
