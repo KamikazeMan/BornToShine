@@ -1997,6 +1997,24 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 			FinalRotation.Roll = 0.0f;
 		}
 
+		if (TargetSocketStr.Contains(TEXT("End")))
+		{
+			FVector RidgeBoardFwd = Candidate.TargetPiece->GetActorRotation().RotateVector(FVector::ForwardVector);
+			float RafterHalfW = RafterSelf ? (RafterSelf->RafterWidth / 2.0f) : 1.905f;
+
+			if (TargetSocketStr.Contains(TEXT("EndL")))
+			{
+				FinalLocation += RidgeBoardFwd * RafterHalfW;
+			}
+			else if (TargetSocketStr.Contains(TEXT("EndR")))
+			{
+				FinalLocation -= RidgeBoardFwd * RafterHalfW;
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("Rafter end flush: shifted %.2fcm inward along ridge board (socket=%s)"),
+				RafterHalfW, *TargetSocketStr);
+		}
+
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
 			*FinalLocation.ToString(), *FinalRotation.ToString(),
 			*Candidate.TargetSocketName.ToString());
