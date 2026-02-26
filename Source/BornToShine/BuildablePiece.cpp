@@ -16,6 +16,7 @@
 #include "RidgeBoard.h"
 #include "RidgePost.h"
 #include "Rafter.h"
+#include "FasciaBoard.h"
 #include "WindowFrame.h"
 #include "DoubleTopPlate.h"
 #include "Kismet/GameplayStatics.h"
@@ -1925,6 +1926,84 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
 			*FinalLocation.ToString(), *FinalRotation.ToString(),
 			*Candidate.TargetSocketName.ToString());
+	}
+
+	// --- Fascia board auto-length ---
+	// When a fascia board snaps to a rafter tail, auto-size it to span
+	// all rafter tails on the same side of the ridge board.
+	if (PieceType == EPieceType::FasciaBoard && Candidate.TargetPiece)
+	{
+		AFasciaBoard* FasciaSelf = Cast<AFasciaBoard>(this);
+		ARafter* SnapRafter = Cast<ARafter>(Candidate.TargetPiece);
+		if (FasciaSelf && SnapRafter && AConstructionPhaseManager::Instance)
+		{
+			// The fascia runs along the eave, perpendicular to the rafters.
+			// Find all rafter tail positions on this side to determine span.
+			TArray<ABuildablePiece*> AllRafters =
+				AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Rafter);
+
+			// Fascia direction: along the eave (perpendicular to rafter direction)
+			FVector RafterDir = SnapRafter->GetActorRotation().RotateVector(FVector::ForwardVector);
+			FVector EaveDir = FVector::CrossProduct(RafterDir, FVector::UpVector).GetSafeNormal();
+			if (EaveDir.IsNearlyZero()) EaveDir = FVector::ForwardVector;
+
+			// Collect tail positions projected onto the eave axis
+			FVector SnapTailPos = SnapRafter->GetTailEndWorldPosition();
+			float MinProj = 0.0f;
+			float MaxProj = 0.0f;
+			int32 TailCount = 0;
+
+			for (ABuildablePiece* P : AllRafters)
+			{
+				ARafter* R = Cast<ARafter>(P);
+				if (!R) continue;
+
+				FVector TailPos = R->GetTailEndWorldPosition();
+				// Check if this tail is on the same side (similar distance from ridge)
+				FVector DeltaFromSnap = TailPos - SnapTailPos;
+				float CrossDist = FMath::Abs(FVector::DotProduct(DeltaFromSnap, RafterDir));
+				if (CrossDist > 50.0f) continue; // Different side of the building
+
+				float Proj = FVector::DotProduct(TailPos - SnapTailPos, EaveDir);
+				if (TailCount == 0)
+				{
+					MinProj = Proj;
+					MaxProj = Proj;
+				}
+				else
+				{
+					MinProj = FMath::Min(MinProj, Proj);
+					MaxProj = FMath::Max(MaxProj, Proj);
+				}
+				TailCount++;
+			}
+
+			if (TailCount >= 2)
+			{
+				// Add one rafter spacing (40.64cm) of overhang on each end
+				// so the fascia is flush with (or slightly past) the end rafters.
+				const float FasciaEndOverhang = 40.64f; // 16" past outermost rafters
+				float NeededLength = (MaxProj - MinProj) + (FasciaEndOverhang * 2.0f);
+				FasciaSelf->SetBoardLengthCm(NeededLength);
+
+				// Re-center the fascia at the midpoint of all tails
+				float MidProj = (MinProj + MaxProj) / 2.0f;
+				FVector MidPoint = SnapTailPos + EaveDir * MidProj;
+				FinalLocation.X = MidPoint.X;
+				FinalLocation.Y = MidPoint.Y;
+				// Keep Z from snap
+
+				// Orient fascia along the eave direction
+				float EaveYaw = FMath::RadiansToDegrees(FMath::Atan2(EaveDir.Y, EaveDir.X));
+				FinalRotation.Yaw = EaveYaw;
+				FinalRotation.Pitch = 0.0f;
+				FinalRotation.Roll = 0.0f;
+
+				UE_LOG(LogTemp, Warning,
+					TEXT("Fascia auto-length: %d tails, span=%.1fcm, length=%.1fcm, center=(%.1f,%.1f)"),
+					TailCount, MaxProj - MinProj, NeededLength, MidPoint.X, MidPoint.Y);
+			}
+		}
 	}
 
 	SetActorRotation(FinalRotation);
