@@ -1440,10 +1440,10 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				{
 					CandidateLocation += InwardDir * 2.754373f; // PIE-tested inward toward ridge
 				}
-				CandidateLocation.Z -= 1.783055f; // PIE-tested Z correction (downward)
+				CandidateLocation.Z += 1.737422f; // PIE-tested Z correction (upward)
 
 				UE_LOG(LogTemp, Log,
-					TEXT("Fascia snap correction: Inward=2.754cm toward ridge, Z-=1.783cm, FinalPos=(%.1f,%.1f,%.1f)"),
+					TEXT("Fascia snap correction: Inward=2.754cm toward ridge, Z+=1.737cm, FinalPos=(%.1f,%.1f,%.1f)"),
 					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 			}
 
