@@ -19,6 +19,7 @@
 #include "WindowFrame.h"
 #include "DoubleTopPlate.h"
 #include "FasciaBoard.h"
+#include "WallSheathing.h"
 #include "Kismet/GameplayStatics.h"
 
 ABuildablePiece::ABuildablePiece()
@@ -741,6 +742,82 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
+			// Wall sheathing snaps to wall stud face — align with wall, position on exterior/interior
+			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Face &&
+				(TgtSocketType == EConstructionSocketType::Wall_Stud_Top ||
+				 TgtSocketType == EConstructionSocketType::Wall_Stud_Bottom ||
+				 TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate) &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+
+				// Determine interior vs exterior based on player position relative to building center
+				FVector FrameCenter = FVector::ZeroVector;
+				int32 RimCount = 0;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					{
+						FrameCenter += P->GetActorLocation();
+						RimCount++;
+					}
+				}
+
+				if (RimCount > 0)
+				{
+					FrameCenter /= RimCount;
+
+					// Get player camera position
+					FVector CamLoc = FVector::ZeroVector;
+					if (UWorld* World = GetWorld())
+					{
+						APlayerController* PC = World->GetFirstPlayerController();
+						if (PC)
+						{
+							FRotator CamRot;
+							PC->GetPlayerViewPoint(CamLoc, CamRot);
+						}
+					}
+
+					// Wall's outward direction (perpendicular to wall, away from building center)
+					FVector WallRight = FRotator(0, CandidateRotation.Yaw, 0).RotateVector(FVector::RightVector);
+					FVector WallToCenter = FrameCenter - TargetPiece->GetActorLocation();
+					WallToCenter.Z = 0.0f;
+					float DotToCenter = FVector::DotProduct(WallToCenter, WallRight);
+
+					// Inward direction = toward building center
+					FVector InwardDir = WallRight * FMath::Sign(DotToCenter);
+					FVector OutwardDir = -InwardDir;
+
+					// Player on exterior = dot product of (player - wall) with outward dir > 0
+					FVector PlayerToWall = CamLoc - TargetPiece->GetActorLocation();
+					PlayerToWall.Z = 0.0f;
+					float PlayerDot = FVector::DotProduct(PlayerToWall, OutwardDir);
+
+					bool bExterior = (PlayerDot > 0.0f);
+
+					// Position sheet face against stud face
+					// Stud depth = 8.89cm (3.5"), sheet goes on outside or inside face
+					const float StudHalfDepth = 8.89f / 2.0f; // 4.445cm
+					const float SheetHalfThick = 1.27f / 2.0f; // 0.635cm
+					float FaceOffset = StudHalfDepth + SheetHalfThick;
+
+					if (bExterior)
+					{
+						CandidateLocation += OutwardDir * FaceOffset;
+					}
+					else
+					{
+						CandidateLocation += InwardDir * FaceOffset;
+					}
+
+					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f"),
+						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw);
+				}
 			}
 
 			// Top plate snaps to wall stud/corner post/door frame/window frame tops.
@@ -2364,6 +2441,19 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::RidgePost_Bottom))
 	{
 		return 800;
+	}
+
+	// Wall sheathing face to wall stud (MEDIUM priority)
+	if ((SocketA == EConstructionSocketType::WallSheathing_Face &&
+		 (SocketB == EConstructionSocketType::Wall_Stud_Top ||
+		  SocketB == EConstructionSocketType::Wall_Stud_Bottom ||
+		  SocketB == EConstructionSocketType::Wall_Bottom_Plate)) ||
+		((SocketA == EConstructionSocketType::Wall_Stud_Top ||
+		  SocketA == EConstructionSocketType::Wall_Stud_Bottom ||
+		  SocketA == EConstructionSocketType::Wall_Bottom_Plate) &&
+		 SocketB == EConstructionSocketType::WallSheathing_Face))
+	{
+		return 600;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)

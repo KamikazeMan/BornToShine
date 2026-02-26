@@ -73,6 +73,9 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 	case EPieceType::FasciaBoard:
 		return GetCyclePieceCount(EPieceType::Rafter) >= 1;
 
+	case EPieceType::WallSheathing:
+		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
+
 	default:
 		return true;
 	}
@@ -126,6 +129,9 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 
 	case EPieceType::FasciaBoard:
 		return TEXT("Place rafters first");
+
+	case EPieceType::WallSheathing:
+		return TEXT("Place wall studs first");
 
 	default:
 		return TEXT("Prerequisites not met");

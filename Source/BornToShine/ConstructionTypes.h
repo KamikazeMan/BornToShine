@@ -31,7 +31,8 @@ enum class EPieceType : uint8
 	DoubleTopPlate		UMETA(DisplayName = "Double Top Plate"),
 	RidgePost			UMETA(DisplayName = "Ridge Post"),
 	RidgeBoard			UMETA(DisplayName = "Ridge Board"),
-	FasciaBoard			UMETA(DisplayName = "Fascia Board")
+	FasciaBoard			UMETA(DisplayName = "Fascia Board"),
+	WallSheathing		UMETA(DisplayName = "Wall Sheathing")
 };
 
 /**
@@ -121,6 +122,9 @@ enum class EConstructionSocketType : uint8
 	// Fascia Board Sockets
 	Fascia_End					UMETA(DisplayName = "Fascia Board End"),
 	Fascia_RafterTail			UMETA(DisplayName = "Fascia Rafter Tail Attach"),
+
+	// Wall Sheathing Sockets
+	WallSheathing_Face			UMETA(DisplayName = "Wall Sheathing Face"),
 
 	None						UMETA(DisplayName = "None")
 };
