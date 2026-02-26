@@ -202,9 +202,11 @@ bool AFasciaBoard::TryPlace()
 
 				if (TrimDist > 10.0f) // Sanity: rafter must extend at least 10cm
 				{
-					// Add fascia thickness so rafter ends at back face
-					const float FasciaThickness = 1.905f; // 3/4"
-					TrimDist += FasciaThickness;
+					// Subtract so rafter ends at the fascia's back face (inside face).
+					// The dot product gives distance to fascia CENTER. The rafter should
+					// stop at the inside face = center minus half the fascia width.
+					const float FasciaHalfWidth = 1.905f / 2.0f; // half of 3/4"
+					TrimDist -= FasciaHalfWidth;
 
 					float CurrentSlope = Raft->GetSlopeLengthCm();
 					if (TrimDist < CurrentSlope) // Only trim if actually shorter

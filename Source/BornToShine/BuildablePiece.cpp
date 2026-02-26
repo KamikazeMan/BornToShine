@@ -1870,7 +1870,7 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 					// Add one rafter width (1.5" = 3.81cm) margin per end so fascia
 					// is flush with the outer face of the end rafters.
 					float Margin = 3.81f;
-					float NeededLength = Span + Margin * 2.0f;
+					float NeededLength = Span + Margin * 2.0f - (1.905f * 2.0f);
 
 					FasciaSelf->SetBoardLengthCm(NeededLength);
 
