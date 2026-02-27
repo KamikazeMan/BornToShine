@@ -45,12 +45,11 @@ void AWallSheathing::BeginPlay()
 			float ScaleZ = TotalHeight / MeshHeight;
 			MeshComponent->SetRelativeScale3D(FVector(ScaleX, CurScale.Y, ScaleZ));
 
-			// Shift mesh so extensions are on the correct sides:
-			// +X by SideExt/2 → extension on the +X edge (toward corner)
+			// Default: extension centered (split both sides). SetCornerExtensionSide()
+			// will shift it to the correct side when the snap detects a corner.
 			// -Z by BottomExt/2 → extension hangs below the wall cavity bottom
-			float XShift = SideExt / 2.0f;
 			float ZShift = -BottomExt / 2.0f;
-			MeshComponent->SetRelativeLocation(FVector(XShift, 0.0f, ZShift));
+			MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, ZShift));
 
 			// Keep SheetHeight at wall cavity for socket positioning
 			SheetHeight = WallCavityHeight;
@@ -123,6 +122,32 @@ void AWallSheathing::AdjustSocketsToMeshBounds()
 
 	UE_LOG(LogTemp, Log, TEXT("WallSheathing: AdjustSockets - MeshZ=[%.2f, %.2f] height=%.2fcm"),
 		MeshBottomZ, MeshTopZ, SheetHeight);
+}
+
+void AWallSheathing::SetCornerExtensionSide(int32 Side)
+{
+	if (!MeshComponent) return;
+
+	const float SideExt = 1.905f; // half of 2x4 width
+	FVector Loc = MeshComponent->GetRelativeLocation();
+
+	if (Side > 0)
+	{
+		// Extension on +X (right side in local space)
+		Loc.X = SideExt / 2.0f;
+	}
+	else if (Side < 0)
+	{
+		// Extension on -X (left side in local space)
+		Loc.X = -SideExt / 2.0f;
+	}
+	else
+	{
+		// No corner — center the extension
+		Loc.X = 0.0f;
+	}
+
+	MeshComponent->SetRelativeLocation(Loc);
 }
 
 void AWallSheathing::ScalePiece(float ScaleDelta)

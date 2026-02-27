@@ -40,6 +40,12 @@ public:
 	/** Override placement to handle window cutouts. */
 	virtual bool TryPlace() override;
 
+	/**
+	 * Shift the corner extension to the correct side.
+	 * Side: -1 = extend left (-X), +1 = extend right (+X), 0 = centered (no corner)
+	 */
+	void SetCornerExtensionSide(int32 Side);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void InitializeSockets() override;

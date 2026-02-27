@@ -2185,6 +2185,81 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
 
+	// Wall sheathing: detect which edge is at a corner and shift the extension to that side
+	if (PieceType == EPieceType::WallSheathing && Candidate.TargetPiece)
+	{
+		AWallSheathing* WS = Cast<AWallSheathing>(this);
+		if (WS)
+		{
+			FVector WallDir = FRotator(0, FinalRotation.Yaw, 0).RotateVector(FVector::ForwardVector);
+			FVector PlateOrigin = Candidate.TargetPiece->GetActorLocation();
+
+			// Find wall extents from plates and corner posts
+			float MinAlong = 0.0f;
+			float MaxAlong = 0.0f;
+			TArray<AActor*> AllPieces;
+			UGameplayStatics::GetAllActorsOfClass(GetWorld(), ABuildablePiece::StaticClass(), AllPieces);
+
+			for (AActor* A : AllPieces)
+			{
+				ABuildablePiece* P = Cast<ABuildablePiece>(A);
+				if (!P) continue;
+
+				if (P->GetPieceType() == EPieceType::WallPlate)
+				{
+					float YawDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
+						P->GetActorRotation().Yaw, FinalRotation.Yaw));
+					if (YawDiff < 5.0f || FMath::Abs(YawDiff - 180.0f) < 5.0f)
+					{
+						FVector ToPlate = P->GetActorLocation() - PlateOrigin;
+						float Along = FVector::DotProduct(ToPlate, WallDir);
+						ABottomPlate* BP = Cast<ABottomPlate>(P);
+						float PlateHalfLen = BP ? BP->GetEffectiveLength() / 2.0f : 0.0f;
+						MinAlong = FMath::Min(MinAlong, Along - PlateHalfLen);
+						MaxAlong = FMath::Max(MaxAlong, Along + PlateHalfLen);
+					}
+				}
+				else if (P->GetPieceType() == EPieceType::CornerPost)
+				{
+					FVector ToPost = P->GetActorLocation() - PlateOrigin;
+					float Along = FVector::DotProduct(ToPost, WallDir);
+					MinAlong = FMath::Min(MinAlong, Along);
+					MaxAlong = FMath::Max(MaxAlong, Along);
+				}
+			}
+
+			// Determine which edge is at a corner
+			const float GridSize = 121.92f;
+			FVector SheetToPlate = FinalLocation - PlateOrigin;
+			float SheetAlong = FVector::DotProduct(SheetToPlate, WallDir);
+			float SheetLeftEdge = SheetAlong - GridSize / 2.0f;
+			float SheetRightEdge = SheetAlong + GridSize / 2.0f;
+
+			const float CornerTolerance = 5.0f; // cm
+			bool bLeftAtCorner = FMath::Abs(SheetLeftEdge - MinAlong) < CornerTolerance;
+			bool bRightAtCorner = FMath::Abs(SheetRightEdge - MaxAlong) < CornerTolerance;
+
+			if (bLeftAtCorner && !bRightAtCorner)
+			{
+				// Corner is on the left edge — extend mesh in -X direction
+				WS->SetCornerExtensionSide(-1);
+			}
+			else if (bRightAtCorner && !bLeftAtCorner)
+			{
+				// Corner is on the right edge — extend mesh in +X direction
+				WS->SetCornerExtensionSide(1);
+			}
+			else
+			{
+				// Middle sheet or both edges at corners — center extension
+				WS->SetCornerExtensionSide(0);
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing ApplySnap: SheetAlong=%.1f, WallExtent=[%.1f, %.1f], LeftAtCorner=%d, RightAtCorner=%d"),
+				SheetAlong, MinAlong, MaxAlong, bLeftAtCorner, bRightAtCorner);
+		}
+	}
+
 	// Ridge board Z chain diagnostic: trace DTP → post → pocket → ridge board
 	if (PieceType == EPieceType::RidgeBoard && Candidate.TargetPiece)
 	{
