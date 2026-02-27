@@ -38,6 +38,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateRidgeBoardRules();
 	CreateRafterRules();
 	CreateFasciaBoardRules();
+	CreateWallSheathingRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -381,10 +382,14 @@ bool ASocketManager::FindBestSnapPoint(
 				                           TargetSocket.SocketType == EConstructionSocketType::WindowFrame_Top);
 				bool bRafterBirdsmouthSource = (SourceSocket.SocketType == EConstructionSocketType::Rafter_BirdsMouth);
 				bool bTopPlateTopTarget = (TargetSocket.SocketType == EConstructionSocketType::TopPlate_Top);
+				bool bWallSheathingSource = (SourceSocket.SocketType == EConstructionSocketType::WallSheathing_Face);
+				bool bStudTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Top ||
+				                    TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Bottom);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
-				    !(bRafterBirdsmouthSource && bTopPlateTopTarget))
+				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
+				    !(bWallSheathingSource && (bStudTarget || bWallPlateTarget)))
 				{
 					continue;
 				}
@@ -759,4 +764,49 @@ void ASocketManager::CreateFasciaBoardRules()
 	CompatibilityRules.Add(EndRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added fascia board compatibility rules"));
+}
+
+void ASocketManager::CreateWallSheathingRules()
+{
+	// WallSheathing face sockets snap to wall stud tops and bottoms
+	FSocketCompatibilityRule FaceToStudTopRule;
+	FaceToStudTopRule.SourceSocketType = EConstructionSocketType::WallSheathing_Face;
+	FaceToStudTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Top);
+	FaceToStudTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Stud_Bottom);
+	FaceToStudTopRule.CompatibleSocketTypes.Add(EConstructionSocketType::Wall_Bottom_Plate);
+	FaceToStudTopRule.RequiredPhase = EConstructionPhase::WallSheathing;
+	FaceToStudTopRule.SnapDistance = 100.0f;
+	FaceToStudTopRule.bCheckAlignment = false;
+	FaceToStudTopRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(FaceToStudTopRule);
+
+	// Reverse: wall stud/plate sockets accept wall sheathing face
+	FSocketCompatibilityRule StudTopToFaceRule;
+	StudTopToFaceRule.SourceSocketType = EConstructionSocketType::Wall_Stud_Top;
+	StudTopToFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::WallSheathing_Face);
+	StudTopToFaceRule.RequiredPhase = EConstructionPhase::WallSheathing;
+	StudTopToFaceRule.SnapDistance = 100.0f;
+	StudTopToFaceRule.bCheckAlignment = false;
+	StudTopToFaceRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(StudTopToFaceRule);
+
+	FSocketCompatibilityRule StudBotToFaceRule;
+	StudBotToFaceRule.SourceSocketType = EConstructionSocketType::Wall_Stud_Bottom;
+	StudBotToFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::WallSheathing_Face);
+	StudBotToFaceRule.RequiredPhase = EConstructionPhase::WallSheathing;
+	StudBotToFaceRule.SnapDistance = 100.0f;
+	StudBotToFaceRule.bCheckAlignment = false;
+	StudBotToFaceRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(StudBotToFaceRule);
+
+	FSocketCompatibilityRule PlateToFaceRule;
+	PlateToFaceRule.SourceSocketType = EConstructionSocketType::Wall_Bottom_Plate;
+	PlateToFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::WallSheathing_Face);
+	PlateToFaceRule.RequiredPhase = EConstructionPhase::WallSheathing;
+	PlateToFaceRule.SnapDistance = 100.0f;
+	PlateToFaceRule.bCheckAlignment = false;
+	PlateToFaceRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(PlateToFaceRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added wall sheathing compatibility rules"));
 }
