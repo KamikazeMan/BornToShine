@@ -1432,20 +1432,54 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
 				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
 
-				// Grid-lock X position along the wall at 4ft (121.92cm) intervals.
-				// Project candidate position onto wall direction, snap to nearest 4ft grid.
+				// Find the wall's starting corner by looking for the furthest bottom plate
+				// endpoint in the negative wall direction. Sheets tile from this corner.
 				FVector WallDir = FRotator(0, CandidateRotation.Yaw, 0).RotateVector(FVector::ForwardVector);
 				FVector PlateOrigin = TargetPiece->GetActorLocation();
+
+				// Find all bottom plates on this wall (same yaw) to determine wall extents
+				float MinAlong = 0.0f;
+				float MaxAlong = 0.0f;
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::BottomPlate)
+					{
+						// Check if same wall (similar yaw)
+						float YawDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
+							P->GetActorRotation().Yaw, CandidateRotation.Yaw));
+						if (YawDiff < 5.0f || FMath::Abs(YawDiff - 180.0f) < 5.0f)
+						{
+							FVector ToPlate = P->GetActorLocation() - PlateOrigin;
+							float Along = FVector::DotProduct(ToPlate, WallDir);
+
+							// Get plate half-length to find its endpoints
+							float PlateHalfLen = P->GetEffectiveLength() / 2.0f;
+							MinAlong = FMath::Min(MinAlong, Along - PlateHalfLen);
+							MaxAlong = FMath::Max(MaxAlong, Along + PlateHalfLen);
+						}
+					}
+				}
+
+				// Wall start = the minimum extent (left corner when facing the wall)
+				float WallStartAlong = MinAlong;
+				const float GridSize = 121.92f; // 4ft sheet width
+
+				// Project candidate position onto wall direction relative to wall start
 				FVector Delta = CandidateLocation - PlateOrigin;
 				float AlongWall = FVector::DotProduct(Delta, WallDir);
 
-				// Snap to nearest 4ft increment (half-sheet offset so edges align at stud centers)
-				const float GridSize = 121.92f; // 4ft
-				float SnappedAlong = FMath::RoundToFloat(AlongWall / GridSize) * GridSize;
+				// Snap to nearest grid position, with sheet CENTER at WallStart + (N * GridSize) + GridSize/2
+				// This puts sheet EDGES at WallStart + (N * GridSize)
+				float RelativeToStart = AlongWall - WallStartAlong;
+				float SheetIndex = FMath::RoundToFloat((RelativeToStart - GridSize / 2.0f) / GridSize);
+				float SnappedAlong = WallStartAlong + SheetIndex * GridSize + GridSize / 2.0f;
 
 				// Apply snapped position along wall
 				CandidateLocation = PlateOrigin + WallDir * SnappedAlong;
 				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
+
+				UE_LOG(LogTemp, Log, TEXT("WallSheathing: WallStart=%.1f, AlongWall=%.1f, SheetIdx=%.0f, SnappedAlong=%.1f"),
+					WallStartAlong, AlongWall, SheetIndex, SnappedAlong);
 
 				// Interior/exterior detection based on player camera position
 				FVector FrameCenter = FVector::ZeroVector;
