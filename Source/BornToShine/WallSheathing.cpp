@@ -1,5 +1,8 @@
 #include "WallSheathing.h"
+#include "WindowFrame.h"
+#include "DoorFrame.h"
 #include "ConstructionPhaseManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
 
 AWallSheathing::AWallSheathing()
@@ -161,7 +164,213 @@ bool AWallSheathing::TryPlace()
 {
 	if (!Super::TryPlace()) return false;
 
-	// Phase 2: Window cutout logic will go here
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
+
+	// Find any window or door frames that overlap this sheet
+	FVector SheetLoc = GetActorLocation();
+	FRotator SheetRot = GetActorRotation();
+	FVector WallDir = FRotator(0, SheetRot.Yaw, 0).RotateVector(FVector::ForwardVector);
+	FVector WallRight = FRotator(0, SheetRot.Yaw, 0).RotateVector(FVector::RightVector);
+
+	// Sheet bounds in local 2D (along wall = X, vertical = Z)
+	float SheetHalfW = SheetWidth / 2.0f;
+	float SheetHalfH = SheetHeight / 2.0f;
+	float SheetLeft = -SheetHalfW;
+	float SheetRight = SheetHalfW;
+	float SheetBottom = -SheetHalfH;
+	float SheetTop = SheetHalfH;
+
+	struct FCutout
+	{
+		float Left, Right, Bottom, Top; // In sheet-local coords (along wall, vertical)
+	};
+
+	TArray<FCutout> Cutouts;
+
+	// Search for window frames
+	TArray<AActor*> AllWindows;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AWindowFrame::StaticClass(), AllWindows);
+	for (AActor* A : AllWindows)
+	{
+		AWindowFrame* WF = Cast<AWindowFrame>(A);
+		if (!WF) continue;
+
+		FVector FrameLoc = WF->GetActorLocation();
+
+		// Check if frame is close to sheet (perpendicular distance)
+		FVector ToFrame = FrameLoc - SheetLoc;
+		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
+		if (PerpDist > 20.0f) continue; // Not on this wall
+
+		// Project frame center onto sheet's local coordinate system
+		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
+		float FrameVertical = ToFrame.Z;
+
+		// Window rough opening in sheet-local coords
+		// Window origin is at mesh center (0,0,0)
+		float ROHalfW = WF->RoughOpeningWidth / 2.0f;
+		float ROBottom = FrameVertical + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
+		float ROTop = ROBottom + WF->RoughOpeningHeight;
+
+		FCutout Cut;
+		Cut.Left = FrameAlongWall - ROHalfW;
+		Cut.Right = FrameAlongWall + ROHalfW;
+		Cut.Bottom = ROBottom;
+		Cut.Top = ROTop;
+
+		// Check if cutout overlaps the sheet
+		if (Cut.Right > SheetLeft + 1.0f && Cut.Left < SheetRight - 1.0f &&
+			Cut.Top > SheetBottom + 1.0f && Cut.Bottom < SheetTop - 1.0f)
+		{
+			// Clamp cutout to sheet bounds
+			Cut.Left = FMath::Max(Cut.Left, SheetLeft);
+			Cut.Right = FMath::Min(Cut.Right, SheetRight);
+			Cut.Bottom = FMath::Max(Cut.Bottom, SheetBottom);
+			Cut.Top = FMath::Min(Cut.Top, SheetTop);
+			Cutouts.Add(Cut);
+
+			UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout at local [%.1f,%.1f]-[%.1f,%.1f]"),
+				Cut.Left, Cut.Bottom, Cut.Right, Cut.Top);
+		}
+	}
+
+	// Search for door frames
+	TArray<AActor*> AllDoors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ADoorFrame::StaticClass(), AllDoors);
+	for (AActor* A : AllDoors)
+	{
+		ADoorFrame* DF = Cast<ADoorFrame>(A);
+		if (!DF) continue;
+
+		FVector FrameLoc = DF->GetActorLocation();
+
+		FVector ToFrame = FrameLoc - SheetLoc;
+		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
+		if (PerpDist > 20.0f) continue;
+
+		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
+
+		// Door rough opening — origin at bottom center of frame
+		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
+		// Door origin is at floor level, opening goes up from there
+		float ROBottom = ToFrame.Z;
+		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
+
+		FCutout Cut;
+		Cut.Left = FrameAlongWall - ROHalfW;
+		Cut.Right = FrameAlongWall + ROHalfW;
+		Cut.Bottom = ROBottom;
+		Cut.Top = ROTop;
+
+		if (Cut.Right > SheetLeft + 1.0f && Cut.Left < SheetRight - 1.0f &&
+			Cut.Top > SheetBottom + 1.0f && Cut.Bottom < SheetTop - 1.0f)
+		{
+			Cut.Left = FMath::Max(Cut.Left, SheetLeft);
+			Cut.Right = FMath::Min(Cut.Right, SheetRight);
+			Cut.Bottom = FMath::Max(Cut.Bottom, SheetBottom);
+			Cut.Top = FMath::Min(Cut.Top, SheetTop);
+			Cutouts.Add(Cut);
+
+			UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Door cutout at local [%.1f,%.1f]-[%.1f,%.1f]"),
+				Cut.Left, Cut.Bottom, Cut.Right, Cut.Top);
+		}
+	}
+
+	// If no cutouts, keep the original sheet as-is
+	if (Cutouts.Num() == 0) return true;
+
+	// For simplicity, handle one cutout per sheet (first found)
+	// Multiple cutouts on one 4ft sheet would be extremely rare
+	FCutout Cut = Cutouts[0];
+
+	// Generate up to 4 rectangular pieces around the cutout:
+	// 1. Left strip: SheetLeft to Cut.Left, full height
+	// 2. Right strip: Cut.Right to SheetRight, full height
+	// 3. Bottom strip: Cut.Left to Cut.Right, SheetBottom to Cut.Bottom
+	// 4. Top strip: Cut.Left to Cut.Right, Cut.Top to SheetTop
+
+	struct FPieceRect
+	{
+		float Left, Right, Bottom, Top;
+		bool IsValid() const { return (Right - Left) > 1.0f && (Top - Bottom) > 1.0f; }
+	};
+
+	TArray<FPieceRect> Pieces;
+
+	// Left strip
+	FPieceRect LeftStrip = { SheetLeft, Cut.Left, SheetBottom, SheetTop };
+	if (LeftStrip.IsValid()) Pieces.Add(LeftStrip);
+
+	// Right strip
+	FPieceRect RightStrip = { Cut.Right, SheetRight, SheetBottom, SheetTop };
+	if (RightStrip.IsValid()) Pieces.Add(RightStrip);
+
+	// Bottom strip (between left and right cutout edges only)
+	FPieceRect BottomStrip = { Cut.Left, Cut.Right, SheetBottom, Cut.Bottom };
+	if (BottomStrip.IsValid()) Pieces.Add(BottomStrip);
+
+	// Top strip (between left and right cutout edges only)
+	FPieceRect TopStrip = { Cut.Left, Cut.Right, Cut.Top, SheetTop };
+	if (TopStrip.IsValid()) Pieces.Add(TopStrip);
+
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces around cutout"), Pieces.Num());
+
+	// Get mesh and material from original sheet
+	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
+	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
+	FBoxSphereBounds MeshBounds = OrigMesh->GetBounds();
+	float MeshExtentX = MeshBounds.BoxExtent.X; // Half-width of unscaled mesh
+	float MeshExtentZ = MeshBounds.BoxExtent.Z; // Half-height of unscaled mesh
+
+	// Current mesh scale (includes wall cavity height extension)
+	FVector OrigScale = MeshComponent->GetRelativeScale3D();
+
+	// The original sheet covers SheetWidth (along wall) x SheetHeight (vertical)
+	// mapped to mesh extent X and Z via OrigScale
+
+	for (const FPieceRect& Rect : Pieces)
+	{
+		float PieceW = Rect.Right - Rect.Left;
+		float PieceH = Rect.Top - Rect.Bottom;
+		float PieceCenterAlongWall = (Rect.Left + Rect.Right) / 2.0f;
+		float PieceCenterVertical = (Rect.Bottom + Rect.Top) / 2.0f;
+
+		// Spawn a new wall sheathing actor for this piece
+		FVector PieceWorldLoc = SheetLoc
+			+ WallDir * PieceCenterAlongWall
+			+ FVector(0, 0, PieceCenterVertical);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		AWallSheathing* Piece = GetWorld()->SpawnActor<AWallSheathing>(
+			GetClass(), PieceWorldLoc, SheetRot, SpawnParams);
+
+		if (Piece && Piece->MeshComponent)
+		{
+			// Scale the piece mesh to match the rectangle dimensions
+			float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
+			float ScaleY = OrigScale.Y;
+			float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
+			Piece->MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+
+			// Apply original material
+			if (OrigMat)
+			{
+				Piece->MeshComponent->SetMaterial(0, OrigMat);
+			}
+
+			// Mark as placed and nailed (these are structural, not player-movable)
+			Piece->PieceState = EPieceState::Nailed;
+			Piece->SetPreviewMode(false);
+
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at (%.1f,%.1f) size %.1fx%.1f scale(%.3f,%.3f,%.3f)"),
+				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
+		}
+	}
+
+	// Destroy the original full sheet
+	Destroy();
 
 	return true;
 }
