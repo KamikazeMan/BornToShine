@@ -82,29 +82,35 @@ void AWallSheathing::InitializeSockets()
 
 void AWallSheathing::CreateFaceSockets()
 {
-	// Create sockets on the back face (Y = -SheetThickness/2) of the sheet.
-	// Only along the BOTTOM edge so the sheet always anchors at the bottom
-	// plate level and hangs downward correctly.
+	// Sockets at the LEFT and RIGHT edges of the bottom only.
+	// This way the sheet edge (not center) aligns with the stud it snaps to.
 
 	float HalfWidth = SheetWidth / 2.0f;
 	float HalfHeight = SheetHeight / 2.0f;
 	float BackY = -SheetThickness / 2.0f;
 
-	const float Spacing = 40.64f; // 16" OC
-	int32 Count = 0;
-
-	// Sockets along the bottom edge (snap to bottom plate top / stud bottoms)
-	for (float X = -HalfWidth; X <= HalfWidth + 0.1f; X += Spacing)
+	// Left edge socket
 	{
 		FConstructionSocket Socket;
-		Socket.SocketName = FName(*FString::Printf(TEXT("WallSheathing_Bot_%d"), Count));
+		Socket.SocketName = FName(TEXT("WallSheathing_Bot_Left"));
 		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
-		Socket.LocalPosition = FVector(X, BackY, -HalfHeight);
+		Socket.LocalPosition = FVector(-HalfWidth, BackY, -HalfHeight);
 		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 		Socket.Orientation = ESocketOrientation::Vertical;
 		Socket.bIsOccupied = false;
 		Sockets.Add(Socket);
-		Count++;
+	}
+
+	// Right edge socket
+	{
+		FConstructionSocket Socket;
+		Socket.SocketName = FName(TEXT("WallSheathing_Bot_Right"));
+		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
+		Socket.LocalPosition = FVector(HalfWidth, BackY, -HalfHeight);
+		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Socket.Orientation = ESocketOrientation::Vertical;
+		Socket.bIsOccupied = false;
+		Sockets.Add(Socket);
 	}
 }
 
