@@ -1419,9 +1419,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				const AWallSheathing* Sheathing = Cast<const AWallSheathing>(this);
-				float SheetHeight = Sheathing ? Sheathing->SheetHeight : 247.66f;
-
 				// Match wall yaw
 				CandidateRotation.Pitch = 0.0f;
 				CandidateRotation.Roll = 0.0f;
@@ -1430,7 +1427,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				// Z: bottom of sheet = top of bottom plate
 				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
 				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
-				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
+				const AWallSheathing* WS = Cast<const AWallSheathing>(this);
+				float WSHeight = WS ? WS->SheetHeight : 247.66f;
+				CandidateLocation.Z = PlateTopZ + WSHeight / 2.0f;
 
 				// Find the wall's starting corner by looking for the furthest bottom plate
 				// endpoint in the negative wall direction. Sheets tile from this corner.
@@ -1442,7 +1441,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				float MaxAlong = 0.0f;
 				for (ABuildablePiece* P : NearbyPieces)
 				{
-					if (P && P->GetPieceType() == EPieceType::BottomPlate)
+					if (P && P->GetPieceType() == EPieceType::WallPlate)
 					{
 						// Check if same wall (similar yaw)
 						float YawDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(
@@ -1476,7 +1475,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 				// Apply snapped position along wall
 				CandidateLocation = PlateOrigin + WallDir * SnappedAlong;
-				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
+				CandidateLocation.Z = PlateTopZ + WSHeight / 2.0f;
 
 				UE_LOG(LogTemp, Log, TEXT("WallSheathing: WallStart=%.1f, AlongWall=%.1f, SheetIdx=%.0f, SnappedAlong=%.1f"),
 					WallStartAlong, AlongWall, SheetIndex, SnappedAlong);
