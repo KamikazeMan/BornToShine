@@ -60,18 +60,12 @@ void AWallSheathing::BeginPlay()
 		}
 	}
 
-	// Set socket Z positions to wall cavity bounds (not extended mesh bounds)
+	// Set bottom socket Z to wall cavity bottom (not extended mesh bottom)
 	{
 		float HalfCavity = SheetHeight / 2.0f;
 		for (FConstructionSocket& Socket : Sockets)
 		{
-			FString Name = Socket.SocketName.ToString();
-			if (Name.Contains(TEXT("_Bot_")))
-				Socket.LocalPosition.Z = -HalfCavity;
-			else if (Name.Contains(TEXT("_Mid_")))
-				Socket.LocalPosition.Z = 0.0f;
-			else if (Name.Contains(TEXT("_Top_")))
-				Socket.LocalPosition.Z = HalfCavity;
+			Socket.LocalPosition.Z = -HalfCavity;
 		}
 	}
 
@@ -89,8 +83,8 @@ void AWallSheathing::InitializeSockets()
 void AWallSheathing::CreateFaceSockets()
 {
 	// Create sockets on the back face (Y = -SheetThickness/2) of the sheet.
-	// These snap to Wall_Stud_Top or Wall_Stud_Bottom sockets on studs.
-	// Sockets at 16" OC along the width and at top/bottom/middle of height.
+	// Only along the BOTTOM edge so the sheet always anchors at the bottom
+	// plate level and hangs downward correctly.
 
 	float HalfWidth = SheetWidth / 2.0f;
 	float HalfHeight = SheetHeight / 2.0f;
@@ -106,34 +100,6 @@ void AWallSheathing::CreateFaceSockets()
 		Socket.SocketName = FName(*FString::Printf(TEXT("WallSheathing_Bot_%d"), Count));
 		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
 		Socket.LocalPosition = FVector(X, BackY, -HalfHeight);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-		Count++;
-	}
-
-	// Sockets along the middle (snap to stud faces at mid-height)
-	for (float X = -HalfWidth; X <= HalfWidth + 0.1f; X += Spacing)
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(*FString::Printf(TEXT("WallSheathing_Mid_%d"), Count));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
-		Socket.LocalPosition = FVector(X, BackY, 0.0f);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-		Count++;
-	}
-
-	// Sockets along the top edge
-	for (float X = -HalfWidth; X <= HalfWidth + 0.1f; X += Spacing)
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(*FString::Printf(TEXT("WallSheathing_Top_%d"), Count));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
-		Socket.LocalPosition = FVector(X, BackY, HalfHeight);
 		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
 		Socket.Orientation = ESocketOrientation::Vertical;
 		Socket.bIsOccupied = false;
