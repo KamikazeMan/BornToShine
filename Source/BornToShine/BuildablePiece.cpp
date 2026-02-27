@@ -744,28 +744,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
-			// Wall sheathing snaps to wall stud face — align with wall
-			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Face &&
-				(TgtSocketType == EConstructionSocketType::Wall_Stud_Top ||
-				 TgtSocketType == EConstructionSocketType::Wall_Stud_Bottom ||
-				 TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate) &&
-				TargetPiece)
-			{
-				CandidateRotation.Pitch = 0.0f;
-				CandidateRotation.Roll = 0.0f;
-				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
-			}
-
-			// Wall sheathing edge-to-edge: match existing sheet's rotation
-			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Edge &&
-				TgtSocketType == EConstructionSocketType::WallSheathing_Edge &&
-				TargetPiece)
-			{
-				CandidateRotation.Pitch = 0.0f;
-				CandidateRotation.Roll = 0.0f;
-				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
-			}
-
 			// Top plate snaps to wall stud/corner post/door frame/window frame tops.
 			// Plate matches the target's yaw (runs along the wall), forced flat.
 			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom &&
@@ -1435,31 +1413,59 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z = SavedZ;
 			}
 
-			// Wall sheathing position: offset to exterior or interior face based on player camera
+			// Wall sheathing — snaps to bottom plate, grid-locks at 4ft intervals along the wall.
+			// Single socket on sheet bottom snaps to plate top face.
 			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Face &&
-				(TgtSocketType == EConstructionSocketType::Wall_Stud_Top ||
-				 TgtSocketType == EConstructionSocketType::Wall_Stud_Bottom ||
-				 TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate) &&
+				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
+				AWallSheathing* Sheathing = Cast<AWallSheathing>(this);
+				float SheetHeight = Sheathing ? Sheathing->SheetHeight : 247.66f;
+
+				// Match wall yaw
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+
+				// Z: bottom of sheet = top of bottom plate
+				const float PlateHalfHeight = 3.81f / 2.0f; // 1.905cm
+				float PlateTopZ = TargetPiece->GetActorLocation().Z + PlateHalfHeight;
+				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
+
+				// Grid-lock X position along the wall at 4ft (121.92cm) intervals.
+				// Project candidate position onto wall direction, snap to nearest 4ft grid.
+				FVector WallDir = FRotator(0, CandidateRotation.Yaw, 0).RotateVector(FVector::ForwardVector);
+				FVector PlateOrigin = TargetPiece->GetActorLocation();
+				FVector Delta = CandidateLocation - PlateOrigin;
+				float AlongWall = FVector::DotProduct(Delta, WallDir);
+
+				// Snap to nearest 4ft increment (half-sheet offset so edges align at stud centers)
+				const float GridSize = 121.92f; // 4ft
+				float SnappedAlong = FMath::RoundToFloat(AlongWall / GridSize) * GridSize;
+
+				// Apply snapped position along wall
+				CandidateLocation = PlateOrigin + WallDir * SnappedAlong;
+				CandidateLocation.Z = PlateTopZ + SheetHeight / 2.0f;
+
+				// Interior/exterior detection based on player camera position
 				FVector FrameCenter = FVector::ZeroVector;
-				int32 RimCount = 0;
+				int32 FrameCount = 0;
 				for (ABuildablePiece* P : NearbyPieces)
 				{
-					if (P && P->GetPieceType() == EPieceType::RimBoard)
+					if (P && (P->GetPieceType() == EPieceType::RimBoard ||
+					          P->GetPieceType() == EPieceType::WallPlate))
 					{
 						FrameCenter += P->GetActorLocation();
-						RimCount++;
+						FrameCount++;
 					}
 				}
 
-				if (RimCount > 0)
+				if (FrameCount > 0)
 				{
-					FrameCenter /= RimCount;
+					FrameCenter /= FrameCount;
 
-					// Get player camera position
 					FVector CamLoc = FVector::ZeroVector;
-					if (UWorld* World = GetWorld())
+					if (UWorld* World = TargetPiece->GetWorld())
 					{
 						APlayerController* PC = World->GetFirstPlayerController();
 						if (PC)
@@ -1469,27 +1475,24 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						}
 					}
 
-					// Wall's outward direction (perpendicular to wall, away from building center)
+					// Wall's perpendicular directions
 					FVector WallRight = FRotator(0, CandidateRotation.Yaw, 0).RotateVector(FVector::RightVector);
 					FVector WallToCenter = FrameCenter - TargetPiece->GetActorLocation();
 					WallToCenter.Z = 0.0f;
 					float DotToCenter = FVector::DotProduct(WallToCenter, WallRight);
 
-					// Inward direction = toward building center
 					FVector InwardDir = WallRight * FMath::Sign(DotToCenter);
 					FVector OutwardDir = -InwardDir;
 
-					// Player on exterior = dot product of (player - wall) with outward dir > 0
 					FVector PlayerToWall = CamLoc - TargetPiece->GetActorLocation();
 					PlayerToWall.Z = 0.0f;
 					float PlayerDot = FVector::DotProduct(PlayerToWall, OutwardDir);
 
 					bool bExterior = (PlayerDot > 0.0f);
 
-					// Position sheet face against stud face
-					// Stud depth = 8.89cm (3.5"), sheet goes on outside or inside face
-					const float StudHalfDepth = 8.89f / 2.0f; // 4.445cm
-					const float SheetHalfThick = 1.27f / 2.0f; // 0.635cm
+					// Offset: stud half-depth + sheet half-thickness
+					const float StudHalfDepth = 8.89f / 2.0f;  // 4.445cm
+					const float SheetHalfThick = 1.27f / 2.0f;  // 0.635cm
 					float FaceOffset = StudHalfDepth + SheetHalfThick;
 
 					if (bExterior)
@@ -1501,21 +1504,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						CandidateLocation += InwardDir * FaceOffset;
 					}
 
-					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f"),
-						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw);
+					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f, GridSnap=%.1f along wall"),
+						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw, SnappedAlong);
 				}
-			}
-
-			// Wall sheathing edge-to-edge: align Z to match existing sheet
-			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Edge &&
-				TgtSocketType == EConstructionSocketType::WallSheathing_Edge &&
-				TargetPiece)
-			{
-				// Force Z to match the existing sheet exactly (same height)
-				CandidateLocation.Z = TargetPiece->GetActorLocation().Z;
-
-				UE_LOG(LogTemp, Log, TEXT("WallSheathing: Edge-to-edge snap, src=%s tgt=%s, Z=%.2f"),
-					*Socket.SocketName.ToString(), *TargetSocketName.ToString(), CandidateLocation.Z);
 			}
 
 			// Fascia board position correction: move inward toward ridge and up slightly.
@@ -2472,24 +2463,13 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 800;
 	}
 
-	// Wall sheathing face to wall stud (MEDIUM priority)
+	// Wall sheathing face to bottom plate (MEDIUM priority)
 	if ((SocketA == EConstructionSocketType::WallSheathing_Face &&
-		 (SocketB == EConstructionSocketType::Wall_Stud_Top ||
-		  SocketB == EConstructionSocketType::Wall_Stud_Bottom ||
-		  SocketB == EConstructionSocketType::Wall_Bottom_Plate)) ||
-		((SocketA == EConstructionSocketType::Wall_Stud_Top ||
-		  SocketA == EConstructionSocketType::Wall_Stud_Bottom ||
-		  SocketA == EConstructionSocketType::Wall_Bottom_Plate) &&
+		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
+		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
 		 SocketB == EConstructionSocketType::WallSheathing_Face))
 	{
 		return 600;
-	}
-
-	// Wall sheathing edge-to-edge (sheet joins — slightly lower than face-to-stud)
-	if (SocketA == EConstructionSocketType::WallSheathing_Edge &&
-		SocketB == EConstructionSocketType::WallSheathing_Edge)
-	{
-		return 550;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)

@@ -82,61 +82,18 @@ void AWallSheathing::InitializeSockets()
 
 void AWallSheathing::CreateFaceSockets()
 {
-	// Sockets at the LEFT and RIGHT edges of the bottom only.
-	// This way the sheet edge (not center) aligns with the stud it snaps to.
+	Sockets.Empty();
 
-	float HalfWidth = SheetWidth / 2.0f;
-	float HalfHeight = SheetHeight / 2.0f;
-	float BackY = -SheetThickness / 2.0f;
-
-	// Left edge socket
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(TEXT("WallSheathing_Bot_Left"));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
-		Socket.LocalPosition = FVector(-HalfWidth, BackY, -HalfHeight);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-	}
-
-	// Right edge socket
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(TEXT("WallSheathing_Bot_Right"));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
-		Socket.LocalPosition = FVector(HalfWidth, BackY, -HalfHeight);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-	}
-
-	// --- Sheet-to-sheet edge sockets (where sheets join) ---
-	// Left edge socket: snaps to existing sheet's right edge
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(TEXT("WallSheathing_Edge_Left"));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Edge;
-		Socket.LocalPosition = FVector(-HalfWidth, 0.0f, 0.0f);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-	}
-
-	// Right edge socket: snaps to new sheet's left edge
-	{
-		FConstructionSocket Socket;
-		Socket.SocketName = FName(TEXT("WallSheathing_Edge_Right"));
-		Socket.SocketType = EConstructionSocketType::WallSheathing_Edge;
-		Socket.LocalPosition = FVector(HalfWidth, 0.0f, 0.0f);
-		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
-		Socket.Orientation = ESocketOrientation::Vertical;
-		Socket.bIsOccupied = false;
-		Sockets.Add(Socket);
-	}
+	// Single bottom-center socket — snaps to bottom plate top face.
+	// All positioning (Z, yaw, interior/exterior offset) is handled in DetectSnapCandidates.
+	FConstructionSocket Socket;
+	Socket.SocketName = FName(TEXT("WallSheathing_Bottom"));
+	Socket.SocketType = EConstructionSocketType::WallSheathing_Face;
+	Socket.LocalPosition = FVector(0.0f, 0.0f, -SheetHeight / 2.0f);
+	Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+	Socket.Orientation = ESocketOrientation::Vertical;
+	Socket.bIsOccupied = false;
+	Sockets.Add(Socket);
 }
 
 void AWallSheathing::AdjustSocketsToMeshBounds()
