@@ -1515,7 +1515,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateLocation.Z = TargetPiece->GetActorLocation().Z;
 
 				UE_LOG(LogTemp, Log, TEXT("WallSheathing: Edge-to-edge snap, src=%s tgt=%s, Z=%.2f"),
-					*Socket.SocketName.ToString(), *TgtSocketName.ToString(), CandidateLocation.Z);
+					*Socket.SocketName.ToString(), *TargetSocketName.ToString(), CandidateLocation.Z);
 			}
 
 			// Fascia board position correction: move inward toward ridge and up slightly.
