@@ -1452,7 +1452,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 							float Along = FVector::DotProduct(ToPlate, WallDir);
 
 							// Get plate half-length to find its endpoints
-							float PlateHalfLen = P->GetEffectiveLength() / 2.0f;
+							ABottomPlate* BP = Cast<ABottomPlate>(P);
+							float PlateHalfLen = BP ? BP->GetEffectiveLength() / 2.0f : 0.0f;
 							MinAlong = FMath::Min(MinAlong, Along - PlateHalfLen);
 							MaxAlong = FMath::Max(MaxAlong, Along + PlateHalfLen);
 						}
