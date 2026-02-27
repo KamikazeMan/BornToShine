@@ -1419,7 +1419,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TgtSocketType == EConstructionSocketType::Wall_Bottom_Plate &&
 				TargetPiece)
 			{
-				AWallSheathing* Sheathing = Cast<AWallSheathing>(this);
+				const AWallSheathing* Sheathing = Cast<const AWallSheathing>(this);
 				float SheetHeight = Sheathing ? Sheathing->SheetHeight : 247.66f;
 
 				// Match wall yaw
