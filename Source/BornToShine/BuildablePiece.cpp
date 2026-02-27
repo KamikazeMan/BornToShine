@@ -1491,17 +1491,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						CandidateLocation += InwardDir * FaceOffset;
 					}
 
-					// Quantize the along-wall position to 4ft (121.92cm) grid so
-					// adjacent sheets always tile without gaps.
-					FVector WallFwd = FRotator(0, CandidateRotation.Yaw, 0).RotateVector(FVector::ForwardVector);
-					float AlongWall = FVector::DotProduct(CandidateLocation, WallFwd);
-					const float SheetGridCm = 121.92f; // 4ft
-					float Snapped = FMath::RoundToFloat(AlongWall / SheetGridCm) * SheetGridCm;
-					CandidateLocation += WallFwd * (Snapped - AlongWall);
-
-					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f, GridSnap=%.1f->%.1f"),
-						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw,
-						AlongWall, Snapped);
+					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f"),
+						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw);
 				}
 			}
 
