@@ -112,6 +112,31 @@ void AWallSheathing::CreateFaceSockets()
 		Socket.bIsOccupied = false;
 		Sockets.Add(Socket);
 	}
+
+	// --- Sheet-to-sheet edge sockets (where sheets join) ---
+	// Left edge socket: snaps to existing sheet's right edge
+	{
+		FConstructionSocket Socket;
+		Socket.SocketName = FName(TEXT("WallSheathing_Edge_Left"));
+		Socket.SocketType = EConstructionSocketType::WallSheathing_Edge;
+		Socket.LocalPosition = FVector(-HalfWidth, 0.0f, 0.0f);
+		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Socket.Orientation = ESocketOrientation::Vertical;
+		Socket.bIsOccupied = false;
+		Sockets.Add(Socket);
+	}
+
+	// Right edge socket: snaps to new sheet's left edge
+	{
+		FConstructionSocket Socket;
+		Socket.SocketName = FName(TEXT("WallSheathing_Edge_Right"));
+		Socket.SocketType = EConstructionSocketType::WallSheathing_Edge;
+		Socket.LocalPosition = FVector(HalfWidth, 0.0f, 0.0f);
+		Socket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+		Socket.Orientation = ESocketOrientation::Vertical;
+		Socket.bIsOccupied = false;
+		Sockets.Add(Socket);
+	}
 }
 
 void AWallSheathing::AdjustSocketsToMeshBounds()

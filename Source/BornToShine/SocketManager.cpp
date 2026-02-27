@@ -808,5 +808,15 @@ void ASocketManager::CreateWallSheathingRules()
 	PlateToFaceRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(PlateToFaceRule);
 
+	// Sheet-to-sheet edge snapping (where sheets join)
+	FSocketCompatibilityRule EdgeRule;
+	EdgeRule.SourceSocketType = EConstructionSocketType::WallSheathing_Edge;
+	EdgeRule.CompatibleSocketTypes.Add(EConstructionSocketType::WallSheathing_Edge);
+	EdgeRule.RequiredPhase = EConstructionPhase::WallSheathing;
+	EdgeRule.SnapDistance = 100.0f;
+	EdgeRule.bCheckAlignment = false;
+	EdgeRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(EdgeRule);
+
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added wall sheathing compatibility rules"));
 }

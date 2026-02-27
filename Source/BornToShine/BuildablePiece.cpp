@@ -756,6 +756,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
 			}
 
+			// Wall sheathing edge-to-edge: match existing sheet's rotation
+			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Edge &&
+				TgtSocketType == EConstructionSocketType::WallSheathing_Edge &&
+				TargetPiece)
+			{
+				CandidateRotation.Pitch = 0.0f;
+				CandidateRotation.Roll = 0.0f;
+				CandidateRotation.Yaw = TargetPiece->GetActorRotation().Yaw;
+			}
+
 			// Top plate snaps to wall stud/corner post/door frame/window frame tops.
 			// Plate matches the target's yaw (runs along the wall), forced flat.
 			if (Socket.SocketType == EConstructionSocketType::TopPlate_Bottom &&
@@ -1494,6 +1504,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					UE_LOG(LogTemp, Log, TEXT("WallSheathing: %s face, offset=%.2f, Yaw=%.1f"),
 						bExterior ? TEXT("Exterior") : TEXT("Interior"), FaceOffset, CandidateRotation.Yaw);
 				}
+			}
+
+			// Wall sheathing edge-to-edge: align Z to match existing sheet
+			if (Socket.SocketType == EConstructionSocketType::WallSheathing_Edge &&
+				TgtSocketType == EConstructionSocketType::WallSheathing_Edge &&
+				TargetPiece)
+			{
+				// Force Z to match the existing sheet exactly (same height)
+				CandidateLocation.Z = TargetPiece->GetActorLocation().Z;
+
+				UE_LOG(LogTemp, Log, TEXT("WallSheathing: Edge-to-edge snap, src=%s tgt=%s, Z=%.2f"),
+					*Socket.SocketName.ToString(), *TgtSocketName.ToString(), CandidateLocation.Z);
 			}
 
 			// Fascia board position correction: move inward toward ridge and up slightly.
@@ -2461,6 +2483,13 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::WallSheathing_Face))
 	{
 		return 600;
+	}
+
+	// Wall sheathing edge-to-edge (sheet joins — slightly lower than face-to-stud)
+	if (SocketA == EConstructionSocketType::WallSheathing_Edge &&
+		SocketB == EConstructionSocketType::WallSheathing_Edge)
+	{
+		return 550;
 	}
 
 	// Rim bottom to Foundation (LOW PRIORITY)

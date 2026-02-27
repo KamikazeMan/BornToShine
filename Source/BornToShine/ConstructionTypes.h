@@ -125,6 +125,7 @@ enum class EConstructionSocketType : uint8
 
 	// Wall Sheathing Sockets
 	WallSheathing_Face			UMETA(DisplayName = "Wall Sheathing Face"),
+	WallSheathing_Edge			UMETA(DisplayName = "Wall Sheathing Edge"),
 
 	None						UMETA(DisplayName = "None")
 };
