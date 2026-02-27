@@ -1460,6 +1460,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					}
 				}
 
+				// Also check corner posts for wall start/end
+				for (ABuildablePiece* P : NearbyPieces)
+				{
+					if (P && P->GetPieceType() == EPieceType::CornerPost)
+					{
+						FVector ToPost = P->GetActorLocation() - PlateOrigin;
+						float Along = FVector::DotProduct(ToPost, WallDir);
+						MinAlong = FMath::Min(MinAlong, Along);
+						MaxAlong = FMath::Max(MaxAlong, Along);
+					}
+				}
+
 				// Wall start = the minimum extent (left corner when facing the wall)
 				float WallStartAlong = MinAlong;
 				const float GridSize = 121.92f; // 4ft sheet width
@@ -1473,6 +1485,22 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				float RelativeToStart = AlongWall - WallStartAlong;
 				float SheetIndex = FMath::RoundToFloat((RelativeToStart - GridSize / 2.0f) / GridSize);
 				float SnappedAlong = WallStartAlong + SheetIndex * GridSize + GridSize / 2.0f;
+
+				// Clamp so sheet doesn't extend past wall end
+				float WallEndAlong = MaxAlong;
+				float SheetLeftEdge = SnappedAlong - GridSize / 2.0f;
+				float SheetRightEdge = SnappedAlong + GridSize / 2.0f;
+
+				// If sheet would extend past the wall end, pull it back
+				if (SheetRightEdge > WallEndAlong + 1.0f)
+				{
+					SnappedAlong = WallEndAlong - GridSize / 2.0f;
+				}
+				// If sheet would extend past the wall start, push it forward
+				if (SheetLeftEdge < WallStartAlong - 1.0f)
+				{
+					SnappedAlong = WallStartAlong + GridSize / 2.0f;
+				}
 
 				// Apply snapped position along wall
 				CandidateLocation = PlateOrigin + WallDir * SnappedAlong;
