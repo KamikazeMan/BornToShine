@@ -35,23 +35,28 @@ void AWallSheathing::BeginPlay()
 		{
 			const float WallCavityHeight = 247.66f;
 			const float BottomExt = 3.82f;   // extends below bottom plate to cover rim board
+			const float SideExt = 1.905f;     // extends one side to cover corner post face (half of 2x4 width)
 
 			float TotalHeight = WallCavityHeight + BottomExt;
+			float TotalWidth = SheetWidth + SideExt;
 
 			FVector CurScale = MeshComponent->GetRelativeScale3D();
-			float ScaleX = SheetWidth / MeshWidth;
+			float ScaleX = TotalWidth / MeshWidth;
 			float ScaleZ = TotalHeight / MeshHeight;
 			MeshComponent->SetRelativeScale3D(FVector(ScaleX, CurScale.Y, ScaleZ));
 
-			// Shift mesh so bottom extension hangs below the wall cavity bottom
+			// Shift mesh so extensions are on the correct sides:
+			// +X by SideExt/2 → extension on the +X edge (toward corner)
+			// -Z by BottomExt/2 → extension hangs below the wall cavity bottom
+			float XShift = SideExt / 2.0f;
 			float ZShift = -BottomExt / 2.0f;
-			MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, ZShift));
+			MeshComponent->SetRelativeLocation(FVector(XShift, 0.0f, ZShift));
 
 			// Keep SheetHeight at wall cavity for socket positioning
 			SheetHeight = WallCavityHeight;
 
-			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Scaled - TotalW=%.1f TotalH=%.1f (BottomExt=%.2f)"),
-				SheetWidth, TotalHeight, BottomExt);
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Scaled - TotalW=%.1f TotalH=%.1f (SideExt=%.2f BottomExt=%.2f)"),
+				TotalWidth, TotalHeight, SideExt, BottomExt);
 		}
 	}
 
