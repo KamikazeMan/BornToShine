@@ -4,6 +4,7 @@
 #include "ConstructionPhaseManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMeshActor.h"
 
 AWallSheathing::AWallSheathing()
 {
@@ -315,6 +316,13 @@ bool AWallSheathing::TryPlace()
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces around cutout"), Pieces.Num());
 
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Sheet bounds local: L=%.1f R=%.1f B=%.1f T=%.1f"),
+		SheetLeft, SheetRight, SheetBottom, SheetTop);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Cutout local: L=%.1f R=%.1f B=%.1f T=%.1f"),
+		Cut.Left, Cut.Right, Cut.Bottom, Cut.Top);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Sheet world center: (%.1f, %.1f, %.1f)"),
+		SheetLoc.X, SheetLoc.Y, SheetLoc.Z);
+
 	// Get mesh and material from original sheet
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
 	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
@@ -335,7 +343,7 @@ bool AWallSheathing::TryPlace()
 		float PieceCenterAlongWall = (Rect.Left + Rect.Right) / 2.0f;
 		float PieceCenterVertical = (Rect.Bottom + Rect.Top) / 2.0f;
 
-		// Spawn a new wall sheathing actor for this piece
+		// World position for this piece
 		FVector PieceWorldLoc = SheetLoc
 			+ WallDir * PieceCenterAlongWall
 			+ FVector(0, 0, PieceCenterVertical);
@@ -343,29 +351,33 @@ bool AWallSheathing::TryPlace()
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		AWallSheathing* Piece = GetWorld()->SpawnActor<AWallSheathing>(
-			GetClass(), PieceWorldLoc, SheetRot, SpawnParams);
+		AStaticMeshActor* Piece = GetWorld()->SpawnActor<AStaticMeshActor>(
+			AStaticMeshActor::StaticClass(), PieceWorldLoc, SheetRot, SpawnParams);
 
-		if (Piece && Piece->MeshComponent)
+		if (Piece)
 		{
-			// Scale the piece mesh to match the rectangle dimensions
-			float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
-			float ScaleY = OrigScale.Y;
-			float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
-			Piece->MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
-
-			// Apply original material
-			if (OrigMat)
+			UStaticMeshComponent* SMC = Piece->GetStaticMeshComponent();
+			if (SMC)
 			{
-				Piece->MeshComponent->SetMaterial(0, OrigMat);
+				SMC->SetStaticMesh(OrigMesh);
+
+				// Scale to match piece dimensions
+				// OrigScale maps SheetWidth -> mesh X, SheetHeight -> mesh Z
+				float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
+				float ScaleY = OrigScale.Y;
+				float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
+				SMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+
+				if (OrigMat)
+				{
+					SMC->SetMaterial(0, OrigMat);
+				}
+
+				SMC->SetMobility(EComponentMobility::Movable);
 			}
 
-			// Mark as placed and nailed (these are structural, not player-movable)
-			Piece->PieceState = EPieceState::Nailed;
-			Piece->SetPreviewMode(false);
-
-			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at (%.1f,%.1f) size %.1fx%.1f scale(%.3f,%.3f,%.3f)"),
-				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at along=%.1f vert=%.1f size %.1fx%.1f"),
+				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH);
 		}
 	}
 
