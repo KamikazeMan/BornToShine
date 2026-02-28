@@ -336,8 +336,17 @@ bool AWallSheathing::TryPlace()
 	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
 	FBoxSphereBounds MeshBounds = OrigMesh->GetBounds();
 
-	// Current mesh scale (includes wall cavity height extension)
+	// Raw mesh dimensions (before any extension scaling).
+	// Sub-pieces must be scaled directly from these so they get the exact
+	// requested size — no wall-cavity extensions baked in.
+	float RawMeshWidth  = MeshBounds.BoxExtent.X * 2.0f;
+	float RawMeshHeight = MeshBounds.BoxExtent.Z * 2.0f;
+	// Keep the original Y (thickness) scale
 	FVector OrigScale = MeshComponent->GetRelativeScale3D();
+
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: RawMesh %.1f x %.1f  OrigScale(%.4f, %.4f, %.4f)  MeshOrigin(%.2f, %.2f, %.2f)"),
+		RawMeshWidth, RawMeshHeight, OrigScale.X, OrigScale.Y, OrigScale.Z,
+		MeshBounds.Origin.X, MeshBounds.Origin.Y, MeshBounds.Origin.Z);
 
 	for (const FPieceRect& Rect : Pieces)
 	{
@@ -365,10 +374,10 @@ bool AWallSheathing::TryPlace()
 				SMC->SetMobility(EComponentMobility::Movable);
 				SMC->SetStaticMesh(OrigMesh);
 
-				// Scale to match piece dimensions
-				float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
+				// Scale directly from raw mesh dimensions — no extension factors
+				float ScaleX = PieceW / RawMeshWidth;
 				float ScaleY = OrigScale.Y;
-				float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
+				float ScaleZ = PieceH / RawMeshHeight;
 				SMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
 				// Correct for mesh pivot offset — if the mesh pivot isn't at the
@@ -382,11 +391,11 @@ bool AWallSheathing::TryPlace()
 				{
 					SMC->SetMaterial(0, OrigMat);
 				}
-			}
 
-			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at along=%.1f vert=%.1f size %.1fx%.1f pivotOff=(%.1f,%.1f)"),
-				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH,
-				MeshBounds.Origin.X, MeshBounds.Origin.Z);
+				UE_LOG(LogTemp, Log, TEXT("WallSheathing: Piece at world(%.1f,%.1f,%.1f) scale(%.4f,%.4f,%.4f) pivotOff(%.2f,%.2f) size=%.1fx%.1f"),
+					PieceWorldLoc.X, PieceWorldLoc.Y, PieceWorldLoc.Z,
+					ScaleX, ScaleY, ScaleZ, PivotOffsetX, PivotOffsetZ, PieceW, PieceH);
+			}
 		}
 	}
 
