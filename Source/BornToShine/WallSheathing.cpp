@@ -253,8 +253,9 @@ bool AWallSheathing::TryPlace()
 
 		// Door rough opening — origin at bottom center of frame
 		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
-		// Door origin is at floor level, opening goes up from there
-		float ROBottom = ToFrame.Z;
+		// Door always opens from the floor, which is at the sheet bottom.
+		// Force ROBottom to SheetBottom to avoid tiny strips from Z precision.
+		float ROBottom = SheetBottom;
 		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
 
 		FCutout Cut;
@@ -381,8 +382,15 @@ bool AWallSheathing::TryPlace()
 		}
 	}
 
-	// Destroy the original full sheet
-	Destroy();
+	// Remove from PlacedPieces so GetNearbyPieces won't return a dangling pointer,
+	// then hide and defer destruction to avoid crashing mid-tick.
+	if (AConstructionPhaseManager::Instance)
+	{
+		AConstructionPhaseManager::Instance->UnregisterPiece(this);
+	}
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	SetLifeSpan(0.1f);
 
 	return true;
 }
