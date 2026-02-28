@@ -174,8 +174,13 @@ bool AWallSheathing::TryPlace()
 	FVector WallRight = FRotator(0, SheetRot.Yaw, 0).RotateVector(FVector::RightVector);
 
 	// Sheet bounds in local 2D (along wall = X, vertical = Z)
-	float SheetHalfW = SheetWidth / 2.0f;
-	float SheetHalfH = SheetHeight / 2.0f;
+	// Use rendered dimensions for sheet bounds so cutout pieces fill the full mesh
+	FBoxSphereBounds SheetBnds = MeshComponent->GetStaticMesh()->GetBounds();
+	FVector MeshScale = MeshComponent->GetRelativeScale3D();
+	float RenderedHalfW = SheetBnds.BoxExtent.X * MeshScale.X;
+	float RenderedHalfH = SheetBnds.BoxExtent.Z * MeshScale.Z;
+	float SheetHalfW = RenderedHalfW;
+	float SheetHalfH = RenderedHalfH;
 	float SheetLeft = -SheetHalfW;
 	float SheetRight = SheetHalfW;
 	float SheetBottom = -SheetHalfH;
@@ -372,11 +377,16 @@ bool AWallSheathing::TryPlace()
 		PieceSMC->SetStaticMesh(OrigMesh);
 		PieceSMC->SetMobility(EComponentMobility::Movable);
 
-		// Scale piece to match its rectangle dimensions
-		// OrigScale maps SheetWidth -> mesh X extent and SheetHeight -> mesh Z extent
-		float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
+		// Use actual rendered dimensions (including extensions) for scale ratio.
+		// The mesh is scaled by OrigScale to cover TotalWidth x TotalHeight,
+		// so piece ratios must be relative to those totals.
+		FBoxSphereBounds Bnds = OrigMesh->GetBounds();
+		float RenderedWidth = Bnds.BoxExtent.X * 2.0f * OrigScale.X;
+		float RenderedHeight = Bnds.BoxExtent.Z * 2.0f * OrigScale.Z;
+
+		float ScaleX = (PieceW / RenderedWidth) * OrigScale.X;
 		float ScaleY = OrigScale.Y;
-		float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
+		float ScaleZ = (PieceH / RenderedHeight) * OrigScale.Z;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
 		// Position relative to the actor origin (which is at the sheet center on the wall)
