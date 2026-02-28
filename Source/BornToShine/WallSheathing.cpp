@@ -206,10 +206,17 @@ bool AWallSheathing::TryPlace()
 		// Project frame center onto sheet's local coordinate system
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 
-		// Window origin is at mesh center — rough opening offset by sill height
+		// Window frame origin is at mesh center. Frame bottom is at -FrameHeight/2.
+		// Sill is at FrameBottom + RoughSillHeight.
+		// But FrameHeight may be overridden by mesh bounds, so use it as-is.
 		float ROHalfW = WF->RoughOpeningWidth / 2.0f;
-		float ROBottom = ToFrame.Z + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
+		float FrameBottomRelToCenter = -WF->FrameHeight / 2.0f;
+		float SillRelToCenter = FrameBottomRelToCenter + WF->RoughSillHeight;
+		float ROBottom = ToFrame.Z + SillRelToCenter;
 		float ROTop = ROBottom + WF->RoughOpeningHeight;
+
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window debug — FrameH=%.1f SillH=%.1f FrameBot=%.1f SillRel=%.1f ToFrameZ=%.1f ROBot=%.1f ROTop=%.1f"),
+			WF->FrameHeight, WF->RoughSillHeight, FrameBottomRelToCenter, SillRelToCenter, ToFrame.Z, ROBottom, ROTop);
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
@@ -253,6 +260,10 @@ bool AWallSheathing::TryPlace()
 		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
 		float ROBottom = ToFrame.Z;
 		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
+
+		// Door opens to the floor — extend cutout to sheet bottom
+		// so no small strip appears below the door threshold
+		ROBottom = SheetBottom;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
