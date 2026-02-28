@@ -209,11 +209,15 @@ bool AWallSheathing::TryPlace()
 		// Window frame origin is at mesh center. Frame bottom is at -FrameHeight/2.
 		// Sill is at FrameBottom + RoughSillHeight.
 		// But FrameHeight may be overridden by mesh bounds, so use it as-is.
-		float ROHalfW = WF->RoughOpeningWidth / 2.0f;
+		float ROHalfW = WF->FrameOverallWidth / 2.0f;
 		float FrameBottomRelToCenter = -WF->FrameHeight / 2.0f;
 		float SillRelToCenter = FrameBottomRelToCenter + WF->RoughSillHeight;
+		// Cut from sill bottom to header top (full visible opening from exterior)
 		float ROBottom = ToFrame.Z + SillRelToCenter;
 		float ROTop = ROBottom + WF->RoughOpeningHeight;
+		// Expand slightly to ensure clean cut at frame edges
+		ROBottom -= 2.0f;
+		ROTop += 2.0f;
 
 		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window debug — FrameH=%.1f SillH=%.1f FrameBot=%.1f SillRel=%.1f ToFrameZ=%.1f ROBot=%.1f ROTop=%.1f"),
 			WF->FrameHeight, WF->RoughSillHeight, FrameBottomRelToCenter, SillRelToCenter, ToFrame.Z, ROBottom, ROTop);
@@ -257,7 +261,7 @@ bool AWallSheathing::TryPlace()
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 
 		// Door origin is at the bottom center — opening goes straight up
-		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
+		float ROHalfW = DF->FrameOverallWidth / 2.0f;
 		float ROBottom = ToFrame.Z;
 		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
 
