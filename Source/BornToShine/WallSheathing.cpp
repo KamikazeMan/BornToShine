@@ -4,7 +4,6 @@
 #include "ConstructionPhaseManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMeshActor.h"
 
 AWallSheathing::AWallSheathing()
 {
@@ -334,79 +333,52 @@ bool AWallSheathing::TryPlace()
 	// Get mesh and material from original sheet
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
 	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
-	FBoxSphereBounds MeshBounds = OrigMesh->GetBounds();
-
-	// Raw mesh dimensions (before any extension scaling).
-	// Sub-pieces must be scaled directly from these so they get the exact
-	// requested size — no wall-cavity extensions baked in.
-	float RawMeshWidth  = MeshBounds.BoxExtent.X * 2.0f;
-	float RawMeshHeight = MeshBounds.BoxExtent.Z * 2.0f;
-	// Keep the original Y (thickness) scale
 	FVector OrigScale = MeshComponent->GetRelativeScale3D();
+	FVector OrigRelLoc = MeshComponent->GetRelativeLocation();
 
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: RawMesh %.1f x %.1f  OrigScale(%.4f, %.4f, %.4f)  MeshOrigin(%.2f, %.2f, %.2f)"),
-		RawMeshWidth, RawMeshHeight, OrigScale.X, OrigScale.Y, OrigScale.Z,
-		MeshBounds.Origin.X, MeshBounds.Origin.Y, MeshBounds.Origin.Z);
+	// Hide the original mesh component (but keep the actor alive for the sub-pieces)
+	MeshComponent->SetVisibility(false);
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	for (const FPieceRect& Rect : Pieces)
+	for (int32 i = 0; i < Pieces.Num(); i++)
 	{
+		const FPieceRect& Rect = Pieces[i];
 		float PieceW = Rect.Right - Rect.Left;
 		float PieceH = Rect.Top - Rect.Bottom;
 		float PieceCenterAlongWall = (Rect.Left + Rect.Right) / 2.0f;
 		float PieceCenterVertical = (Rect.Bottom + Rect.Top) / 2.0f;
 
-		// World position for this piece
-		FVector PieceWorldLoc = SheetLoc
-			+ WallDir * PieceCenterAlongWall
-			+ FVector(0, 0, PieceCenterVertical);
+		// Create a new static mesh component as a child of this actor
+		FName CompName = FName(*FString::Printf(TEXT("CutoutPiece_%d"), i));
+		UStaticMeshComponent* PieceSMC = NewObject<UStaticMeshComponent>(this, CompName);
+		if (!PieceSMC) continue;
 
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		PieceSMC->SetupAttachment(SceneRoot);
+		PieceSMC->SetStaticMesh(OrigMesh);
+		PieceSMC->SetMobility(EComponentMobility::Movable);
 
-		AStaticMeshActor* Piece = GetWorld()->SpawnActor<AStaticMeshActor>(
-			AStaticMeshActor::StaticClass(), PieceWorldLoc, SheetRot, SpawnParams);
+		// Scale piece to match its rectangle dimensions
+		// OrigScale maps SheetWidth -> mesh X extent and SheetHeight -> mesh Z extent
+		float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
+		float ScaleY = OrigScale.Y;
+		float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
+		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		if (Piece)
+		// Position relative to the actor origin (which is at the sheet center on the wall)
+		// PieceCenterAlongWall is in sheet-local coords where X = along wall
+		// PieceCenterVertical is in sheet-local coords where Z = vertical
+		// The mesh component's relative location is in actor-local space
+		PieceSMC->SetRelativeLocation(FVector(PieceCenterAlongWall, OrigRelLoc.Y, PieceCenterVertical + OrigRelLoc.Z));
+
+		if (OrigMat)
 		{
-			UStaticMeshComponent* SMC = Piece->GetStaticMeshComponent();
-			if (SMC)
-			{
-				SMC->SetMobility(EComponentMobility::Movable);
-				SMC->SetStaticMesh(OrigMesh);
-
-				// Scale directly from raw mesh dimensions — no extension factors
-				float ScaleX = PieceW / RawMeshWidth;
-				float ScaleY = OrigScale.Y;
-				float ScaleZ = PieceH / RawMeshHeight;
-				SMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
-
-				// Correct for mesh pivot offset — if the mesh pivot isn't at the
-				// bounding box center, the scaled mesh won't be centered on the actor.
-				// Shift the mesh so its visual center aligns with the actor position.
-				float PivotOffsetX = MeshBounds.Origin.X * ScaleX;
-				float PivotOffsetZ = MeshBounds.Origin.Z * ScaleZ;
-				SMC->SetRelativeLocation(FVector(-PivotOffsetX, 0.0f, -PivotOffsetZ));
-
-				if (OrigMat)
-				{
-					SMC->SetMaterial(0, OrigMat);
-				}
-
-				UE_LOG(LogTemp, Log, TEXT("WallSheathing: Piece at world(%.1f,%.1f,%.1f) scale(%.4f,%.4f,%.4f) pivotOff(%.2f,%.2f) size=%.1fx%.1f"),
-					PieceWorldLoc.X, PieceWorldLoc.Y, PieceWorldLoc.Z,
-					ScaleX, ScaleY, ScaleZ, PivotOffsetX, PivotOffsetZ, PieceW, PieceH);
-			}
+			PieceSMC->SetMaterial(0, OrigMat);
 		}
-	}
 
-	// Hide the original sheet — it stays alive and registered in PlacedPieces
-	// (no dangling pointer, building component can still reference it).
-	// The sub-pieces provide the visual cutout appearance.
-	SetActorHiddenInGame(true);
-	SetActorEnableCollision(false);
-	if (MeshComponent)
-	{
-		MeshComponent->SetVisibility(false);
+		PieceSMC->RegisterComponent();
+
+		UE_LOG(LogTemp, Log, TEXT("WallSheathing: Cutout piece[%d] local(%.1f, %.1f) size %.1fx%.1f scale(%.3f,%.3f,%.3f)"),
+			i, PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
 	return true;
