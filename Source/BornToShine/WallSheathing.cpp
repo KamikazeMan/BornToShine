@@ -163,14 +163,10 @@ void AWallSheathing::ScalePiece(float ScaleDelta)
 
 bool AWallSheathing::TryPlace()
 {
-	if (!MeshComponent || !MeshComponent->GetStaticMesh())
-	{
-		return Super::TryPlace();
-	}
+	// Always go through normal placement first
+	if (!Super::TryPlace()) return false;
 
-	// Validate placement before checking cutouts
-	if (PieceState != EPieceState::Preview) return false;
-	if (!IsPlacementValid()) return false;
+	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
 
 	// Find any window or door frames that overlap this sheet
 	FVector SheetLoc = GetActorLocation();
@@ -279,11 +275,8 @@ bool AWallSheathing::TryPlace()
 		}
 	}
 
-	// If no cutouts, do normal placement
-	if (Cutouts.Num() == 0)
-	{
-		return Super::TryPlace();
-	}
+	// If no cutouts, keep the original sheet as-is
+	if (Cutouts.Num() == 0) return true;
 
 	// For simplicity, handle one cutout per sheet (first found)
 	// Multiple cutouts on one 4ft sheet would be extremely rare
@@ -397,9 +390,15 @@ bool AWallSheathing::TryPlace()
 		}
 	}
 
-	// No Super::TryPlace() was called — piece was never registered in PlacedPieces.
-	// Safe to destroy directly without dangling pointer risk.
-	Destroy();
+	// Hide the original sheet — it stays alive and registered in PlacedPieces
+	// (no dangling pointer, building component can still reference it).
+	// The sub-pieces provide the visual cutout appearance.
+	SetActorHiddenInGame(true);
+	SetActorEnableCollision(false);
+	if (MeshComponent)
+	{
+		MeshComponent->SetVisibility(false);
+	}
 
 	return true;
 }
