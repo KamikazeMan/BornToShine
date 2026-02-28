@@ -251,12 +251,11 @@ bool AWallSheathing::TryPlace()
 
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 
-		// Door rough opening — origin at bottom center of frame
+		// Door rough opening — frame actor is at its CENTER (same as window).
+		// Bottom socket is at -FrameHeight/2. Opening starts at frame bottom.
 		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
-		// Door always opens from the floor, which is at the sheet bottom.
-		// Force ROBottom to SheetBottom to avoid tiny strips from Z precision.
-		float ROBottom = SheetBottom;
-		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
+		float ROBottom = ToFrame.Z + (-DF->FrameHeight / 2.0f);
+		float ROTop = ToFrame.Z + (-DF->FrameHeight / 2.0f + DF->RoughOpeningHeight);
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
@@ -321,8 +320,18 @@ bool AWallSheathing::TryPlace()
 		SheetLeft, SheetRight, SheetBottom, SheetTop);
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Cutout local: L=%.1f R=%.1f B=%.1f T=%.1f"),
 		Cut.Left, Cut.Right, Cut.Bottom, Cut.Top);
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Sheet world center: (%.1f, %.1f, %.1f)"),
-		SheetLoc.X, SheetLoc.Y, SheetLoc.Z);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Sheet world center: (%.1f, %.1f, %.1f) SheetHeight=%.1f"),
+		SheetLoc.X, SheetLoc.Y, SheetLoc.Z, SheetHeight);
+
+	for (int32 i = 0; i < Pieces.Num(); i++)
+	{
+		const FPieceRect& R = Pieces[i];
+		float CX = (R.Left + R.Right) / 2.0f;
+		float CZ = (R.Bottom + R.Top) / 2.0f;
+		UE_LOG(LogTemp, Warning, TEXT("  Piece[%d]: local [%.1f,%.1f]-[%.1f,%.1f] size %.1fx%.1f center(%.1f,%.1f) worldZ=%.1f"),
+			i, R.Left, R.Bottom, R.Right, R.Top,
+			R.Right - R.Left, R.Top - R.Bottom, CX, CZ, SheetLoc.Z + CZ);
+	}
 
 	// Get mesh and material from original sheet
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
