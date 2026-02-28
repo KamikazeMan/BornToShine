@@ -359,6 +359,8 @@ bool AWallSheathing::TryPlace()
 			UStaticMeshComponent* SMC = Piece->GetStaticMeshComponent();
 			if (SMC)
 			{
+				// Must set Movable BEFORE SetStaticMesh — Static mobility rejects mesh changes
+				SMC->SetMobility(EComponentMobility::Movable);
 				SMC->SetStaticMesh(OrigMesh);
 
 				// Scale to match piece dimensions
@@ -372,8 +374,6 @@ bool AWallSheathing::TryPlace()
 				{
 					SMC->SetMaterial(0, OrigMat);
 				}
-
-				SMC->SetMobility(EComponentMobility::Movable);
 			}
 
 			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at along=%.1f vert=%.1f size %.1fx%.1f"),
