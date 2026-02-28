@@ -208,15 +208,8 @@ bool AWallSheathing::TryPlace()
 
 		// Window origin is at mesh center — rough opening offset by sill height
 		float ROHalfW = WF->RoughOpeningWidth / 2.0f;
-		// Sheet local Z is inverted — negate the vertical offsets
-		float WorldROBottom = ToFrame.Z + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
-		float WorldROTop = WorldROBottom + WF->RoughOpeningHeight;
-		// Invert to sheet-local Z
-		float ROBottom = -WorldROTop;
-		float ROTop = -WorldROBottom;
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Frame world ROBottom=%.1f ROTop=%.1f -> local ROBottom=%.1f ROTop=%.1f"),
-			WorldROBottom, WorldROTop, ROBottom, ROTop);
+		float ROBottom = ToFrame.Z + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
+		float ROTop = ROBottom + WF->RoughOpeningHeight;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
@@ -258,13 +251,8 @@ bool AWallSheathing::TryPlace()
 
 		// Door origin is at the bottom center — opening goes straight up
 		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
-		float WorldROBottom = ToFrame.Z;
-		float WorldROTop = ToFrame.Z + DF->RoughOpeningHeight;
-		float ROBottom = -WorldROTop;
-		float ROTop = -WorldROBottom;
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Frame world ROBottom=%.1f ROTop=%.1f -> local ROBottom=%.1f ROTop=%.1f"),
-			WorldROBottom, WorldROTop, ROBottom, ROTop);
+		float ROBottom = ToFrame.Z;
+		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
@@ -380,7 +368,7 @@ bool AWallSheathing::TryPlace()
 		// PieceCenterAlongWall is in sheet-local coords where X = along wall
 		// PieceCenterVertical is in sheet-local coords where Z = vertical
 		// The mesh component's relative location is in actor-local space
-		PieceSMC->SetRelativeLocation(FVector(PieceCenterAlongWall, OrigRelLoc.Y, PieceCenterVertical + OrigRelLoc.Z));
+		PieceSMC->SetRelativeLocation(FVector(PieceCenterAlongWall, OrigRelLoc.Y, -PieceCenterVertical + OrigRelLoc.Z));
 
 		if (OrigMat)
 		{
