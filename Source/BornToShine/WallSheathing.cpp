@@ -203,6 +203,9 @@ bool AWallSheathing::TryPlace()
 		AWindowFrame* WF = Cast<AWindowFrame>(A);
 		if (!WF) continue;
 
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: WindowFrame dims — FrameOverallW=%.1f RoughOpeningW=%.1f RoughOpeningH=%.1f FrameH=%.1f SillH=%.1f"),
+			WF->FrameOverallWidth, WF->RoughOpeningWidth, WF->RoughOpeningHeight, WF->FrameHeight, WF->RoughSillHeight);
+
 		FVector ToFrame = WF->GetActorLocation() - ActorLoc;
 		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
 		if (PerpDist > 20.0f) continue;
@@ -246,6 +249,9 @@ bool AWallSheathing::TryPlace()
 	{
 		ADoorFrame* DF = Cast<ADoorFrame>(A);
 		if (!DF) continue;
+
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: DoorFrame dims — FrameOverallW=%.1f RoughOpeningW=%.1f RoughOpeningH=%.1f FrameH=%.1f"),
+			DF->FrameOverallWidth, DF->RoughOpeningWidth, DF->RoughOpeningHeight, DF->FrameHeight);
 
 		FVector ToFrame = DF->GetActorLocation() - ActorLoc;
 		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
