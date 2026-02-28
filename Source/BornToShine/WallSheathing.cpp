@@ -368,7 +368,13 @@ bool AWallSheathing::TryPlace()
 		// PieceCenterAlongWall is in sheet-local coords where X = along wall
 		// PieceCenterVertical is in sheet-local coords where Z = vertical
 		// The mesh component's relative location is in actor-local space
-		PieceSMC->SetRelativeLocation(FVector(-PieceCenterAlongWall, OrigRelLoc.Y, -PieceCenterVertical + OrigRelLoc.Z));
+		PieceSMC->SetRelativeLocation(FVector(PieceCenterAlongWall, OrigRelLoc.Y, PieceCenterVertical + OrigRelLoc.Z));
+
+		FVector WorldPos = PieceSMC->GetComponentLocation();
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] relLoc=(%.1f, %.1f, %.1f) worldPos=(%.1f, %.1f, %.1f) scale=(%.3f,%.3f,%.3f)"),
+			i, PieceCenterAlongWall, PieceCenterVertical, OrigRelLoc.Z,
+			WorldPos.X, WorldPos.Y, WorldPos.Z,
+			ScaleX, ScaleY, ScaleZ);
 
 		if (OrigMat)
 		{
