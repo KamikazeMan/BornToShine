@@ -163,9 +163,14 @@ void AWallSheathing::ScalePiece(float ScaleDelta)
 
 bool AWallSheathing::TryPlace()
 {
-	if (!Super::TryPlace()) return false;
+	if (!MeshComponent || !MeshComponent->GetStaticMesh())
+	{
+		return Super::TryPlace();
+	}
 
-	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
+	// Validate placement before checking cutouts
+	if (PieceState != EPieceState::Preview) return false;
+	if (!IsPlacementValid()) return false;
 
 	// Find any window or door frames that overlap this sheet
 	FVector SheetLoc = GetActorLocation();
@@ -205,12 +210,10 @@ bool AWallSheathing::TryPlace()
 
 		// Project frame center onto sheet's local coordinate system
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
-		float FrameVertical = ToFrame.Z;
 
-		// Window rough opening in sheet-local coords
-		// Window origin is at mesh center (0,0,0)
+		// Window origin is at mesh center — rough opening offset by sill height
 		float ROHalfW = WF->RoughOpeningWidth / 2.0f;
-		float ROBottom = FrameVertical + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
+		float ROBottom = ToFrame.Z + (-WF->FrameHeight / 2.0f + WF->RoughSillHeight);
 		float ROTop = ROBottom + WF->RoughOpeningHeight;
 
 		FCutout Cut;
@@ -251,11 +254,10 @@ bool AWallSheathing::TryPlace()
 
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 
-		// Door rough opening — frame actor is at its CENTER (same as window).
-		// Bottom socket is at -FrameHeight/2. Opening starts at frame bottom.
+		// Door origin is at the bottom center — opening goes straight up
 		float ROHalfW = DF->RoughOpeningWidth / 2.0f;
-		float ROBottom = ToFrame.Z + (-DF->FrameHeight / 2.0f);
-		float ROTop = ToFrame.Z + (-DF->FrameHeight / 2.0f + DF->RoughOpeningHeight);
+		float ROBottom = ToFrame.Z;
+		float ROTop = ToFrame.Z + DF->RoughOpeningHeight;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - ROHalfW;
@@ -277,8 +279,11 @@ bool AWallSheathing::TryPlace()
 		}
 	}
 
-	// If no cutouts, keep the original sheet as-is
-	if (Cutouts.Num() == 0) return true;
+	// If no cutouts, do normal placement
+	if (Cutouts.Num() == 0)
+	{
+		return Super::TryPlace();
+	}
 
 	// For simplicity, handle one cutout per sheet (first found)
 	// Multiple cutouts on one 4ft sheet would be extremely rare
@@ -337,14 +342,9 @@ bool AWallSheathing::TryPlace()
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
 	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
 	FBoxSphereBounds MeshBounds = OrigMesh->GetBounds();
-	float MeshExtentX = MeshBounds.BoxExtent.X; // Half-width of unscaled mesh
-	float MeshExtentZ = MeshBounds.BoxExtent.Z; // Half-height of unscaled mesh
 
 	// Current mesh scale (includes wall cavity height extension)
 	FVector OrigScale = MeshComponent->GetRelativeScale3D();
-
-	// The original sheet covers SheetWidth (along wall) x SheetHeight (vertical)
-	// mapped to mesh extent X and Z via OrigScale
 
 	for (const FPieceRect& Rect : Pieces)
 	{
@@ -369,16 +369,21 @@ bool AWallSheathing::TryPlace()
 			UStaticMeshComponent* SMC = Piece->GetStaticMeshComponent();
 			if (SMC)
 			{
-				// Must set Movable BEFORE SetStaticMesh — Static mobility rejects mesh changes
 				SMC->SetMobility(EComponentMobility::Movable);
 				SMC->SetStaticMesh(OrigMesh);
 
 				// Scale to match piece dimensions
-				// OrigScale maps SheetWidth -> mesh X, SheetHeight -> mesh Z
 				float ScaleX = (PieceW / SheetWidth) * OrigScale.X;
 				float ScaleY = OrigScale.Y;
 				float ScaleZ = (PieceH / SheetHeight) * OrigScale.Z;
 				SMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
+
+				// Correct for mesh pivot offset — if the mesh pivot isn't at the
+				// bounding box center, the scaled mesh won't be centered on the actor.
+				// Shift the mesh so its visual center aligns with the actor position.
+				float PivotOffsetX = MeshBounds.Origin.X * ScaleX;
+				float PivotOffsetZ = MeshBounds.Origin.Z * ScaleZ;
+				SMC->SetRelativeLocation(FVector(-PivotOffsetX, 0.0f, -PivotOffsetZ));
 
 				if (OrigMat)
 				{
@@ -386,20 +391,15 @@ bool AWallSheathing::TryPlace()
 				}
 			}
 
-			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at along=%.1f vert=%.1f size %.1fx%.1f"),
-				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH);
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Spawned cutout piece at along=%.1f vert=%.1f size %.1fx%.1f pivotOff=(%.1f,%.1f)"),
+				PieceCenterAlongWall, PieceCenterVertical, PieceW, PieceH,
+				MeshBounds.Origin.X, MeshBounds.Origin.Z);
 		}
 	}
 
-	// Remove from PlacedPieces so GetNearbyPieces won't return a dangling pointer,
-	// then hide and defer destruction to avoid crashing mid-tick.
-	if (AConstructionPhaseManager::Instance)
-	{
-		AConstructionPhaseManager::Instance->UnregisterPiece(this);
-	}
-	SetActorHiddenInGame(true);
-	SetActorEnableCollision(false);
-	SetLifeSpan(0.1f);
+	// No Super::TryPlace() was called — piece was never registered in PlacedPieces.
+	// Safe to destroy directly without dangling pointer risk.
+	Destroy();
 
 	return true;
 }
