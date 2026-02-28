@@ -370,9 +370,10 @@ bool AWallSheathing::TryPlace()
 		// The mesh component's relative location is in actor-local space
 		PieceSMC->SetRelativeLocation(FVector(PieceCenterAlongWall, OrigRelLoc.Y, PieceCenterVertical + OrigRelLoc.Z));
 
+		FVector ActualRelLoc = PieceSMC->GetRelativeLocation();
 		FVector WorldPos = PieceSMC->GetComponentLocation();
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] relLoc=(%.1f, %.1f, %.1f) worldPos=(%.1f, %.1f, %.1f) scale=(%.3f,%.3f,%.3f)"),
-			i, PieceCenterAlongWall, PieceCenterVertical, OrigRelLoc.Z,
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] ACTUAL relLoc=(%.1f, %.1f, %.1f) worldPos=(%.1f, %.1f, %.1f) scale=(%.3f,%.3f,%.3f)"),
+			i, ActualRelLoc.X, ActualRelLoc.Y, ActualRelLoc.Z,
 			WorldPos.X, WorldPos.Y, WorldPos.Z,
 			ScaleX, ScaleY, ScaleZ);
 
