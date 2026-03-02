@@ -331,7 +331,7 @@ bool AWallSheathing::TryPlace()
 
 	// Expand each piece by a small margin to eliminate visual gaps between adjacent pieces.
 	// This creates slight overlaps which are invisible but prevent gaps from mesh rendering.
-	const float OverlapMargin = 1.5f; // cm
+	const float OverlapMargin = 5.0f; // cm
 	for (FPieceRect& Rect : Pieces)
 	{
 		// Only expand edges that are NOT at the mesh boundary (those are already correct)
