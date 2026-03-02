@@ -345,9 +345,9 @@ bool AWallSheathing::TryPlace()
 		UStaticMeshComponent* PieceSMC = NewObject<UStaticMeshComponent>(this, CompName);
 		if (!PieceSMC) continue;
 
-		PieceSMC->SetupAttachment(SceneRoot);
-		PieceSMC->SetStaticMesh(OrigMesh);
 		PieceSMC->SetMobility(EComponentMobility::Movable);
+		PieceSMC->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		PieceSMC->SetStaticMesh(OrigMesh);
 
 		// Scale: piece dimensions relative to unscaled mesh dimensions
 		float ScaleX = PieceW / UnscaledW;
@@ -355,6 +355,7 @@ bool AWallSheathing::TryPlace()
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
+		// Position in actor-local space
 		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, CenterZ));
 
 		if (OrigMat)
