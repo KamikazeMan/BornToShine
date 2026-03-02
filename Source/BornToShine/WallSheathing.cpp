@@ -365,6 +365,18 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Component '%s' registered=%d attached=%d parent='%s' visible=%d"),
+			*CompName.ToString(),
+			PieceSMC->IsRegistered(),
+			PieceSMC->GetAttachParent() != nullptr,
+			PieceSMC->GetAttachParent() ? *PieceSMC->GetAttachParent()->GetName() : TEXT("NONE"),
+			PieceSMC->IsVisible());
+
+		// Also verify it's in the actor's component list
+		TArray<UStaticMeshComponent*> AllSMCs;
+		GetComponents<UStaticMeshComponent>(AllSMCs);
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Actor now has %d StaticMeshComponents"), AllSMCs.Num());
+
 		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
 			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
