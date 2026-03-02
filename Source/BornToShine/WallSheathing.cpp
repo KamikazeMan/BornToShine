@@ -219,7 +219,7 @@ bool AWallSheathing::TryPlace()
 		float HalfFrameH = WF->FrameHeight / 2.0f;
 		float SillFromCenter = -HalfFrameH + WF->RoughSillHeight;
 		float HeaderFromCenter = SillFromCenter + WF->RoughOpeningHeight;
-		float HalfOverallW = WF->FrameOverallWidth / 2.0f;
+		float HalfOverallW = WF->RoughOpeningWidth / 2.0f;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOverallW;
@@ -259,7 +259,7 @@ bool AWallSheathing::TryPlace()
 
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 		float FrameZ = ToFrame.Z; // door origin is at bottom
-		float HalfOverallW = DF->FrameOverallWidth / 2.0f;
+		float HalfOverallW = DF->RoughOpeningWidth / 2.0f;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOverallW;
