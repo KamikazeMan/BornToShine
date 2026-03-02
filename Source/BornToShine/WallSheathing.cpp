@@ -345,10 +345,15 @@ bool AWallSheathing::TryPlace()
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		// Position: actor-local center of the piece
-		// The mesh origin is at (0,0,0) in its own space, so when placed at
-		// (CenterX, Y, CenterZ) the mesh visual center will be at that point.
-		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, CenterZ));
+		// Compensate for mesh origin offset. The mesh visual center is at
+		// ComponentLocation + MeshBounds.Origin * Scale, so we shift the
+		// component location in the opposite direction to align the visual.
+		float OriginCorrectionX = MeshBounds.Origin.X * ScaleX;
+		float OriginCorrectionZ = MeshBounds.Origin.Z * ScaleZ;
+		PieceSMC->SetRelativeLocation(FVector(
+			CenterX - OriginCorrectionX,
+			MeshRelLoc.Y,
+			CenterZ - OriginCorrectionZ));
 
 		if (OrigMat)
 		{
@@ -357,10 +362,8 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
-		FVector WorldPos = PieceSMC->GetComponentLocation();
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f) world=(%.1f,%.1f,%.1f)"),
-			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ,
-			WorldPos.X, WorldPos.Y, WorldPos.Z);
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) originCorr=(%.2f,%.2f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
+			i, CenterX, CenterZ, OriginCorrectionX, OriginCorrectionZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
 	return true;
