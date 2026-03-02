@@ -329,6 +329,19 @@ bool AWallSheathing::TryPlace()
 	FPieceRect TopStrip = { Cut.Left, Cut.Right, Cut.Top, MeshMaxZ };
 	if (TopStrip.IsValid()) Pieces.Add(TopStrip);
 
+	// Expand each piece by a small margin to eliminate visual gaps between adjacent pieces.
+	// This creates slight overlaps which are invisible but prevent gaps from mesh rendering.
+	const float OverlapMargin = 1.5f; // cm
+	for (FPieceRect& Rect : Pieces)
+	{
+		// Only expand edges that are NOT at the mesh boundary (those are already correct)
+		// and NOT at the cutout boundary (those define the opening)
+		if (Rect.Left > MeshMinX + 1.0f) Rect.Left -= OverlapMargin;
+		if (Rect.Right < MeshMaxX - 1.0f) Rect.Right += OverlapMargin;
+		if (Rect.Bottom > MeshMinZ + 1.0f) Rect.Bottom -= OverlapMargin;
+		if (Rect.Top < MeshMaxZ - 1.0f) Rect.Top += OverlapMargin;
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: ActorLoc=(%.1f,%.1f,%.1f) ActorRot=(%.1f,%.1f,%.1f)"),
