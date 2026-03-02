@@ -345,15 +345,7 @@ bool AWallSheathing::TryPlace()
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		// Compensate for mesh origin offset. The mesh visual center is at
-		// ComponentLocation + MeshBounds.Origin * Scale, so we shift the
-		// component location in the opposite direction to align the visual.
-		float OriginCorrectionX = MeshBounds.Origin.X * ScaleX;
-		float OriginCorrectionZ = MeshBounds.Origin.Z * ScaleZ;
-		PieceSMC->SetRelativeLocation(FVector(
-			CenterX - OriginCorrectionX,
-			MeshRelLoc.Y,
-			CenterZ - OriginCorrectionZ));
+		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, -CenterZ));
 
 		if (OrigMat)
 		{
