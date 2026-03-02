@@ -354,8 +354,8 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) originCorr=(%.2f,%.2f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
-			i, CenterX, CenterZ, OriginCorrectionX, OriginCorrectionZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
+			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
 	return true;
