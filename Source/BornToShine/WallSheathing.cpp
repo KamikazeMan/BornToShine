@@ -170,6 +170,29 @@ bool AWallSheathing::TryPlace()
 	FVector MeshScale = MeshComponent->GetRelativeScale3D();
 	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
 
+	// DEBUG TEST: spawn a single piece covering the entire sheet
+	// This should look identical to the original mesh. If it doesn't,
+	// the coordinate system is wrong.
+	if (true) // Change to true to test, false to disable
+	{
+		MeshComponent->SetVisibility(false);
+
+		UStaticMeshComponent* TestSMC = NewObject<UStaticMeshComponent>(this, TEXT("TestFullSheet"));
+		TestSMC->SetMobility(EComponentMobility::Movable);
+		TestSMC->AttachToComponent(SceneRoot, FAttachmentTransformRules::KeepRelativeTransform);
+		TestSMC->SetStaticMesh(MeshComponent->GetStaticMesh());
+		TestSMC->SetRelativeScale3D(MeshScale);
+		TestSMC->SetRelativeLocation(MeshRelLoc);
+		if (MeshComponent->GetMaterial(0))
+			TestSMC->SetMaterial(0, MeshComponent->GetMaterial(0));
+		TestSMC->RegisterComponent();
+
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: DEBUG full sheet test - scale=(%.3f,%.3f,%.3f) loc=(%.2f,%.2f,%.2f)"),
+			MeshScale.X, MeshScale.Y, MeshScale.Z, MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z);
+
+		return true; // Skip cutout logic
+	}
+
 	// Rendered mesh extents in actor-local space
 	float MeshMinX = (MeshBounds.Origin.X - MeshBounds.BoxExtent.X) * MeshScale.X + MeshRelLoc.X;
 	float MeshMaxX = (MeshBounds.Origin.X + MeshBounds.BoxExtent.X) * MeshScale.X + MeshRelLoc.X;
@@ -345,26 +368,16 @@ bool AWallSheathing::TryPlace()
 		if (!PieceSMC) continue;
 
 		PieceSMC->SetMobility(EComponentMobility::Movable);
-		PieceSMC->AttachToComponent(MeshComponent, FAttachmentTransformRules::KeepRelativeTransform);
+		PieceSMC->AttachToComponent(SceneRoot, FAttachmentTransformRules::KeepRelativeTransform);
 		PieceSMC->SetStaticMesh(OrigMesh);
 
 		float ScaleX = PieceW / UnscaledW;
-		float ScaleY = 1.0f;
+		float ScaleY = OrigScale.Y;
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		// Position relative to the ORIGINAL MeshComponent.
-		// MeshComponent renders the full sheet from MeshMin to MeshMax.
-		// CenterX/CenterZ are in the same coordinate space as MeshMin/MeshMax.
-		// But since we attach to MeshComponent (which is already at MeshRelLoc),
-		// and MeshComponent's own mesh renders centered on itself,
-		// the relative position needs to be the offset FROM the mesh center.
-		// MeshCenter in its own space = MeshBounds.Origin = (0,0,0).
-		// So CenterX/CenterZ relative to MeshComponent = CenterX - MeshRelLoc.X, CenterZ - MeshRelLoc.Z
-		// But MeshMinX already included MeshRelLoc, so we need to subtract it.
-		float RelX = CenterX - MeshRelLoc.X;
-		float RelZ = CenterZ - MeshRelLoc.Z;
-		PieceSMC->SetRelativeLocation(FVector(RelX, 0.0f, RelZ));
+		// Position relative to SceneRoot, same space as MeshComponent
+		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, CenterZ));
 
 		if (OrigMat)
 		{
@@ -373,8 +386,8 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] CenterX=%.1f CenterZ=%.1f RelX=%.1f RelZ=%.1f size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
-			i, CenterX, CenterZ, RelX, RelZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
+			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
 	return true;
