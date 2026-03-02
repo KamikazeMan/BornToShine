@@ -173,7 +173,7 @@ bool AWallSheathing::TryPlace()
 	// DEBUG TEST: spawn a single piece covering the entire sheet
 	// This should look identical to the original mesh. If it doesn't,
 	// the coordinate system is wrong.
-	if (true) // Change to true to test, false to disable
+	if (false) // Change to true to test, false to disable
 	{
 		MeshComponent->SetVisibility(false);
 
