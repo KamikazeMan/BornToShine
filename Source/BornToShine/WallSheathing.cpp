@@ -242,13 +242,13 @@ bool AWallSheathing::TryPlace()
 		float HalfFrameH = WF->FrameHeight / 2.0f;
 		float SillFromCenter = -HalfFrameH + WF->RoughSillHeight;
 		float HeaderFromCenter = SillFromCenter + WF->RoughOpeningHeight;
-		float HalfOverallW = WF->RoughOpeningWidth / 2.0f;
+		float HalfOverallW = (WF->RoughOpeningWidth / 2.0f) + 10.0f; // extra margin for king studs
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOverallW;
 		Cut.Right = FrameAlongWall + HalfOverallW;
-		Cut.Bottom = FrameZ + SillFromCenter - 2.0f; // 2cm margin
-		Cut.Top = FrameZ + HeaderFromCenter + 2.0f;
+		Cut.Bottom = FrameZ + SillFromCenter - 10.0f; // generous margin to clear sill
+		Cut.Top = FrameZ + HeaderFromCenter + 10.0f;  // generous margin to clear header
 
 		// Check overlap with mesh bounds
 		if (Cut.Right > MeshMinX && Cut.Left < MeshMaxX &&
