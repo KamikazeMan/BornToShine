@@ -337,7 +337,6 @@ bool AWallSheathing::TryPlace()
 		float PieceW = Rect.Right - Rect.Left;
 		float PieceH = Rect.Top - Rect.Bottom;
 
-		// Piece center in actor-local space
 		float CenterX = (Rect.Left + Rect.Right) / 2.0f;
 		float CenterZ = (Rect.Bottom + Rect.Top) / 2.0f;
 
@@ -346,17 +345,26 @@ bool AWallSheathing::TryPlace()
 		if (!PieceSMC) continue;
 
 		PieceSMC->SetMobility(EComponentMobility::Movable);
-		PieceSMC->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		PieceSMC->AttachToComponent(MeshComponent, FAttachmentTransformRules::KeepRelativeTransform);
 		PieceSMC->SetStaticMesh(OrigMesh);
 
-		// Scale: piece dimensions relative to unscaled mesh dimensions
 		float ScaleX = PieceW / UnscaledW;
-		float ScaleY = OrigScale.Y;
+		float ScaleY = 1.0f;
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		// Position in actor-local space
-		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, CenterZ));
+		// Position relative to the ORIGINAL MeshComponent.
+		// MeshComponent renders the full sheet from MeshMin to MeshMax.
+		// CenterX/CenterZ are in the same coordinate space as MeshMin/MeshMax.
+		// But since we attach to MeshComponent (which is already at MeshRelLoc),
+		// and MeshComponent's own mesh renders centered on itself,
+		// the relative position needs to be the offset FROM the mesh center.
+		// MeshCenter in its own space = MeshBounds.Origin = (0,0,0).
+		// So CenterX/CenterZ relative to MeshComponent = CenterX - MeshRelLoc.X, CenterZ - MeshRelLoc.Z
+		// But MeshMinX already included MeshRelLoc, so we need to subtract it.
+		float RelX = CenterX - MeshRelLoc.X;
+		float RelZ = CenterZ - MeshRelLoc.Z;
+		PieceSMC->SetRelativeLocation(FVector(RelX, 0.0f, RelZ));
 
 		if (OrigMat)
 		{
@@ -365,20 +373,8 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Component '%s' registered=%d attached=%d parent='%s' visible=%d"),
-			*CompName.ToString(),
-			PieceSMC->IsRegistered(),
-			PieceSMC->GetAttachParent() != nullptr,
-			PieceSMC->GetAttachParent() ? *PieceSMC->GetAttachParent()->GetName() : TEXT("NONE"),
-			PieceSMC->IsVisible());
-
-		// Also verify it's in the actor's component list
-		TArray<UStaticMeshComponent*> AllSMCs;
-		GetComponents<UStaticMeshComponent>(AllSMCs);
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Actor now has %d StaticMeshComponents"), AllSMCs.Num());
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
-			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] CenterX=%.1f CenterZ=%.1f RelX=%.1f RelZ=%.1f size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
+			i, CenterX, CenterZ, RelX, RelZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
 	return true;
