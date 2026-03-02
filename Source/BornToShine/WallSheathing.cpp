@@ -308,6 +308,16 @@ bool AWallSheathing::TryPlace()
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
 
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: ActorLoc=(%.1f,%.1f,%.1f) ActorRot=(%.1f,%.1f,%.1f)"),
+		ActorLoc.X, ActorLoc.Y, ActorLoc.Z, ActorRot.Pitch, ActorRot.Roll, ActorRot.Yaw);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: MeshRelLoc=(%.2f,%.2f,%.2f) MeshScale=(%.3f,%.3f,%.3f)"),
+		MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z, MeshScale.X, MeshScale.Y, MeshScale.Z);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: SceneRoot loc=(%.2f,%.2f,%.2f)"),
+		SceneRoot->GetRelativeLocation().X, SceneRoot->GetRelativeLocation().Y, SceneRoot->GetRelativeLocation().Z);
+	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: MeshBounds Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f)"),
+		MeshBounds.Origin.X, MeshBounds.Origin.Y, MeshBounds.Origin.Z,
+		MeshBounds.BoxExtent.X, MeshBounds.BoxExtent.Y, MeshBounds.BoxExtent.Z);
+
 	// Get original mesh info
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
 	UMaterialInterface* OrigMat = MeshComponent->GetMaterial(0);
@@ -345,7 +355,7 @@ bool AWallSheathing::TryPlace()
 		float ScaleZ = PieceH / UnscaledH;
 		PieceSMC->SetRelativeScale3D(FVector(ScaleX, ScaleY, ScaleZ));
 
-		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, -CenterZ));
+		PieceSMC->SetRelativeLocation(FVector(CenterX, MeshRelLoc.Y, CenterZ));
 
 		if (OrigMat)
 		{
