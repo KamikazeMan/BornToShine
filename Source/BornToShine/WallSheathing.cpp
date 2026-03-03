@@ -329,40 +329,38 @@ bool AWallSheathing::TryPlace()
 	FPieceRect TopStrip = { Cut.Left, Cut.Right, Cut.Top, MeshMaxZ };
 	if (TopStrip.IsValid()) Pieces.Add(TopStrip);
 
-	// Expand pieces to overlap at shared edges (where pieces meet each other).
-	// Do NOT expand edges that face the cutout opening.
 	const float OverlapMargin = 5.0f;
 	for (FPieceRect& Rect : Pieces)
 	{
-		bool bIsLeftStrip = (Rect.Right <= Cut.Left + 2.0f);
-		bool bIsRightStrip = (Rect.Left >= Cut.Right - 2.0f);
-		bool bIsBottomStrip = (Rect.Top <= Cut.Bottom + 2.0f) && !bIsLeftStrip && !bIsRightStrip;
-		bool bIsTopStrip = (Rect.Bottom >= Cut.Top - 2.0f) && !bIsLeftStrip && !bIsRightStrip;
+		// Save original edges that touch the cutout
+		float OrigLeft = Rect.Left;
+		float OrigRight = Rect.Right;
+		float OrigBottom = Rect.Bottom;
+		float OrigTop = Rect.Top;
 
-		if (bIsLeftStrip)
-		{
-			// Left strip: expand RIGHT edge toward cutout to overlap with top/bottom strips
-			Rect.Right += OverlapMargin;
-		}
-		else if (bIsRightStrip)
-		{
-			// Right strip: expand LEFT edge toward cutout to overlap with top/bottom strips
-			Rect.Left -= OverlapMargin;
-		}
-		else if (bIsBottomStrip)
-		{
-			// Bottom strip: expand TOP edge upward to overlap with left/right strips
-			// But NOT into the cutout — expand LEFT and RIGHT to overlap with side strips
-			Rect.Left -= OverlapMargin;
-			Rect.Right += OverlapMargin;
-		}
-		else if (bIsTopStrip)
-		{
-			// Top strip: expand BOTTOM edge downward to overlap with left/right strips
-			// But NOT into the cutout — expand LEFT and RIGHT to overlap with side strips
-			Rect.Left -= OverlapMargin;
-			Rect.Right += OverlapMargin;
-		}
+		// Expand all edges
+		Rect.Left -= OverlapMargin;
+		Rect.Right += OverlapMargin;
+		Rect.Bottom -= OverlapMargin;
+		Rect.Top += OverlapMargin;
+
+		// Clamp back to mesh bounds (don't extend past the sheet)
+		Rect.Left = FMath::Max(Rect.Left, MeshMinX);
+		Rect.Right = FMath::Min(Rect.Right, MeshMaxX);
+		Rect.Bottom = FMath::Max(Rect.Bottom, MeshMinZ);
+		Rect.Top = FMath::Min(Rect.Top, MeshMaxZ);
+
+		// Re-clamp edges that originally touched the cutout boundary
+		// so pieces don't grow INTO the opening
+		bool bTouchedCutLeft = (FMath::Abs(OrigLeft - Cut.Left) < 2.0f);
+		bool bTouchedCutRight = (FMath::Abs(OrigRight - Cut.Right) < 2.0f);
+		bool bTouchedCutBottom = (FMath::Abs(OrigBottom - Cut.Bottom) < 2.0f);
+		bool bTouchedCutTop = (FMath::Abs(OrigTop - Cut.Top) < 2.0f);
+
+		if (bTouchedCutLeft) Rect.Left = OrigLeft;
+		if (bTouchedCutRight) Rect.Right = OrigRight;
+		if (bTouchedCutBottom) Rect.Bottom = OrigBottom;
+		if (bTouchedCutTop) Rect.Top = OrigTop;
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
