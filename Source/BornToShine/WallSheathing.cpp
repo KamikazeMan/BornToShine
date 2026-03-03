@@ -259,8 +259,8 @@ bool AWallSheathing::TryPlace()
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOpeningW;
 		Cut.Right = FrameAlongWall + HalfOpeningW;
-		Cut.Bottom = SillLocalZ + 43.0f;   // TEST: shift cutout UP by 43cm
-		Cut.Top = HeaderLocalZ + 43.0f;     // TEST: shift cutout UP by 43cm
+		Cut.Bottom = SillLocalZ + 50.0f;   // TEST: shift cutout UP by 50cm
+		Cut.Top = HeaderLocalZ + 50.0f;     // TEST: shift cutout UP by 50cm
 
 		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout — SillLocalZ=%.1f HeaderLocalZ=%.1f (MeshMinZ=%.1f BottomExt=%.1f SillH=%.1f ROH=%.1f)"),
 			SillLocalZ, HeaderLocalZ, MeshMinZ, BottomExt, WF->RoughSillHeight, WF->RoughOpeningHeight);
