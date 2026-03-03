@@ -20,6 +20,7 @@
 #include "DoubleTopPlate.h"
 #include "FasciaBoard.h"
 #include "WallSheathing.h"
+#include "RoofSheathing.h"
 #include "Kismet/GameplayStatics.h"
 
 ABuildablePiece::ABuildablePiece()
@@ -1571,6 +1572,113 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
+			// ── Roof sheathing → rafter top face ──
+			if (Socket.SocketType == EConstructionSocketType::RoofSheathing_Face &&
+				TgtSocketType == EConstructionSocketType::Rafter_Top_Face &&
+				TargetPiece)
+			{
+				ARoofSheathing* RoofSheet = Cast<ARoofSheathing>(this);
+				if (RoofSheet)
+				{
+					// Get rafter orientation
+					FRotator RafterRot = TargetPiece->GetActorRotation();
+					float RafterYaw = RafterRot.Yaw;
+					float RafterPitch = RafterRot.Pitch;
+
+					// The sheet lays on the rafter with:
+					// - Sheet X (8ft/243.84cm) along the RIDGE direction (perpendicular to rafter slope)
+					// - Sheet Y (4ft/121.92cm) along the SLOPE direction (same as rafter run)
+					// - Sheet Z (thickness) perpendicular to roof surface (normal to slope)
+
+					// Ridge direction is perpendicular to the rafter's horizontal direction
+					// Rafter runs from ridge to fascia. Ridge direction is 90° from rafter yaw.
+					float RidgeYaw = RafterYaw + 90.0f;
+
+					// Sheet rotation: yaw follows ridge direction, pitch matches roof slope
+					CandidateRotation.Yaw = RidgeYaw;
+					CandidateRotation.Pitch = RafterPitch;
+					CandidateRotation.Roll = 0.0f;
+
+					// Offset sheet so it sits ON TOP of the rafter (not centered on it)
+					// Rafter depth = 13.97cm (2x6). Sheet sits on the top face.
+					const float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm
+					const float SheetHalfThick = 1.27f / 2.0f;    // 0.635cm
+
+					// Roof normal direction (perpendicular to roof surface, pointing outward)
+					FVector RoofNormal = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::UpVector);
+					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
+
+					// --- Grid snap along ridge direction ---
+					FVector RidgeDir = FRotator(0, RidgeYaw, 0).RotateVector(FVector::ForwardVector);
+					FVector RafterLoc = TargetPiece->GetActorLocation();
+
+					// Project candidate location onto ridge direction relative to first rafter
+					float AlongRidge = FVector::DotProduct(CandidateLocation - RafterLoc, RidgeDir);
+
+					// Find all rafter positions to determine ridge extent
+					float MinRidgeProj = 0.0f;
+					float MaxRidgeProj = 0.0f;
+					bool bFirstRafter = true;
+					FVector RefRafterLoc = RafterLoc;
+
+					for (ABuildablePiece* P : NearbyPieces)
+					{
+						if (!P || P->GetPieceType() != EPieceType::Rafter) continue;
+						// Only rafters on the same side (similar pitch sign)
+						float PPitch = P->GetActorRotation().Pitch;
+						if (FMath::Sign(PPitch) != FMath::Sign(RafterPitch)) continue;
+
+						float Proj = FVector::DotProduct(P->GetActorLocation() - RefRafterLoc, RidgeDir);
+						if (bFirstRafter)
+						{
+							MinRidgeProj = Proj;
+							MaxRidgeProj = Proj;
+							bFirstRafter = false;
+						}
+						else
+						{
+							MinRidgeProj = FMath::Min(MinRidgeProj, Proj);
+							MaxRidgeProj = FMath::Max(MaxRidgeProj, Proj);
+						}
+					}
+
+					// Add gable overhang (30.48cm past end rafters on each side)
+					const float GableOverhang = 30.48f;
+					float RidgeStart = MinRidgeProj - GableOverhang;
+					float RidgeEnd = MaxRidgeProj + GableOverhang;
+
+					// Snap to 8ft grid along ridge
+					const float RidgeGridSize = 243.84f; // 8ft
+					float RelAlongRidge = AlongRidge - RidgeStart;
+					int32 RidgeIdx = FMath::RoundToInt(RelAlongRidge / RidgeGridSize);
+					RidgeIdx = FMath::Max(RidgeIdx, 0);
+					float SnappedAlongRidge = RidgeStart + (RidgeIdx * RidgeGridSize) + RidgeGridSize / 2.0f;
+
+					// Clamp to ridge extent
+					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
+					SnappedAlongRidge = FMath::Clamp(SnappedAlongRidge, RidgeStart + SheetHalfLen, RidgeEnd - SheetHalfLen);
+
+					// Apply ridge snap
+					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
+
+					// --- Grid snap along slope direction ---
+					// The slope direction runs from fascia to ridge along the rafter
+					FVector SlopeDir = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::ForwardVector);
+					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
+
+					// Snap at 4ft intervals from the fascia (bottom of rafter = slope distance 0)
+					const float SlopeGridSize = 121.92f; // 4ft
+					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
+					SlopeIdx = FMath::Max(SlopeIdx, 0);
+					float SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
+
+					CandidateLocation += SlopeDir * (SnappedAlongSlope - AlongSlope);
+
+					UE_LOG(LogTemp, Log, TEXT("RoofSheathing: RidgeYaw=%.1f Pitch=%.1f RidgeIdx=%d SlopeIdx=%d"),
+						RidgeYaw, RafterPitch, RidgeIdx, SlopeIdx);
+				}
+			}
+
 			// Fascia board position correction: move inward toward ridge and up slightly.
 			// PIE-tested values from David's manual adjustment.
 			if (Socket.SocketType == EConstructionSocketType::Fascia_RafterTail &&
@@ -2605,6 +2713,15 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		 SocketB == EConstructionSocketType::Wall_Bottom_Plate) ||
 		(SocketA == EConstructionSocketType::Wall_Bottom_Plate &&
 		 SocketB == EConstructionSocketType::WallSheathing_Face))
+	{
+		return 600;
+	}
+
+	// Roof sheathing face to rafter top (MEDIUM priority)
+	if ((SocketA == EConstructionSocketType::RoofSheathing_Face &&
+		 SocketB == EConstructionSocketType::Rafter_Top_Face) ||
+		(SocketA == EConstructionSocketType::Rafter_Top_Face &&
+		 SocketB == EConstructionSocketType::RoofSheathing_Face))
 	{
 		return 600;
 	}

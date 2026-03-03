@@ -82,6 +82,7 @@ protected:
 	void CreateRafterRules();
 	void CreateFasciaBoardRules();
 	void CreateWallSheathingRules();
+	void CreateRoofSheathingRules();
 
 	// Helper functions
 	bool CheckSocketAlignment(

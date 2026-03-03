@@ -91,6 +91,7 @@ private:
 	void CreateRidgeEndSocket();
 	void CreateBirdsmouthSocket();
 	void CreateTailEndSocket();
+	void CreateTopFaceSocket();
 	void RegenerateSockets();
 
 	// Scale the mesh along X to match SlopeLength

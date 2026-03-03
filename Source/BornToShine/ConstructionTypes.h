@@ -32,7 +32,8 @@ enum class EPieceType : uint8
 	RidgePost			UMETA(DisplayName = "Ridge Post"),
 	RidgeBoard			UMETA(DisplayName = "Ridge Board"),
 	FasciaBoard			UMETA(DisplayName = "Fascia Board"),
-	WallSheathing		UMETA(DisplayName = "Wall Sheathing")
+	WallSheathing		UMETA(DisplayName = "Wall Sheathing"),
+	RoofSheathing		UMETA(DisplayName = "Roof Sheathing")
 };
 
 /**
@@ -118,6 +119,7 @@ enum class EConstructionSocketType : uint8
 	Rafter_Ridge				UMETA(DisplayName = "Rafter Ridge End"),
 	Rafter_BirdsMouth			UMETA(DisplayName = "Rafter Birdsmouth"),
 	Rafter_Tail					UMETA(DisplayName = "Rafter Tail End"),
+	Rafter_Top_Face				UMETA(DisplayName = "Rafter Top Face"),
 
 	// Fascia Board Sockets
 	Fascia_End					UMETA(DisplayName = "Fascia Board End"),
@@ -126,6 +128,9 @@ enum class EConstructionSocketType : uint8
 	// Wall Sheathing Sockets
 	WallSheathing_Face			UMETA(DisplayName = "Wall Sheathing Face"),
 	WallSheathing_Edge			UMETA(DisplayName = "Wall Sheathing Edge"),
+
+	// Roof Sheathing Sockets
+	RoofSheathing_Face			UMETA(DisplayName = "Roof Sheathing Face"),
 
 	None						UMETA(DisplayName = "None")
 };

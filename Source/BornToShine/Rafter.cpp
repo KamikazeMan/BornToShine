@@ -62,6 +62,7 @@ void ARafter::InitializeSockets()
 	CreateRidgeEndSocket();
 	CreateBirdsmouthSocket();
 	CreateTailEndSocket();
+	CreateTopFaceSocket();
 
 	UE_LOG(LogTemp, Log, TEXT("Rafter: InitializeSockets - Generated %d sockets"), Sockets.Num());
 }
@@ -180,6 +181,22 @@ void ARafter::CreateTailEndSocket()
 	Sockets.Add(TailSocket);
 }
 
+void ARafter::CreateTopFaceSocket()
+{
+	// Top face socket at the midpoint of the rafter slope.
+	// Roof sheathing snaps to this socket to lay on top of the rafter.
+	float SlopeLen = GetSlopeLengthCm();
+
+	FConstructionSocket TopFaceSocket;
+	TopFaceSocket.SocketName = FName(TEXT("RafterTopFace"));
+	TopFaceSocket.SocketType = EConstructionSocketType::Rafter_Top_Face;
+	TopFaceSocket.LocalPosition = FVector(SlopeLen / 2.0f, 0.0f, 0.0f);
+	TopFaceSocket.LocalRotation = FRotator(0.0f, 0.0f, 0.0f);
+	TopFaceSocket.Orientation = ESocketOrientation::Any;
+	TopFaceSocket.bIsOccupied = false;
+	Sockets.Add(TopFaceSocket);
+}
+
 void ARafter::RegenerateSockets()
 {
 	Sockets.Empty();
@@ -187,6 +204,7 @@ void ARafter::RegenerateSockets()
 	CreateRidgeEndSocket();
 	CreateBirdsmouthSocket();
 	CreateTailEndSocket();
+	CreateTopFaceSocket();
 
 	UE_LOG(LogTemp, Log, TEXT("Rafter: Regenerated %d sockets"), Sockets.Num());
 }

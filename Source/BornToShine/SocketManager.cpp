@@ -39,6 +39,7 @@ void ASocketManager::InitializeCompatibilityRules()
 	CreateRafterRules();
 	CreateFasciaBoardRules();
 	CreateWallSheathingRules();
+	CreateRoofSheathingRules();
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Initialized %d compatibility rules"), CompatibilityRules.Num());
 }
@@ -385,11 +386,14 @@ bool ASocketManager::FindBestSnapPoint(
 				bool bWallSheathingSource = (SourceSocket.SocketType == EConstructionSocketType::WallSheathing_Face);
 				bool bStudTarget = (TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Top ||
 				                    TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Bottom);
+				bool bRoofSheathingSource = (SourceSocket.SocketType == EConstructionSocketType::RoofSheathing_Face);
+				bool bRafterTopFaceTarget = (TargetSocket.SocketType == EConstructionSocketType::Rafter_Top_Face);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
 				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
-				    !(bWallSheathingSource && (bStudTarget || bWallPlateTarget)))
+				    !(bWallSheathingSource && (bStudTarget || bWallPlateTarget)) &&
+				    !(bRoofSheathingSource && bRafterTopFaceTarget))
 				{
 					continue;
 				}
@@ -819,4 +823,29 @@ void ASocketManager::CreateWallSheathingRules()
 	CompatibilityRules.Add(EdgeRule);
 
 	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added wall sheathing compatibility rules"));
+}
+
+void ASocketManager::CreateRoofSheathingRules()
+{
+	// RoofSheathing face snaps to rafter top face
+	FSocketCompatibilityRule FaceToRafterRule;
+	FaceToRafterRule.SourceSocketType = EConstructionSocketType::RoofSheathing_Face;
+	FaceToRafterRule.CompatibleSocketTypes.Add(EConstructionSocketType::Rafter_Top_Face);
+	FaceToRafterRule.RequiredPhase = EConstructionPhase::RoofSheathing;
+	FaceToRafterRule.SnapDistance = 150.0f;
+	FaceToRafterRule.bCheckAlignment = false;
+	FaceToRafterRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(FaceToRafterRule);
+
+	// Reverse: rafter top face accepts roof sheathing face
+	FSocketCompatibilityRule RafterToFaceRule;
+	RafterToFaceRule.SourceSocketType = EConstructionSocketType::Rafter_Top_Face;
+	RafterToFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::RoofSheathing_Face);
+	RafterToFaceRule.RequiredPhase = EConstructionPhase::RoofSheathing;
+	RafterToFaceRule.SnapDistance = 150.0f;
+	RafterToFaceRule.bCheckAlignment = false;
+	RafterToFaceRule.MaxAlignmentAngle = 15.0f;
+	CompatibilityRules.Add(RafterToFaceRule);
+
+	UE_LOG(LogTemp, Log, TEXT("SocketManager: Added roof sheathing compatibility rules"));
 }

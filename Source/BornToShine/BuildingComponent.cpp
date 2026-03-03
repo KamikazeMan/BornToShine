@@ -15,6 +15,7 @@
 #include "Rafter.h"
 #include "FasciaBoard.h"
 #include "WallSheathing.h"
+#include "RoofSheathing.h"
 #include "RectangleBuilder.h"
 #include "ConstructionPhaseManager.h"
 #include "BornToShineHUD.h"
@@ -121,6 +122,11 @@ void UBuildingComponent::BeginPlay()
 		AvailablePieceTypes.Add(AWallSheathing::StaticClass());
 		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added WallSheathing to AvailablePieceTypes"));
 	}
+	if (!HasPieceType(EPieceType::RoofSheathing))
+	{
+		AvailablePieceTypes.Add(ARoofSheathing::StaticClass());
+		UE_LOG(LogTemp, Warning, TEXT("BuildingComponent: Auto-added RoofSheathing to AvailablePieceTypes"));
+	}
 
 	// Also scan PieceTypeInfos for any piece types configured in the editor
 	// that still aren't in AvailablePieceTypes (handles the case where the user
@@ -144,6 +150,7 @@ void UBuildingComponent::BeginPlay()
 		case EPieceType::Rafter:          AutoClass = ARafter::StaticClass(); break;
 		case EPieceType::FasciaBoard:     AutoClass = AFasciaBoard::StaticClass(); break;
 		case EPieceType::WallSheathing:  AutoClass = AWallSheathing::StaticClass(); break;
+		case EPieceType::RoofSheathing:  AutoClass = ARoofSheathing::StaticClass(); break;
 		default: break;
 		}
 
@@ -1211,6 +1218,7 @@ TArray<FPieceTypeInfo> UBuildingComponent::GetPieceTypeInfos() const
 				case EPieceType::Rafter:          Info.Subtitle = TEXT("2x6"); break;
 				case EPieceType::FasciaBoard:     Info.Subtitle = TEXT("1x6"); break;
 				case EPieceType::WallSheathing:  Info.Subtitle = TEXT("4x8"); break;
+				case EPieceType::RoofSheathing:  Info.Subtitle = TEXT("4x8"); break;
 				default: break;
 				}
 			}

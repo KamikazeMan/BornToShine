@@ -76,6 +76,9 @@ bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 	case EPieceType::WallSheathing:
 		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
 
+	case EPieceType::RoofSheathing:
+		return GetCyclePieceCount(EPieceType::Rafter) >= 1;
+
 	default:
 		return true;
 	}
@@ -132,6 +135,9 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 
 	case EPieceType::WallSheathing:
 		return TEXT("Place wall studs first");
+
+	case EPieceType::RoofSheathing:
+		return TEXT("Place rafters first");
 
 	default:
 		return TEXT("Prerequisites not met");
@@ -227,6 +233,16 @@ bool AConstructionPhaseManager::AdvanceToNextPhase()
 		case EConstructionPhase::WallFrame:
 			CurrentPhase = EConstructionPhase::WallSheathing;
 			UE_LOG(LogTemp, Log, TEXT("Advanced to Wall Sheathing phase"));
+			return true;
+
+		case EConstructionPhase::WallSheathing:
+			CurrentPhase = EConstructionPhase::RoofFrame;
+			UE_LOG(LogTemp, Log, TEXT("Advanced to Roof Frame phase"));
+			return true;
+
+		case EConstructionPhase::RoofFrame:
+			CurrentPhase = EConstructionPhase::RoofSheathing;
+			UE_LOG(LogTemp, Log, TEXT("Advanced to Roof Sheathing phase"));
 			return true;
 
 		default:
