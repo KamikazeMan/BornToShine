@@ -259,8 +259,8 @@ bool AWallSheathing::TryPlace()
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOpeningW;
 		Cut.Right = FrameAlongWall + HalfOpeningW;
-		Cut.Bottom = SillLocalZ + 53.0f;   // Empirical vertical correction
-		Cut.Top = HeaderLocalZ + 53.0f;     // Empirical vertical correction
+		Cut.Bottom = SillLocalZ + 52.0f;   // Empirical vertical correction
+		Cut.Top = HeaderLocalZ + 52.0f;     // Empirical vertical correction
 
 		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout — SillLocalZ=%.1f HeaderLocalZ=%.1f (MeshMinZ=%.1f BottomExt=%.1f SillH=%.1f ROH=%.1f)"),
 			SillLocalZ, HeaderLocalZ, MeshMinZ, BottomExt, WF->RoughSillHeight, WF->RoughOpeningHeight);
