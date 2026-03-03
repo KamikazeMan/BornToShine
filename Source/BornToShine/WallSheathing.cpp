@@ -332,7 +332,6 @@ bool AWallSheathing::TryPlace()
 	const float OverlapMargin = 5.0f;
 	for (FPieceRect& Rect : Pieces)
 	{
-		// Save original edges that touch the cutout
 		float OrigLeft = Rect.Left;
 		float OrigRight = Rect.Right;
 		float OrigBottom = Rect.Bottom;
@@ -344,23 +343,23 @@ bool AWallSheathing::TryPlace()
 		Rect.Bottom -= OverlapMargin;
 		Rect.Top += OverlapMargin;
 
-		// Clamp back to mesh bounds (don't extend past the sheet)
+		// Clamp to mesh bounds
 		Rect.Left = FMath::Max(Rect.Left, MeshMinX);
 		Rect.Right = FMath::Min(Rect.Right, MeshMaxX);
 		Rect.Bottom = FMath::Max(Rect.Bottom, MeshMinZ);
 		Rect.Top = FMath::Min(Rect.Top, MeshMaxZ);
 
-		// Re-clamp edges that originally touched the cutout boundary
-		// so pieces don't grow INTO the opening
-		bool bTouchedCutLeft = (FMath::Abs(OrigLeft - Cut.Left) < 2.0f);
-		bool bTouchedCutRight = (FMath::Abs(OrigRight - Cut.Right) < 2.0f);
-		bool bTouchedCutBottom = (FMath::Abs(OrigBottom - Cut.Bottom) < 2.0f);
-		bool bTouchedCutTop = (FMath::Abs(OrigTop - Cut.Top) < 2.0f);
+		// Any edge that originally touched a cutout boundary must not expand
+		// into the opening. Check against ALL four cutout edges.
+		bool bLeftTouchesCutout = (FMath::Abs(OrigLeft - Cut.Left) < 2.0f) || (FMath::Abs(OrigLeft - Cut.Right) < 2.0f);
+		bool bRightTouchesCutout = (FMath::Abs(OrigRight - Cut.Left) < 2.0f) || (FMath::Abs(OrigRight - Cut.Right) < 2.0f);
+		bool bBottomTouchesCutout = (FMath::Abs(OrigBottom - Cut.Bottom) < 2.0f) || (FMath::Abs(OrigBottom - Cut.Top) < 2.0f);
+		bool bTopTouchesCutout = (FMath::Abs(OrigTop - Cut.Bottom) < 2.0f) || (FMath::Abs(OrigTop - Cut.Top) < 2.0f);
 
-		if (bTouchedCutLeft) Rect.Left = OrigLeft;
-		if (bTouchedCutRight) Rect.Right = OrigRight;
-		if (bTouchedCutBottom) Rect.Bottom = OrigBottom;
-		if (bTouchedCutTop) Rect.Top = OrigTop;
+		if (bLeftTouchesCutout) Rect.Left = OrigLeft;
+		if (bRightTouchesCutout) Rect.Right = OrigRight;
+		if (bBottomTouchesCutout) Rect.Bottom = OrigBottom;
+		if (bTopTouchesCutout) Rect.Top = OrigTop;
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
