@@ -1607,8 +1607,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					const float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm
 					const float SheetHalfThick = 1.27f / 2.0f;    // 0.635cm
 
-					// Roof normal direction (perpendicular to roof surface, pointing outward)
-					FVector RoofNormal = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::UpVector);
 					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
 
 					// --- Grid snap along ridge direction ---
