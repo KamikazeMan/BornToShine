@@ -236,19 +236,34 @@ bool AWallSheathing::TryPlace()
 		float FrameAlongWall = FVector::DotProduct(ToFrame, WallDir);
 		float FrameZ = ToFrame.Z; // vertical offset from actor center
 
-		// Window frame center is at its mesh center
-		// Rough opening: sill starts at FrameBottom + SillHeight
-		// FrameBottom relative to frame center = -FrameHeight/2
-		float HalfFrameH = WF->FrameHeight / 2.0f;
-		float SillFromCenter = -HalfFrameH + WF->RoughSillHeight;
-		float HeaderFromCenter = SillFromCenter + WF->RoughOpeningHeight;
-		float HalfOverallW = WF->RoughOpeningWidth / 2.0f;
+		// Calculate cutout from bottom plate reference, bypassing FrameHeight
+		// (which gets overridden by mesh bounds in BeginPlay).
+		//
+		// Both the sheathing and window frame snap to the same bottom plate.
+		// The sheathing actor center is at bottomPlateTop + wallCavityHeight/2.
+		// MeshMinZ in actor-local space = the sheet bottom edge.
+		//
+		// The window frame's RoughSillHeight is measured from the bottom plate top.
+		// The window's RoughOpeningHeight is the opening height from sill to header.
+		//
+		// Convert sill position to sheet-local Z:
+		// SillZ_local = MeshMinZ + RoughSillHeight (sill above sheet bottom)
+		// But MeshMinZ includes the bottom extension (3.82cm below plate top),
+		// so add that back: sill starts at MeshMinZ + BottomExt + RoughSillHeight
+
+		const float BottomExt = 3.82f;
+		float SillLocalZ = MeshMinZ + BottomExt + WF->RoughSillHeight;
+		float HeaderLocalZ = SillLocalZ + WF->RoughOpeningHeight;
+		float HalfOpeningW = WF->RoughOpeningWidth / 2.0f;
 
 		FCutout Cut;
-		Cut.Left = FrameAlongWall - HalfOverallW;
-		Cut.Right = FrameAlongWall + HalfOverallW;
-		Cut.Bottom = FrameZ + SillFromCenter;
-		Cut.Top = FrameZ + HeaderFromCenter;
+		Cut.Left = FrameAlongWall - HalfOpeningW;
+		Cut.Right = FrameAlongWall + HalfOpeningW;
+		Cut.Bottom = SillLocalZ;
+		Cut.Top = HeaderLocalZ;
+
+		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout — SillLocalZ=%.1f HeaderLocalZ=%.1f (MeshMinZ=%.1f BottomExt=%.1f SillH=%.1f ROH=%.1f)"),
+			SillLocalZ, HeaderLocalZ, MeshMinZ, BottomExt, WF->RoughSillHeight, WF->RoughOpeningHeight);
 
 		// Check overlap with mesh bounds
 		if (Cut.Right > MeshMinX && Cut.Left < MeshMaxX &&
@@ -288,7 +303,9 @@ bool AWallSheathing::TryPlace()
 		Cut.Left = FrameAlongWall - HalfOverallW;
 		Cut.Right = FrameAlongWall + HalfOverallW;
 		Cut.Bottom = MeshMinZ; // door goes to floor — extend to mesh bottom
-		Cut.Top = FrameZ + DF->RoughOpeningHeight;
+		// Door rough opening measured from bottom plate top
+		const float DoorBottomExt = 3.82f;
+		Cut.Top = MeshMinZ + DoorBottomExt + DF->RoughOpeningHeight;
 
 		if (Cut.Right > MeshMinX && Cut.Left < MeshMaxX &&
 			Cut.Top > MeshMinZ && Cut.Bottom < MeshMaxZ)
