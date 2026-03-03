@@ -23,6 +23,7 @@ public:
 	float SheetThickness;  // 0.50" = 1.27cm
 
 	virtual void ScalePiece(float ScaleDelta) override;
+	virtual bool TryPlace() override;
 
 protected:
 	virtual void BeginPlay() override;
