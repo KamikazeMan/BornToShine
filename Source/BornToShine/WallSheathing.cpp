@@ -434,6 +434,9 @@ bool AWallSheathing::TryPlace()
 			PieceSMC->SetMaterial(0, OrigMat);
 		}
 
+		PieceSMC->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		PieceSMC->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Overlap);
+
 		PieceSMC->RegisterComponent();
 
 		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
