@@ -2698,12 +2698,19 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 850;
 	}
 
-	// Ridge post bottom to double top plate / top plate top
+	// Ridge post bottom to double top plate end (preferred target)
 	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
-		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
-		  SocketB == EConstructionSocketType::TopPlate_Top)) ||
-		((SocketA == EConstructionSocketType::DoubleTopPlate_End ||
-		  SocketA == EConstructionSocketType::TopPlate_Top) &&
+		 SocketB == EConstructionSocketType::DoubleTopPlate_End) ||
+		(SocketA == EConstructionSocketType::DoubleTopPlate_End &&
+		 SocketB == EConstructionSocketType::RidgePost_Bottom))
+	{
+		return 850;
+	}
+
+	// Ridge post bottom to top plate top (fallback if no DTP)
+	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
+		 SocketB == EConstructionSocketType::TopPlate_Top) ||
+		(SocketA == EConstructionSocketType::TopPlate_Top &&
 		 SocketB == EConstructionSocketType::RidgePost_Bottom))
 	{
 		return 800;
