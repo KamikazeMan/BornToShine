@@ -170,29 +170,6 @@ bool AWallSheathing::TryPlace()
 	FVector MeshScale = MeshComponent->GetRelativeScale3D();
 	FVector MeshRelLoc = MeshComponent->GetRelativeLocation();
 
-	// DEBUG TEST: spawn a single piece covering the entire sheet
-	// This should look identical to the original mesh. If it doesn't,
-	// the coordinate system is wrong.
-	if (false) // Change to true to test, false to disable
-	{
-		MeshComponent->SetVisibility(false);
-
-		UStaticMeshComponent* TestSMC = NewObject<UStaticMeshComponent>(this, TEXT("TestFullSheet"));
-		TestSMC->SetMobility(EComponentMobility::Movable);
-		TestSMC->AttachToComponent(SceneRoot, FAttachmentTransformRules::KeepRelativeTransform);
-		TestSMC->SetStaticMesh(MeshComponent->GetStaticMesh());
-		TestSMC->SetRelativeScale3D(MeshScale);
-		TestSMC->SetRelativeLocation(MeshRelLoc);
-		if (MeshComponent->GetMaterial(0))
-			TestSMC->SetMaterial(0, MeshComponent->GetMaterial(0));
-		TestSMC->RegisterComponent();
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: DEBUG full sheet test - scale=(%.3f,%.3f,%.3f) loc=(%.2f,%.2f,%.2f)"),
-			MeshScale.X, MeshScale.Y, MeshScale.Z, MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z);
-
-		return true; // Skip cutout logic
-	}
-
 	// Rendered mesh extents in actor-local space
 	float MeshMinX = (MeshBounds.Origin.X - MeshBounds.BoxExtent.X) * MeshScale.X + MeshRelLoc.X;
 	float MeshMaxX = (MeshBounds.Origin.X + MeshBounds.BoxExtent.X) * MeshScale.X + MeshRelLoc.X;
@@ -201,7 +178,7 @@ bool AWallSheathing::TryPlace()
 	float MeshFullW = MeshMaxX - MeshMinX;
 	float MeshFullH = MeshMaxZ - MeshMinZ;
 
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Mesh local bounds X=[%.1f,%.1f] Z=[%.1f,%.1f] size=%.1fx%.1f"),
+	UE_LOG(LogTemp, Log, TEXT("WallSheathing: Mesh local bounds X=[%.1f,%.1f] Z=[%.1f,%.1f] size=%.1fx%.1f"),
 		MeshMinX, MeshMaxX, MeshMinZ, MeshMaxZ, MeshFullW, MeshFullH);
 
 	// Actor transform
@@ -225,9 +202,6 @@ bool AWallSheathing::TryPlace()
 	{
 		AWindowFrame* WF = Cast<AWindowFrame>(A);
 		if (!WF) continue;
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: WindowFrame dims — FrameOverallW=%.1f RoughOpeningW=%.1f RoughOpeningH=%.1f FrameH=%.1f SillH=%.1f"),
-			WF->FrameOverallWidth, WF->RoughOpeningWidth, WF->RoughOpeningHeight, WF->FrameHeight, WF->RoughSillHeight);
 
 		FVector ToFrame = WF->GetActorLocation() - ActorLoc;
 		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
@@ -262,8 +236,8 @@ bool AWallSheathing::TryPlace()
 		Cut.Bottom = SillLocalZ + 52.0f;   // Empirical vertical correction
 		Cut.Top = HeaderLocalZ + 52.0f;     // Empirical vertical correction
 
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout — SillLocalZ=%.1f HeaderLocalZ=%.1f (MeshMinZ=%.1f BottomExt=%.1f SillH=%.1f ROH=%.1f)"),
-			SillLocalZ, HeaderLocalZ, MeshMinZ, BottomExt, WF->RoughSillHeight, WF->RoughOpeningHeight);
+		UE_LOG(LogTemp, Log, TEXT("WallSheathing: Window sill=%.1f header=%.1f (opening %.1fx%.1f)"),
+			SillLocalZ, HeaderLocalZ, WF->RoughOpeningWidth, WF->RoughOpeningHeight);
 
 		// Check overlap with mesh bounds
 		if (Cut.Right > MeshMinX && Cut.Left < MeshMaxX &&
@@ -275,7 +249,7 @@ bool AWallSheathing::TryPlace()
 			Cut.Top = FMath::Min(Cut.Top, MeshMaxZ);
 			Cutouts.Add(Cut);
 
-			UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Window cutout local [%.1f,%.1f]-[%.1f,%.1f]"),
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Window cutout local [%.1f,%.1f]-[%.1f,%.1f]"),
 				Cut.Left, Cut.Bottom, Cut.Right, Cut.Top);
 		}
 	}
@@ -287,9 +261,6 @@ bool AWallSheathing::TryPlace()
 	{
 		ADoorFrame* DF = Cast<ADoorFrame>(A);
 		if (!DF) continue;
-
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: DoorFrame dims — FrameOverallW=%.1f RoughOpeningW=%.1f RoughOpeningH=%.1f FrameH=%.1f"),
-			DF->FrameOverallWidth, DF->RoughOpeningWidth, DF->RoughOpeningHeight, DF->FrameHeight);
 
 		FVector ToFrame = DF->GetActorLocation() - ActorLoc;
 		float PerpDist = FMath::Abs(FVector::DotProduct(ToFrame, WallRight));
@@ -316,7 +287,7 @@ bool AWallSheathing::TryPlace()
 			Cut.Top = FMath::Min(Cut.Top, MeshMaxZ);
 			Cutouts.Add(Cut);
 
-			UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Door cutout local [%.1f,%.1f]-[%.1f,%.1f]"),
+			UE_LOG(LogTemp, Log, TEXT("WallSheathing: Door cutout local [%.1f,%.1f]-[%.1f,%.1f]"),
 				Cut.Left, Cut.Bottom, Cut.Right, Cut.Top);
 		}
 	}
@@ -379,17 +350,7 @@ bool AWallSheathing::TryPlace()
 		if (bTopTouchesCutout) Rect.Top = OrigTop;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
-
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: ActorLoc=(%.1f,%.1f,%.1f) ActorRot=(%.1f,%.1f,%.1f)"),
-		ActorLoc.X, ActorLoc.Y, ActorLoc.Z, ActorRot.Pitch, ActorRot.Roll, ActorRot.Yaw);
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: MeshRelLoc=(%.2f,%.2f,%.2f) MeshScale=(%.3f,%.3f,%.3f)"),
-		MeshRelLoc.X, MeshRelLoc.Y, MeshRelLoc.Z, MeshScale.X, MeshScale.Y, MeshScale.Z);
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: SceneRoot loc=(%.2f,%.2f,%.2f)"),
-		SceneRoot->GetRelativeLocation().X, SceneRoot->GetRelativeLocation().Y, SceneRoot->GetRelativeLocation().Z);
-	UE_LOG(LogTemp, Warning, TEXT("WallSheathing DEBUG: MeshBounds Origin=(%.2f,%.2f,%.2f) Extent=(%.2f,%.2f,%.2f)"),
-		MeshBounds.Origin.X, MeshBounds.Origin.Y, MeshBounds.Origin.Z,
-		MeshBounds.BoxExtent.X, MeshBounds.BoxExtent.Y, MeshBounds.BoxExtent.Z);
+	UE_LOG(LogTemp, Log, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
 
 	// Get original mesh info
 	UStaticMesh* OrigMesh = MeshComponent->GetStaticMesh();
@@ -439,7 +400,7 @@ bool AWallSheathing::TryPlace()
 
 		PieceSMC->RegisterComponent();
 
-		UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
+		UE_LOG(LogTemp, Log, TEXT("WallSheathing: Piece[%d] center=(%.1f,%.1f) size=%.1fx%.1f scale=(%.3f,%.3f,%.3f)"),
 			i, CenterX, CenterZ, PieceW, PieceH, ScaleX, ScaleY, ScaleZ);
 	}
 
