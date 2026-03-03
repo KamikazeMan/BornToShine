@@ -242,13 +242,13 @@ bool AWallSheathing::TryPlace()
 		float HalfFrameH = WF->FrameHeight / 2.0f;
 		float SillFromCenter = -HalfFrameH + WF->RoughSillHeight;
 		float HeaderFromCenter = SillFromCenter + WF->RoughOpeningHeight;
-		float HalfOverallW = (WF->RoughOpeningWidth / 2.0f) + 10.0f; // extra margin for king studs
+		float HalfOverallW = WF->RoughOpeningWidth / 2.0f;
 
 		FCutout Cut;
 		Cut.Left = FrameAlongWall - HalfOverallW;
 		Cut.Right = FrameAlongWall + HalfOverallW;
-		Cut.Bottom = FrameZ + SillFromCenter - 10.0f; // generous margin to clear sill
-		Cut.Top = FrameZ + HeaderFromCenter + 10.0f;  // generous margin to clear header
+		Cut.Bottom = FrameZ + SillFromCenter;
+		Cut.Top = FrameZ + HeaderFromCenter;
 
 		// Check overlap with mesh bounds
 		if (Cut.Right > MeshMinX && Cut.Left < MeshMaxX &&
@@ -329,17 +329,40 @@ bool AWallSheathing::TryPlace()
 	FPieceRect TopStrip = { Cut.Left, Cut.Right, Cut.Top, MeshMaxZ };
 	if (TopStrip.IsValid()) Pieces.Add(TopStrip);
 
-	// Expand each piece by a small margin to eliminate visual gaps between adjacent pieces.
-	// This creates slight overlaps which are invisible but prevent gaps from mesh rendering.
-	const float OverlapMargin = 5.0f; // cm
+	// Expand pieces to overlap at shared edges (where pieces meet each other).
+	// Do NOT expand edges that face the cutout opening.
+	const float OverlapMargin = 5.0f;
 	for (FPieceRect& Rect : Pieces)
 	{
-		// Only expand edges that are NOT at the mesh boundary (those are already correct)
-		// and NOT at the cutout boundary (those define the opening)
-		if (Rect.Left > MeshMinX + 1.0f) Rect.Left -= OverlapMargin;
-		if (Rect.Right < MeshMaxX - 1.0f) Rect.Right += OverlapMargin;
-		if (Rect.Bottom > MeshMinZ + 1.0f) Rect.Bottom -= OverlapMargin;
-		if (Rect.Top < MeshMaxZ - 1.0f) Rect.Top += OverlapMargin;
+		bool bIsLeftStrip = (Rect.Right <= Cut.Left + 2.0f);
+		bool bIsRightStrip = (Rect.Left >= Cut.Right - 2.0f);
+		bool bIsBottomStrip = (Rect.Top <= Cut.Bottom + 2.0f) && !bIsLeftStrip && !bIsRightStrip;
+		bool bIsTopStrip = (Rect.Bottom >= Cut.Top - 2.0f) && !bIsLeftStrip && !bIsRightStrip;
+
+		if (bIsLeftStrip)
+		{
+			// Left strip: expand RIGHT edge toward cutout to overlap with top/bottom strips
+			Rect.Right += OverlapMargin;
+		}
+		else if (bIsRightStrip)
+		{
+			// Right strip: expand LEFT edge toward cutout to overlap with top/bottom strips
+			Rect.Left -= OverlapMargin;
+		}
+		else if (bIsBottomStrip)
+		{
+			// Bottom strip: expand TOP edge upward to overlap with left/right strips
+			// But NOT into the cutout — expand LEFT and RIGHT to overlap with side strips
+			Rect.Left -= OverlapMargin;
+			Rect.Right += OverlapMargin;
+		}
+		else if (bIsTopStrip)
+		{
+			// Top strip: expand BOTTOM edge downward to overlap with left/right strips
+			// But NOT into the cutout — expand LEFT and RIGHT to overlap with side strips
+			Rect.Left -= OverlapMargin;
+			Rect.Right += OverlapMargin;
+		}
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("WallSheathing: Splitting into %d pieces"), Pieces.Num());
