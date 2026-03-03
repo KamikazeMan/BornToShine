@@ -1577,7 +1577,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TgtSocketType == EConstructionSocketType::Rafter_Top_Face &&
 				TargetPiece)
 			{
-				ARoofSheathing* RoofSheet = Cast<ARoofSheathing>(this);
+				const ARoofSheathing* RoofSheet = Cast<const ARoofSheathing>(this);
 				if (RoofSheet)
 				{
 					// Get rafter orientation
