@@ -1577,7 +1577,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				TgtSocketType == EConstructionSocketType::Rafter_Top_Face &&
 				TargetPiece)
 			{
-				const ARoofSheathing* RoofSheet = Cast<const ARoofSheathing>(this);
+				ARoofSheathing* RoofSheet = Cast<ARoofSheathing>(this);
 				if (RoofSheet)
 				{
 					// Get rafter orientation
@@ -1594,19 +1594,18 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// Rafter runs from ridge to fascia. Ridge direction is 90° from rafter yaw.
 					float RidgeYaw = RafterYaw + 90.0f;
 
-					// Build rotation from direction vectors instead of Euler angles.
-					// Euler (Yaw=RidgeYaw, Pitch=RafterPitch) produces a crooked result
-					// because the pitch axis rotates with the yaw offset.
-					// Instead: Sheet X = ridge direction, Sheet Z = roof surface normal.
-					FVector RidgeDirVec = FRotator(0, RidgeYaw, 0).RotateVector(FVector::ForwardVector);
-					FVector RoofNormal = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::UpVector);
-					CandidateRotation = FRotationMatrix::MakeFromXZ(RidgeDirVec, RoofNormal).Rotator();
+					// Sheet rotation: yaw follows ridge direction, pitch matches roof slope
+					CandidateRotation.Yaw = RidgeYaw;
+					CandidateRotation.Pitch = RafterPitch;
+					CandidateRotation.Roll = 0.0f;
 
 					// Offset sheet so it sits ON TOP of the rafter (not centered on it)
 					// Rafter depth = 13.97cm (2x6). Sheet sits on the top face.
 					const float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm
 					const float SheetHalfThick = 1.27f / 2.0f;    // 0.635cm
 
+					// Roof normal direction (perpendicular to roof surface, pointing outward)
+					FVector RoofNormal = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::UpVector);
 					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
 
 					// --- Grid snap along ridge direction ---
@@ -2698,19 +2697,12 @@ int32 ABuildablePiece::GetSocketConnectionPriority(EConstructionSocketType Socke
 		return 850;
 	}
 
-	// Ridge post bottom to double top plate end (preferred target)
+	// Ridge post bottom to double top plate / top plate top
 	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
-		 SocketB == EConstructionSocketType::DoubleTopPlate_End) ||
-		(SocketA == EConstructionSocketType::DoubleTopPlate_End &&
-		 SocketB == EConstructionSocketType::RidgePost_Bottom))
-	{
-		return 850;
-	}
-
-	// Ridge post bottom to top plate top (fallback if no DTP)
-	if ((SocketA == EConstructionSocketType::RidgePost_Bottom &&
-		 SocketB == EConstructionSocketType::TopPlate_Top) ||
-		(SocketA == EConstructionSocketType::TopPlate_Top &&
+		 (SocketB == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketB == EConstructionSocketType::TopPlate_Top)) ||
+		((SocketA == EConstructionSocketType::DoubleTopPlate_End ||
+		  SocketA == EConstructionSocketType::TopPlate_Top) &&
 		 SocketB == EConstructionSocketType::RidgePost_Bottom))
 	{
 		return 800;

@@ -388,15 +388,12 @@ bool ASocketManager::FindBestSnapPoint(
 				                    TargetSocket.SocketType == EConstructionSocketType::Wall_Stud_Bottom);
 				bool bRoofSheathingSource = (SourceSocket.SocketType == EConstructionSocketType::RoofSheathing_Face);
 				bool bRafterTopFaceTarget = (TargetSocket.SocketType == EConstructionSocketType::Rafter_Top_Face);
-				bool bRidgePostSource = (SourceSocket.SocketType == EConstructionSocketType::RidgePost_Bottom);
-				bool bDTPEndTarget = (TargetSocket.SocketType == EConstructionSocketType::DoubleTopPlate_End);
 				if (!((bPlywoodSource || bBottomPlateSource) && bFramingTarget) &&
 				    !bWallPlateTarget &&
 				    !(bTopPlateSource && bStudPostTopTarget) &&
 				    !(bRafterBirdsmouthSource && bTopPlateTopTarget) &&
 				    !(bWallSheathingSource && (bStudTarget || bWallPlateTarget)) &&
-				    !(bRoofSheathingSource && bRafterTopFaceTarget) &&
-				    !(bRidgePostSource && (bDTPEndTarget || bTopPlateTopTarget)))
+				    !(bRoofSheathingSource && bRafterTopFaceTarget))
 				{
 					continue;
 				}
@@ -835,7 +832,7 @@ void ASocketManager::CreateRoofSheathingRules()
 	FaceToRafterRule.SourceSocketType = EConstructionSocketType::RoofSheathing_Face;
 	FaceToRafterRule.CompatibleSocketTypes.Add(EConstructionSocketType::Rafter_Top_Face);
 	FaceToRafterRule.RequiredPhase = EConstructionPhase::RoofSheathing;
-	FaceToRafterRule.SnapDistance = 300.0f;
+	FaceToRafterRule.SnapDistance = 150.0f;
 	FaceToRafterRule.bCheckAlignment = false;
 	FaceToRafterRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(FaceToRafterRule);
@@ -845,7 +842,7 @@ void ASocketManager::CreateRoofSheathingRules()
 	RafterToFaceRule.SourceSocketType = EConstructionSocketType::Rafter_Top_Face;
 	RafterToFaceRule.CompatibleSocketTypes.Add(EConstructionSocketType::RoofSheathing_Face);
 	RafterToFaceRule.RequiredPhase = EConstructionPhase::RoofSheathing;
-	RafterToFaceRule.SnapDistance = 300.0f;
+	RafterToFaceRule.SnapDistance = 150.0f;
 	RafterToFaceRule.bCheckAlignment = false;
 	RafterToFaceRule.MaxAlignmentAngle = 15.0f;
 	CompatibilityRules.Add(RafterToFaceRule);
