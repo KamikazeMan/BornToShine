@@ -1702,6 +1702,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					// Sheets start from RidgeStart + stagger offset
 					float EffectiveStart = RidgeStart + StaggerOffset;
+					// Recalculate max ridge index based on effective span after stagger
+					float EffectiveSpan = RidgeEnd - EffectiveStart;
+					if (EffectiveSpan > 0.0f)
+					{
+						MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(EffectiveSpan / RidgeGridSize) - 1);
+					}
 					float RelAlongRidge = AlongRidge - EffectiveStart;
 					int32 RidgeIdx = FMath::RoundToInt((RelAlongRidge - SheetHalfLen) / RidgeGridSize);
 					RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
