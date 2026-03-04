@@ -1661,15 +1661,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
 					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
 					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
-
 					float SnappedAlongSlope;
-					if (SlopeIdx == MaxSlopeIdx && MaxSlopeLen > (SlopeIdx * SlopeGridSize))
+					if (SlopeIdx == MaxSlopeIdx)
 					{
-						// Last row: position so bottom edge starts at previous row's top edge
-						// and top edge extends to the roof edge (MaxSlopeLen)
 						float RowStart = SlopeIdx * SlopeGridSize;
 						float RowEnd = MaxSlopeLen;
-						SnappedAlongSlope = (RowStart + RowEnd) / 2.0f;
+						float Remaining = RowEnd - RowStart;
+						if (Remaining < SlopeGridSize && Remaining > 1.0f)
+						{
+							// Last row: center on remaining space
+							SnappedAlongSlope = (RowStart + RowEnd) / 2.0f;
+						}
+						else
+						{
+							SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
+						}
 					}
 					else
 					{
@@ -1702,12 +1708,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					// Sheet center position along ridge
 					float SnappedAlongRidge;
-					if (RidgeIdx == MaxRidgeIdx && RidgeEnd > (EffectiveStart + RidgeIdx * RidgeGridSize + RidgeGridSize))
+					if (RidgeIdx == MaxRidgeIdx)
 					{
-						// Last sheet: center on remaining space
 						float ColStart = EffectiveStart + (RidgeIdx * RidgeGridSize);
 						float ColEnd = RidgeEnd;
-						SnappedAlongRidge = (ColStart + ColEnd) / 2.0f;
+						float Remaining = ColEnd - ColStart;
+						if (Remaining < RidgeGridSize && Remaining > 1.0f)
+						{
+							// Last sheet: center on remaining space
+							SnappedAlongRidge = (ColStart + ColEnd) / 2.0f;
+						}
+						else
+						{
+							SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+						}
 					}
 					else
 					{
@@ -2359,6 +2373,54 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 	// Corner joints: boards stay at centerline positions (centered on foundation).
 	// Small overlap at corners is acceptable — boards sit centered on their foundations.
 	SetActorLocation(FinalLocation);
+
+	// Roof sheathing: preview-time trimming so ghost shows actual trimmed size
+	if (PieceType == EPieceType::RoofSheathing)
+	{
+		ARoofSheathing* RoofSheet = Cast<ARoofSheathing>(this);
+		if (RoofSheet && MeshComponent && MeshComponent->GetStaticMesh() &&
+			!RoofSheet->RoofRidgeDir.IsNearlyZero() && !RoofSheet->RoofSlopeDir.IsNearlyZero())
+		{
+			FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
+			float UnscaledX = Bounds.BoxExtent.X * 2.0f;
+			float UnscaledY = Bounds.BoxExtent.Y * 2.0f;
+			float SheetHalfX = UnscaledX / 2.0f;
+			float SheetHalfY = UnscaledY / 2.0f;
+			FVector ToSheet = FinalLocation - RoofSheet->RoofRafterOrigin;
+			float SheetAlongRidge = FVector::DotProduct(ToSheet, RoofSheet->RoofRidgeDir);
+			float SheetAlongSlope = FVector::DotProduct(ToSheet, RoofSheet->RoofSlopeDir);
+			float SheetRidgeLeft = SheetAlongRidge - SheetHalfX;
+			float SheetRidgeRight = SheetAlongRidge + SheetHalfX;
+			float SheetSlopeBottom = SheetAlongSlope - SheetHalfY;
+			float SheetSlopeTop = SheetAlongSlope + SheetHalfY;
+			float TrimLeft = FMath::Max(SheetRidgeLeft, RoofSheet->RoofRidgeStart);
+			float TrimRight = FMath::Min(SheetRidgeRight, RoofSheet->RoofRidgeEnd);
+			float TrimBottom = FMath::Max(SheetSlopeBottom, 0.0f);
+			float TrimTop = FMath::Min(SheetSlopeTop, RoofSheet->RoofSlopeMax);
+			bool bNeedsTrim = (TrimLeft > SheetRidgeLeft + 0.1f || TrimRight < SheetRidgeRight - 0.1f ||
+							   TrimBottom > SheetSlopeBottom + 0.1f || TrimTop < SheetSlopeTop - 0.1f);
+			if (bNeedsTrim)
+			{
+				float NewWidth = TrimRight - TrimLeft;
+				float NewHeight = TrimTop - TrimBottom;
+				if (NewWidth > 5.0f && NewHeight > 5.0f)
+				{
+					float ScaleX = NewWidth / UnscaledX;
+					float ScaleY = NewHeight / UnscaledY;
+					FVector CurScale = MeshComponent->GetRelativeScale3D();
+					MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, CurScale.Z));
+					float TrimCenterRidge = ((TrimLeft + TrimRight) / 2.0f) - SheetAlongRidge;
+					float TrimCenterSlope = ((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope;
+					MeshComponent->SetRelativeLocation(FVector(TrimCenterRidge, TrimCenterSlope, 0.0f));
+				}
+			}
+			else
+			{
+				MeshComponent->SetRelativeScale3D(FVector(1.0f, 1.0f, 1.0f));
+				MeshComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 0.0f));
+			}
+		}
+	}
 
 	// Wall sheathing: detect which edge is at a corner and shift the extension to that side
 	if (PieceType == EPieceType::WallSheathing && Candidate.TargetPiece)
