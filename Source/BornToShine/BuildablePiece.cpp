@@ -1691,12 +1691,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// Clamp so sheet doesn't extend past slope length
 					// No clamping — TryPlace() will trim sheets that extend past roof edges
 
-					// === STAGGER: odd rows offset by half a sheet (4ft) along ridge ===
-					float StaggerOffset = 0.0f;
-					if (SlopeIdx % 2 == 1)
-					{
-						StaggerOffset = 121.92f; // 4ft offset for odd rows
-					}
+					float StaggerOffset = 0.0f; // No stagger — clean grid on small buildings
 
 					// === RIDGE GRID: tile 8ft sheets from RidgeStart ===
 					const float RidgeGridSize = 243.84f; // 8ft per sheet
@@ -1707,12 +1702,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					// Sheets start from RidgeStart + stagger offset
 					float EffectiveStart = RidgeStart + StaggerOffset;
-					// Recalculate max ridge index based on effective span after stagger
-					float EffectiveSpan = RidgeEnd - EffectiveStart;
-					if (EffectiveSpan > 0.0f)
-					{
-						MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(EffectiveSpan / RidgeGridSize) - 1);
-					}
 					float RelAlongRidge = AlongRidge - EffectiveStart;
 					int32 RidgeIdx = FMath::RoundToInt((RelAlongRidge - SheetHalfLen) / RidgeGridSize);
 					RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
@@ -1788,8 +1777,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						float Now = GetWorld()->GetTimeSeconds();
 						if (Now - LastRoofLog > 2.0f)
 						{
-							UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d Stagger=%.1f"),
-								RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx, StaggerOffset);
+							UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d"),
+								RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx);
 							LastRoofLog = Now;
 						}
 					}
