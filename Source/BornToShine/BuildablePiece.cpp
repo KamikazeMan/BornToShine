@@ -1758,6 +1758,31 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
 					CandidateLocation += SlopeDir * (SnappedAlongSlope - AlongSlope);
 
+					// Skip if a roof sheathing sheet already exists at this grid position
+					if (AConstructionPhaseManager::Instance)
+					{
+						TArray<ABuildablePiece*> ExistingSheets =
+							AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RoofSheathing);
+						bool bSlotOccupied = false;
+						for (ABuildablePiece* Existing : ExistingSheets)
+						{
+							if (Existing && Existing != this)
+							{
+								float DistSq = FVector::DistSquared(Existing->GetActorLocation(), CandidateLocation);
+								if (DistSq < 900.0f) // 30cm tolerance
+								{
+									bSlotOccupied = true;
+									break;
+								}
+							}
+						}
+						if (bSlotOccupied)
+						{
+							// Try next rafter — this grid slot is taken
+							continue;
+						}
+					}
+
 					{
 						static float LastRoofLog = 0.0f;
 						float Now = GetWorld()->GetTimeSeconds();
