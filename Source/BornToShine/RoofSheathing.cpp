@@ -73,115 +73,87 @@ bool ARoofSheathing::TryPlace()
 	if (!Super::TryPlace()) return false;
 	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
 
+	// Roof boundaries were set by the snap system in DetectSnapCandidates
+	if (RoofRidgeDir.IsNearlyZero() || RoofSlopeDir.IsNearlyZero()) return true;
+
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float UnscaledX = Bounds.BoxExtent.X * 2.0f; // 243.84 along ridge
-	float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // 121.92 along slope
-
-	FRotator ActorRot = GetActorRotation();
-	FVector ActorLoc = GetActorLocation();
-	FVector SheetRidgeDir = ActorRot.RotateVector(FVector::ForwardVector);
-	FVector SheetSlopeDir = ActorRot.RotateVector(FVector::RightVector);
-
-	// Find all same-side rafters
-	TArray<AActor*> AllRafters;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ARafter::StaticClass(), AllRafters);
-
-	float MinRidgeProj = FLT_MAX;
-	float MaxRidgeProj = -FLT_MAX;
-	float MaxSlopeLen = 0.0f;
-	int32 RafterCount = 0;
-
-	for (AActor* A : AllRafters)
-	{
-		ARafter* R = Cast<ARafter>(A);
-		if (!R) continue;
-		if (FVector::Dist(R->GetActorLocation(), ActorLoc) > 500.0f) continue;
-
-		FVector RafterFwd = R->GetActorRotation().RotateVector(FVector::ForwardVector);
-		if (FVector::DotProduct(RafterFwd, SheetSlopeDir) < 0.5f) continue;
-
-		RafterCount++;
-		float RidgeProj = FVector::DotProduct(R->GetActorLocation() - ActorLoc, SheetRidgeDir);
-		MinRidgeProj = FMath::Min(MinRidgeProj, RidgeProj);
-		MaxRidgeProj = FMath::Max(MaxRidgeProj, RidgeProj);
-		MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
-	}
-
-	if (RafterCount < 2) return true;
-
-	// Roof boundaries relative to sheet center
-	const float RafterHalfW = 1.905f;
-	float RoofLeft = MinRidgeProj - RafterHalfW;
-	float RoofRight = MaxRidgeProj + RafterHalfW;
-
-	// Find nearest rafter to get slope reference
-	ARafter* NearestRafter = nullptr;
-	float NearestDist = FLT_MAX;
-	for (AActor* A : AllRafters)
-	{
-		ARafter* R = Cast<ARafter>(A);
-		if (!R) continue;
-		FVector RafterFwd = R->GetActorRotation().RotateVector(FVector::ForwardVector);
-		if (FVector::DotProduct(RafterFwd, SheetSlopeDir) < 0.5f) continue;
-		float D = FVector::Dist(R->GetActorLocation(), ActorLoc);
-		if (D < NearestDist) { NearestDist = D; NearestRafter = R; }
-	}
-	if (!NearestRafter) return true;
-
-	// Sheet center position along slope, relative to rafter ridge end
-	float SheetCenterSlope = FVector::DotProduct(ActorLoc - NearestRafter->GetActorLocation(), SheetSlopeDir);
-
-	// Sheet edges in local space
+	float UnscaledX = Bounds.BoxExtent.X * 2.0f; // along ridge
+	float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // along slope
 	float SheetHalfX = UnscaledX / 2.0f;
 	float SheetHalfY = UnscaledY / 2.0f;
 
-	// Clamp ridge edges
-	float LeftEdge = -SheetHalfX;
-	float RightEdge = SheetHalfX;
+	FVector ActorLoc = GetActorLocation();
 
-	if (LeftEdge < RoofLeft) LeftEdge = RoofLeft;
-	if (RightEdge > RoofRight) RightEdge = RoofRight;
+	// Sheet center position in roof coordinate system
+	FVector ToSheet = ActorLoc - RoofRafterOrigin;
+	float SheetAlongRidge = FVector::DotProduct(ToSheet, RoofRidgeDir);
+	float SheetAlongSlope = FVector::DotProduct(ToSheet, RoofSlopeDir);
 
-	// Clamp slope edges (relative to sheet center)
-	float BottomEdge = -SheetHalfY; // toward ridge board
-	float TopEdge = SheetHalfY;     // toward fascia
+	// Sheet edges in roof coordinates (absolute positions)
+	float SheetRidgeLeft = SheetAlongRidge - SheetHalfX;
+	float SheetRidgeRight = SheetAlongRidge + SheetHalfX;
+	float SheetSlopeBottom = SheetAlongSlope - SheetHalfY; // toward ridge board
+	float SheetSlopeTop = SheetAlongSlope + SheetHalfY;    // toward fascia
 
-	// Absolute slope positions of sheet edges
-	float AbsSlopeBottom = SheetCenterSlope + BottomEdge;
-	float AbsSlopeTop = SheetCenterSlope + TopEdge;
+	// Trim to roof boundaries
+	float TrimLeft = SheetRidgeLeft;
+	float TrimRight = SheetRidgeRight;
+	float TrimBottom = SheetSlopeBottom;
+	float TrimTop = SheetSlopeTop;
 
-	if (AbsSlopeBottom < 0.0f)
+	bool bNeedsTrim = false;
+
+	// Ridge direction trim
+	if (TrimLeft < RoofRidgeStart)
 	{
-		BottomEdge = -SheetCenterSlope; // trim at ridge board (slope=0)
+		TrimLeft = RoofRidgeStart;
+		bNeedsTrim = true;
 	}
-	if (AbsSlopeTop > MaxSlopeLen)
+	if (TrimRight > RoofRidgeEnd)
 	{
-		TopEdge = MaxSlopeLen - SheetCenterSlope; // trim at fascia
+		TrimRight = RoofRidgeEnd;
+		bNeedsTrim = true;
 	}
 
-	// Check if any trimming needed
-	float NewWidth = RightEdge - LeftEdge;
-	float NewHeight = TopEdge - BottomEdge;
+	// Slope direction trim
+	if (TrimBottom < 0.0f)
+	{
+		TrimBottom = 0.0f;
+		bNeedsTrim = true;
+	}
+	if (TrimTop > RoofSlopeMax)
+	{
+		TrimTop = RoofSlopeMax;
+		bNeedsTrim = true;
+	}
 
-	bool bTrimmedX = FMath::Abs(NewWidth - UnscaledX) > 1.0f;
-	bool bTrimmedY = FMath::Abs(NewHeight - UnscaledY) > 1.0f;
+	if (!bNeedsTrim) return true;
 
-	if (!bTrimmedX && !bTrimmedY) return true;
-	if (NewWidth < 5.0f || NewHeight < 5.0f) return true;
+	float NewWidth = TrimRight - TrimLeft;
+	float NewHeight = TrimTop - TrimBottom;
 
-	// Apply scale
+	if (NewWidth < 5.0f || NewHeight < 5.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: Trimmed too small (%.1f x %.1f) — skipping"), NewWidth, NewHeight);
+		return true;
+	}
+
+	// Scale mesh
 	float ScaleX = NewWidth / UnscaledX;
 	float ScaleY = NewHeight / UnscaledY;
 	FVector CurScale = MeshComponent->GetRelativeScale3D();
 	MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, CurScale.Z));
 
-	// Offset mesh to center of trimmed region
-	float OffsetX = (LeftEdge + RightEdge) / 2.0f;
-	float OffsetY = (BottomEdge + TopEdge) / 2.0f;
-	MeshComponent->SetRelativeLocation(FVector(OffsetX, OffsetY, 0.0f));
+	// Offset mesh center to the center of the trimmed region.
+	// The offset is in LOCAL sheet space (X=ridge, Y=slope).
+	// TrimLeft/TrimRight are in absolute roof coords. Convert to relative to sheet center.
+	float TrimCenterRidge = ((TrimLeft + TrimRight) / 2.0f) - SheetAlongRidge;
+	float TrimCenterSlope = ((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope;
+	MeshComponent->SetRelativeLocation(FVector(TrimCenterRidge, TrimCenterSlope, 0.0f));
 
-	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed %.1fx%.1f -> %.1fx%.1f (scale=%.3f,%.3f offset=%.1f,%.1f)"),
-		UnscaledX, UnscaledY, NewWidth, NewHeight, ScaleX, ScaleY, OffsetX, OffsetY);
+	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed %.1fx%.1f -> %.1fx%.1f (scale=%.3f,%.3f offset=%.1f,%.1f) Ridge=[%.1f,%.1f] Slope=[%.1f,%.1f]"),
+		UnscaledX, UnscaledY, NewWidth, NewHeight, ScaleX, ScaleY, TrimCenterRidge, TrimCenterSlope,
+		TrimLeft, TrimRight, TrimBottom, TrimTop);
 
 	return true;
 }

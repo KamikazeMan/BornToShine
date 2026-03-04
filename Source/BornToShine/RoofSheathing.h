@@ -22,6 +22,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float SheetThickness;  // 0.50" = 1.27cm
 
+	// Set by snap system, used by TryPlace() for trimming
+	float RoofRidgeStart = 0.0f;
+	float RoofRidgeEnd = 0.0f;
+	float RoofSlopeMax = 0.0f;
+	FVector RoofRidgeDir = FVector::ZeroVector;
+	FVector RoofSlopeDir = FVector::ZeroVector;
+	FVector RoofRafterOrigin = FVector::ZeroVector;
+
 	virtual void ScalePiece(float ScaleDelta) override;
 	virtual bool TryPlace() override;
 

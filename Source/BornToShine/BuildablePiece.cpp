@@ -1667,15 +1667,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					float SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
 
 					// Clamp so sheet doesn't extend past slope length
-					float SheetHalfW = RoofSheet->SheetWidth / 2.0f;
-					if (SnappedAlongSlope + SheetHalfW > MaxSlopeLen)
-					{
-						SnappedAlongSlope = MaxSlopeLen - SheetHalfW;
-					}
-					if (SnappedAlongSlope - SheetHalfW < 0.0f)
-					{
-						SnappedAlongSlope = SheetHalfW;
-					}
+					// No clamping — TryPlace() will trim sheets that extend past roof edges
 
 					// === STAGGER: odd rows offset by half a sheet (4ft) along ridge ===
 					float StaggerOffset = 0.0f;
@@ -1700,15 +1692,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// Sheet center position along ridge
 					float SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
 
-					// Clamp so sheet doesn't extend past roof edges
-					if (SnappedAlongRidge - SheetHalfLen < RidgeStart)
+					// Store roof boundaries on the sheet for TryPlace() trimming
+					ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
+					if (MutableSheet)
 					{
-						SnappedAlongRidge = RidgeStart + SheetHalfLen;
+						MutableSheet->RoofRidgeStart = RidgeStart;
+						MutableSheet->RoofRidgeEnd = RidgeEnd;
+						MutableSheet->RoofSlopeMax = MaxSlopeLen;
+						MutableSheet->RoofRidgeDir = RidgeDir;
+						MutableSheet->RoofSlopeDir = SlopeDir;
+						MutableSheet->RoofRafterOrigin = RafterLoc;
 					}
-					if (SnappedAlongRidge + SheetHalfLen > RidgeEnd)
-					{
-						SnappedAlongRidge = RidgeEnd - SheetHalfLen;
-					}
+
+					// No clamping — TryPlace() will trim sheets that extend past roof edges
 
 					// Apply final position
 					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
