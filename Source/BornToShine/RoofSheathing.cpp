@@ -73,18 +73,14 @@ bool ARoofSheathing::TryPlace()
 	if (!Super::TryPlace()) return false;
 	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
 
-	// Get mesh info
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	FVector MeshScale = MeshComponent->GetRelativeScale3D();
-	float UnscaledX = Bounds.BoxExtent.X * 2.0f; // 243.84 (8ft along ridge)
-	float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // 121.92 (4ft along slope)
+	float UnscaledX = Bounds.BoxExtent.X * 2.0f; // 243.84 along ridge
+	float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // 121.92 along slope
 
-	// Sheet's world-space axes
 	FRotator ActorRot = GetActorRotation();
 	FVector ActorLoc = GetActorLocation();
-	FVector SheetRidgeDir = ActorRot.RotateVector(FVector::ForwardVector);  // mesh X = along ridge
-	FVector SheetSlopeDir = ActorRot.RotateVector(FVector::RightVector);    // mesh Y = along slope
-	FVector SheetNormal = ActorRot.RotateVector(FVector::UpVector);         // mesh Z = roof normal
+	FVector SheetRidgeDir = ActorRot.RotateVector(FVector::ForwardVector);
+	FVector SheetSlopeDir = ActorRot.RotateVector(FVector::RightVector);
 
 	// Find all same-side rafters
 	TArray<AActor*> AllRafters;
@@ -99,46 +95,26 @@ bool ARoofSheathing::TryPlace()
 	{
 		ARafter* R = Cast<ARafter>(A);
 		if (!R) continue;
+		if (FVector::Dist(R->GetActorLocation(), ActorLoc) > 500.0f) continue;
 
-		FVector ToRafter = R->GetActorLocation() - ActorLoc;
-		if (ToRafter.Size() > 500.0f) continue;
-
-		// Same side check
 		FVector RafterFwd = R->GetActorRotation().RotateVector(FVector::ForwardVector);
-		float SlopeDot = FVector::DotProduct(RafterFwd, SheetSlopeDir);
-		if (SlopeDot < 0.5f) continue;
+		if (FVector::DotProduct(RafterFwd, SheetSlopeDir) < 0.5f) continue;
 
 		RafterCount++;
-
-		// Project rafter position onto ridge direction
-		float RidgeProj = FVector::DotProduct(ToRafter, SheetRidgeDir);
+		float RidgeProj = FVector::DotProduct(R->GetActorLocation() - ActorLoc, SheetRidgeDir);
 		MinRidgeProj = FMath::Min(MinRidgeProj, RidgeProj);
 		MaxRidgeProj = FMath::Max(MaxRidgeProj, RidgeProj);
-
 		MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 	}
 
-	if (RafterCount < 2) return true; // Not enough rafters to determine bounds
+	if (RafterCount < 2) return true;
 
-	// Roof boundaries relative to this sheet's center
+	// Roof boundaries relative to sheet center
 	const float RafterHalfW = 1.905f;
-	float RoofRidgeMin = MinRidgeProj - RafterHalfW; // left edge of roof along ridge
-	float RoofRidgeMax = MaxRidgeProj + RafterHalfW;  // right edge of roof along ridge
+	float RoofLeft = MinRidgeProj - RafterHalfW;
+	float RoofRight = MaxRidgeProj + RafterHalfW;
 
-	// Sheet's current extent relative to its center (unscaled, in local coords)
-	float SheetHalfX = UnscaledX / 2.0f; // half of 8ft along ridge
-	float SheetHalfY = UnscaledY / 2.0f; // half of 4ft along slope
-
-	// Sheet edges in roof-projected space (relative to actor center)
-	float SheetLeftRidge = -SheetHalfX;
-	float SheetRightRidge = SheetHalfX;
-	float SheetStartSlope = -SheetHalfY; // toward ridge board (up slope)
-	float SheetEndSlope = SheetHalfY;     // toward fascia (down slope)
-
-	// The sheet center's position along the slope relative to rafter origin
-	// is determined by the snap system. We need to know where the rafter origin
-	// (ridge end) is relative to this sheet center.
-	// Find nearest rafter to get reference
+	// Find nearest rafter to get slope reference
 	ARafter* NearestRafter = nullptr;
 	float NearestDist = FLT_MAX;
 	for (AActor* A : AllRafters)
@@ -150,152 +126,62 @@ bool ARoofSheathing::TryPlace()
 		float D = FVector::Dist(R->GetActorLocation(), ActorLoc);
 		if (D < NearestDist) { NearestDist = D; NearestRafter = R; }
 	}
-
 	if (!NearestRafter) return true;
 
-	// Sheet center position along slope relative to rafter ridge end
-	FVector ToSheetFromRafter = ActorLoc - NearestRafter->GetActorLocation();
-	float SheetCenterAlongSlope = FVector::DotProduct(ToSheetFromRafter, SheetSlopeDir);
+	// Sheet center position along slope, relative to rafter ridge end
+	float SheetCenterSlope = FVector::DotProduct(ActorLoc - NearestRafter->GetActorLocation(), SheetSlopeDir);
 
-	// Slope boundaries: 0 = ridge end of rafter, MaxSlopeLen = tail end
-	float SlopeStart = 0.0f;            // ridge board
-	float SlopeEnd = MaxSlopeLen;        // rafter tail / fascia
+	// Sheet edges in local space
+	float SheetHalfX = UnscaledX / 2.0f;
+	float SheetHalfY = UnscaledY / 2.0f;
 
-	// Sheet edges in slope space (absolute, not relative to center)
-	float SheetSlopeMin = SheetCenterAlongSlope - SheetHalfY;
-	float SheetSlopeMax = SheetCenterAlongSlope + SheetHalfY;
+	// Clamp ridge edges
+	float LeftEdge = -SheetHalfX;
+	float RightEdge = SheetHalfX;
 
-	// Determine how much to trim
-	bool bNeedsTrim = false;
+	if (LeftEdge < RoofLeft) LeftEdge = RoofLeft;
+	if (RightEdge > RoofRight) RightEdge = RoofRight;
 
-	// Trim along ridge: clamp to roof edges
-	float TrimmedLeftRidge = SheetLeftRidge;
-	float TrimmedRightRidge = SheetRightRidge;
+	// Clamp slope edges (relative to sheet center)
+	float BottomEdge = -SheetHalfY; // toward ridge board
+	float TopEdge = SheetHalfY;     // toward fascia
 
-	if (SheetLeftRidge < RoofRidgeMin)
+	// Absolute slope positions of sheet edges
+	float AbsSlopeBottom = SheetCenterSlope + BottomEdge;
+	float AbsSlopeTop = SheetCenterSlope + TopEdge;
+
+	if (AbsSlopeBottom < 0.0f)
 	{
-		TrimmedLeftRidge = RoofRidgeMin;
-		bNeedsTrim = true;
+		BottomEdge = -SheetCenterSlope; // trim at ridge board (slope=0)
 	}
-	if (SheetRightRidge > RoofRidgeMax)
+	if (AbsSlopeTop > MaxSlopeLen)
 	{
-		TrimmedRightRidge = RoofRidgeMax;
-		bNeedsTrim = true;
-	}
-
-	// Trim along slope: clamp to rafter extent
-	float TrimmedStartSlope = SheetStartSlope;
-	float TrimmedEndSlope = SheetEndSlope;
-
-	if (SheetSlopeMin < SlopeStart)
-	{
-		// Sheet extends past ridge board — trim the ridge-side edge
-		float OverlapAtRidge = SlopeStart - SheetSlopeMin;
-		TrimmedStartSlope = SheetStartSlope + OverlapAtRidge;
-		bNeedsTrim = true;
-	}
-	if (SheetSlopeMax > SlopeEnd)
-	{
-		// Sheet extends past fascia — trim the fascia-side edge
-		float OverlapAtFascia = SheetSlopeMax - SlopeEnd;
-		TrimmedEndSlope = SheetEndSlope - OverlapAtFascia;
-		bNeedsTrim = true;
+		TopEdge = MaxSlopeLen - SheetCenterSlope; // trim at fascia
 	}
 
-	// Now check for overlap with OTHER placed roof sheathing sheets.
-	// If this sheet overlaps an already-placed sheet, trim this one back.
-	const float SlopeGridSize = 121.92f;
-	const float RidgeGridSize = 243.84f;
+	// Check if any trimming needed
+	float NewWidth = RightEdge - LeftEdge;
+	float NewHeight = TopEdge - BottomEdge;
 
-	TArray<AActor*> AllSheathing;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ARoofSheathing::StaticClass(), AllSheathing);
+	bool bTrimmedX = FMath::Abs(NewWidth - UnscaledX) > 1.0f;
+	bool bTrimmedY = FMath::Abs(NewHeight - UnscaledY) > 1.0f;
 
-	for (AActor* A : AllSheathing)
-	{
-		ARoofSheathing* Other = Cast<ARoofSheathing>(A);
-		if (!Other || Other == this) continue;
-		if (Other->GetPieceState() != EPieceState::Placed && Other->GetPieceState() != EPieceState::Nailed) continue;
-
-		// Check if on same side of roof (similar normal direction)
-		FVector OtherNormal = Other->GetActorRotation().RotateVector(FVector::UpVector);
-		if (FVector::DotProduct(SheetNormal, OtherNormal) < 0.5f) continue;
-
-		FVector ToOther = Other->GetActorLocation() - ActorLoc;
-		float OtherAlongRidge = FVector::DotProduct(ToOther, SheetRidgeDir);
-		float OtherAlongSlope = FVector::DotProduct(ToOther, SheetSlopeDir);
-
-		// Get other sheet's current dimensions (may already be trimmed)
-		FVector OtherScale = Other->MeshComponent ? Other->MeshComponent->GetRelativeScale3D() : FVector(1,1,1);
-		float OtherHalfX = (UnscaledX * OtherScale.X) / 2.0f;
-		float OtherHalfY = (UnscaledY * OtherScale.Y) / 2.0f;
-
-		// Other sheet edges relative to THIS sheet's center
-		float OtherLeftRidge = OtherAlongRidge - OtherHalfX;
-		float OtherRightRidge = OtherAlongRidge + OtherHalfX;
-		float OtherStartSlope = OtherAlongSlope - OtherHalfY;
-		float OtherEndSlope = OtherAlongSlope + OtherHalfY;
-
-		// Check ridge overlap (sheets in same row)
-		bool bSameRow = FMath::Abs(OtherAlongSlope) < SlopeGridSize * 0.75f;
-		if (bSameRow)
-		{
-			// If other sheet is to our right and we overlap
-			if (OtherAlongRidge > 0.0f && TrimmedRightRidge > OtherLeftRidge)
-			{
-				TrimmedRightRidge = OtherLeftRidge;
-				bNeedsTrim = true;
-			}
-			// If other sheet is to our left and we overlap
-			if (OtherAlongRidge < 0.0f && TrimmedLeftRidge < OtherRightRidge)
-			{
-				TrimmedLeftRidge = OtherRightRidge;
-				bNeedsTrim = true;
-			}
-		}
-
-		// Check slope overlap (sheets in same column)
-		bool bSameCol = FMath::Abs(OtherAlongRidge) < RidgeGridSize * 0.75f;
-		if (bSameCol)
-		{
-			// If other sheet is above us (toward ridge) and we overlap
-			if (OtherAlongSlope < 0.0f && TrimmedStartSlope < OtherEndSlope)
-			{
-				TrimmedStartSlope = OtherEndSlope;
-				bNeedsTrim = true;
-			}
-			// If other sheet is below us (toward fascia) and we overlap
-			if (OtherAlongSlope > 0.0f && TrimmedEndSlope > OtherStartSlope)
-			{
-				TrimmedEndSlope = OtherStartSlope;
-				bNeedsTrim = true;
-			}
-		}
-	}
-
-	if (!bNeedsTrim) return true;
-
-	// Calculate trimmed dimensions
-	float NewWidth = TrimmedRightRidge - TrimmedLeftRidge;
-	float NewHeight = TrimmedEndSlope - TrimmedStartSlope;
-
-	// Don't trim to nothing
+	if (!bTrimmedX && !bTrimmedY) return true;
 	if (NewWidth < 5.0f || NewHeight < 5.0f) return true;
 
-	// Scale mesh to trimmed size
+	// Apply scale
 	float ScaleX = NewWidth / UnscaledX;
 	float ScaleY = NewHeight / UnscaledY;
-	MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, MeshScale.Z));
+	FVector CurScale = MeshComponent->GetRelativeScale3D();
+	MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, CurScale.Z));
 
-	// Offset mesh center to match trimmed region
-	float NewCenterX = (TrimmedLeftRidge + TrimmedRightRidge) / 2.0f;
-	float NewCenterY = (TrimmedStartSlope + TrimmedEndSlope) / 2.0f;
+	// Offset mesh to center of trimmed region
+	float OffsetX = (LeftEdge + RightEdge) / 2.0f;
+	float OffsetY = (BottomEdge + TopEdge) / 2.0f;
+	MeshComponent->SetRelativeLocation(FVector(OffsetX, OffsetY, 0.0f));
 
-	// Convert the center offset from roof-projected space back to mesh-local offset
-	// NewCenterX is along SheetRidgeDir (mesh X), NewCenterY is along SheetSlopeDir (mesh Y)
-	MeshComponent->SetRelativeLocation(FVector(NewCenterX, NewCenterY, 0.0f));
-
-	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed to %.1f x %.1f (scale=%.3f, %.3f) offset=(%.1f, %.1f)"),
-		NewWidth, NewHeight, ScaleX, ScaleY, NewCenterX, NewCenterY);
+	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed %.1fx%.1f -> %.1fx%.1f (scale=%.3f,%.3f offset=%.1f,%.1f)"),
+		UnscaledX, UnscaledY, NewWidth, NewHeight, ScaleX, ScaleY, OffsetX, OffsetY);
 
 	return true;
 }

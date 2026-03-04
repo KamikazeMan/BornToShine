@@ -1688,16 +1688,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					const float RidgeGridSize = 243.84f; // 8ft per sheet
 					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
 
+					// How many sheets needed to cover the ridge span
+					int32 MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(RidgeSpan / RidgeGridSize) - 1);
+
 					// Sheets start from RidgeStart + stagger offset
 					float EffectiveStart = RidgeStart + StaggerOffset;
 					float RelAlongRidge = AlongRidge - EffectiveStart;
 					int32 RidgeIdx = FMath::RoundToInt((RelAlongRidge - SheetHalfLen) / RidgeGridSize);
-					RidgeIdx = FMath::Max(RidgeIdx, 0);
-
-					// How many sheets fit along the ridge
-					float EffectiveSpan = RidgeSpan - StaggerOffset;
-					int32 MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(EffectiveSpan / RidgeGridSize) - 1);
-					RidgeIdx = FMath::Min(RidgeIdx, MaxRidgeIdx);
+					RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
 
 					// Sheet center position along ridge
 					float SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
