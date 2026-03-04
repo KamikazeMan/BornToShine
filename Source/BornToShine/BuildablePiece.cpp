@@ -349,7 +349,8 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 				for (const FConstructionSocket& TargetSocket : TargetSockets)
 				{
-					if (TargetSocket.bIsOccupied) continue;
+					// Allow multiple sheets on the same rafter — Rafter_Top_Face can be shared
+					if (TargetSocket.bIsOccupied && TargetSocket.SocketType != EConstructionSocketType::Rafter_Top_Face) continue;
 					if (TargetSocket.SocketType != EConstructionSocketType::RimBoard_End_Corner) continue;
 
 					FVector TargetWorldPos = Piece->GetActorTransform().TransformPosition(TargetSocket.LocalPosition);
