@@ -1649,16 +1649,30 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					float RidgeStart = MinRidgeProj - GableOverhang;
 					float RidgeEnd = MaxRidgeProj + GableOverhang;
 
-					// Snap to 8ft grid along ridge
+					// Snap along ridge
 					const float RidgeGridSize = 243.84f; // 8ft
-					float RelAlongRidge = AlongRidge - RidgeStart;
-					int32 RidgeIdx = FMath::RoundToInt(RelAlongRidge / RidgeGridSize);
-					RidgeIdx = FMath::Max(RidgeIdx, 0);
-					float SnappedAlongRidge = RidgeStart + (RidgeIdx * RidgeGridSize) + RidgeGridSize / 2.0f;
-
-					// Clamp to ridge extent
+					float RidgeSpan = RidgeEnd - RidgeStart;
+					float RidgeMidpoint = (RidgeStart + RidgeEnd) / 2.0f;
 					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
-					SnappedAlongRidge = FMath::Clamp(SnappedAlongRidge, RidgeStart + SheetHalfLen, RidgeEnd - SheetHalfLen);
+
+					float SnappedAlongRidge;
+					int32 RidgeIdx = 0;
+
+					if (RidgeSpan <= RidgeGridSize + 1.0f)
+					{
+						// Small roof — center the sheet on the rafter field
+						SnappedAlongRidge = RidgeMidpoint;
+					}
+					else
+					{
+						// Large roof — grid snap at 8ft intervals from RidgeStart
+						float RelAlongRidge = AlongRidge - RidgeStart;
+						RidgeIdx = FMath::FloorToInt(RelAlongRidge / RidgeGridSize);
+						int32 MaxRidgeIdx = FMath::Max(0, FMath::FloorToInt((RidgeSpan - 1.0f) / RidgeGridSize));
+						RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
+						SnappedAlongRidge = RidgeStart + (RidgeIdx * RidgeGridSize) + RidgeGridSize / 2.0f;
+						SnappedAlongRidge = FMath::Clamp(SnappedAlongRidge, RidgeStart + SheetHalfLen, RidgeEnd - SheetHalfLen);
+					}
 
 					// Apply ridge snap
 					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
