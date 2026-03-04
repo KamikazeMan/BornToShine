@@ -1615,7 +1615,11 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector RidgeDir = RidgeDirVec;
 					FVector RafterLoc = TargetPiece->GetActorLocation();
 
-					float AlongRidge = FVector::DotProduct(CandidateLocation - RafterLoc, RidgeDir);
+					// Use player's aimed position (pre-snap actor location) for column selection
+					// so aiming along the ridge picks different columns.
+					// CandidateLocation is derived from the rafter socket which has the same
+					// ridge-direction position for all rafters on the same side.
+					float AlongRidge = FVector::DotProduct(GetActorLocation() - RafterLoc, RidgeDir);
 
 					// Find end rafter positions along ridge to determine roof width
 					float MinRidgeProj = 0.0f;
