@@ -1582,7 +1582,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				{
 					// Get rafter orientation
 					FRotator RafterRot = TargetPiece->GetActorRotation();
-					float RafterYaw = RafterRot.Yaw;
 					float RafterPitch = RafterRot.Pitch;
 
 					// The sheet lays on the rafter with:
@@ -1590,17 +1589,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// - Sheet Y (4ft/121.92cm) along the SLOPE direction (same as rafter run)
 					// - Sheet Z (thickness) perpendicular to roof surface (normal to slope)
 
-					// Ridge direction is perpendicular to the rafter's horizontal direction
-					// Rafter runs from ridge to fascia. Ridge direction is 90° from rafter yaw.
-					float RidgeYaw = RafterYaw + 90.0f;
+					// Use the rafter's actual transform vectors instead of
+					// reconstructing from Euler components (which produces crooked results).
+					FVector RafterForward = RafterRot.RotateVector(FVector::ForwardVector);
+					FVector RafterUp = RafterRot.RotateVector(FVector::UpVector);
 
-					// Build rotation from direction vectors instead of Euler angles.
-					// Euler (Yaw=RidgeYaw, Pitch=RafterPitch) produces a crooked result
-					// because the pitch axis rotates with the yaw offset.
-					// Instead: Sheet X = ridge direction, Sheet Z = roof surface normal.
-					FVector RidgeDirVec = FRotator(0, RidgeYaw, 0).RotateVector(FVector::ForwardVector);
-					FVector RoofNormal = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::UpVector);
+					// Roof normal = rafter's local up vector (perpendicular to slope)
+					FVector RoofNormal = RafterUp;
+
+					// Ridge direction = perpendicular to rafter slope, lying in the roof plane
+					FVector RidgeDirVec = FVector::CrossProduct(RoofNormal, RafterForward).GetSafeNormal();
+
 					CandidateRotation = FRotationMatrix::MakeFromXZ(RidgeDirVec, RoofNormal).Rotator();
+					float RidgeYaw = CandidateRotation.Yaw;
 
 					// Offset sheet so it sits ON TOP of the rafter (not centered on it)
 					// Rafter depth = 13.97cm (2x6). Sheet sits on the top face.
@@ -1610,7 +1611,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
 
 					// --- Grid snap along ridge direction ---
-					FVector RidgeDir = FRotator(0, RidgeYaw, 0).RotateVector(FVector::ForwardVector);
+					FVector RidgeDir = RidgeDirVec;
 					FVector RafterLoc = TargetPiece->GetActorLocation();
 
 					// Project candidate location onto ridge direction relative to first rafter
@@ -1664,7 +1665,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					// --- Grid snap along slope direction ---
 					// The slope direction runs from fascia to ridge along the rafter
-					FVector SlopeDir = FRotator(RafterPitch, RafterYaw, 0.0f).RotateVector(FVector::ForwardVector);
+					FVector SlopeDir = RafterForward;
 					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
 
 					// Snap at 4ft intervals from the fascia (bottom of rafter = slope distance 0)
