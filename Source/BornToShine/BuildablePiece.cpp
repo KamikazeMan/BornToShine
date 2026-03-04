@@ -1656,15 +1656,26 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector SlopeDir = RafterForward;
 					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
 
-					// Determine slope row (0 = bottom/fascia, 1 = next row up toward ridge)
-					const float SlopeGridSize = 121.92f; // 4ft per row
+					// Snap at 4ft intervals from the ridge (rafter origin = slope distance 0)
+					const float SlopeGridSize = 121.92f; // 4ft
 					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
 					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
 					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
 
-					// Slope position: row 0 starts at rafter origin (ridge end),
-					// each row moves down the slope by 4ft
-					float SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
+					float SnappedAlongSlope;
+					if (SlopeIdx == MaxSlopeIdx && MaxSlopeLen > (SlopeIdx * SlopeGridSize))
+					{
+						// Last row: position so bottom edge starts at previous row's top edge
+						// and top edge extends to the roof edge (MaxSlopeLen)
+						float RowStart = SlopeIdx * SlopeGridSize;
+						float RowEnd = MaxSlopeLen;
+						SnappedAlongSlope = (RowStart + RowEnd) / 2.0f;
+					}
+					else
+					{
+						// Normal row: center at grid position
+						SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
+					}
 
 					// Clamp so sheet doesn't extend past slope length
 					// No clamping — TryPlace() will trim sheets that extend past roof edges
@@ -1690,7 +1701,19 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
 
 					// Sheet center position along ridge
-					float SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+					float SnappedAlongRidge;
+					if (RidgeIdx == MaxRidgeIdx && RidgeEnd > (EffectiveStart + RidgeIdx * RidgeGridSize + RidgeGridSize))
+					{
+						// Last sheet: center on remaining space
+						float ColStart = EffectiveStart + (RidgeIdx * RidgeGridSize);
+						float ColEnd = RidgeEnd;
+						SnappedAlongRidge = (ColStart + ColEnd) / 2.0f;
+					}
+					else
+					{
+						// Normal sheet: center at grid position
+						SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+					}
 
 					// Store roof boundaries on the sheet for TryPlace() trimming
 					ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
