@@ -1716,8 +1716,16 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
 					CandidateLocation += SlopeDir * (SnappedAlongSlope - AlongSlope);
 
-					UE_LOG(LogTemp, Log, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d Stagger=%.1f"),
-						RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx, StaggerOffset);
+					{
+						static float LastRoofLog = 0.0f;
+						float Now = GetWorld()->GetTimeSeconds();
+						if (Now - LastRoofLog > 2.0f)
+						{
+							UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d Stagger=%.1f"),
+								RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx, StaggerOffset);
+							LastRoofLog = Now;
+						}
+					}
 				}
 			}
 
