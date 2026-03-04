@@ -1729,6 +1729,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
 					}
 
+					// Sheathing stops at the fascia board face, not the rafter tail tip.
+					const float RafterTailOverhang = 60.96f; // 24 inches
+					if (MaxSlopeLen > RafterTailOverhang)
+					{
+						MaxSlopeLen -= RafterTailOverhang;
+					}
+
 					// Store roof boundaries on the sheet for TryPlace() trimming
 					ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
 					if (MutableSheet)
