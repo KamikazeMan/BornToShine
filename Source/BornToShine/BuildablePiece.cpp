@@ -1610,27 +1610,25 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
 
-					// --- Grid snap along ridge direction ---
+					// === GRID SNAP: RIDGE DIRECTION (along ridge, 8ft sheets) ===
 					FVector RidgeDir = RidgeDirVec;
 					FVector RafterLoc = TargetPiece->GetActorLocation();
 
-					// Project candidate location onto ridge direction relative to first rafter
 					float AlongRidge = FVector::DotProduct(CandidateLocation - RafterLoc, RidgeDir);
 
-					// Find all rafter positions to determine ridge extent
+					// Find end rafter positions along ridge to determine roof width
 					float MinRidgeProj = 0.0f;
 					float MaxRidgeProj = 0.0f;
 					bool bFirstRafter = true;
-					FVector RefRafterLoc = RafterLoc;
+					float MaxSlopeLen = 0.0f;
 
 					for (ABuildablePiece* P : NearbyPieces)
 					{
 						if (!P || P->GetPieceType() != EPieceType::Rafter) continue;
-						// Only rafters on the same side (similar pitch sign)
 						float PPitch = P->GetActorRotation().Pitch;
-						if (FMath::Sign(PPitch) != FMath::Sign(RafterPitch)) continue;
+						if (FMath::Sign(PPitch) != FMath::Sign(RafterRot.Pitch)) continue;
 
-						float Proj = FVector::DotProduct(P->GetActorLocation() - RefRafterLoc, RidgeDir);
+						float Proj = FVector::DotProduct(P->GetActorLocation() - RafterLoc, RidgeDir);
 						if (bFirstRafter)
 						{
 							MinRidgeProj = Proj;
@@ -1642,56 +1640,84 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 							MinRidgeProj = FMath::Min(MinRidgeProj, Proj);
 							MaxRidgeProj = FMath::Max(MaxRidgeProj, Proj);
 						}
+
+						ARafter* R = Cast<ARafter>(P);
+						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 					}
 
-					// Add gable overhang (30.48cm past end rafters on each side)
-					const float GableOverhang = 30.48f;
-					float RidgeStart = MinRidgeProj - GableOverhang;
-					float RidgeEnd = MaxRidgeProj + GableOverhang;
-
-					// Snap along ridge
-					const float RidgeGridSize = 243.84f; // 8ft
+					// Roof edges flush with end rafters (add half rafter width so
+					// sheathing covers the outer face of end rafters)
+					const float RafterHalfWidth = 1.905f; // half of 3.81cm (2x4 width)
+					float RidgeStart = MinRidgeProj - RafterHalfWidth;
+					float RidgeEnd = MaxRidgeProj + RafterHalfWidth;
 					float RidgeSpan = RidgeEnd - RidgeStart;
-					float RidgeMidpoint = (RidgeStart + RidgeEnd) / 2.0f;
-					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
 
-					float SnappedAlongRidge;
-					int32 RidgeIdx = 0;
-
-					if (RidgeSpan <= RidgeGridSize + 1.0f)
-					{
-						// Small roof — center the sheet on the rafter field
-						SnappedAlongRidge = RidgeMidpoint;
-					}
-					else
-					{
-						// Large roof — grid snap at 8ft intervals from RidgeStart
-						float RelAlongRidge = AlongRidge - RidgeStart;
-						RidgeIdx = FMath::FloorToInt(RelAlongRidge / RidgeGridSize);
-						int32 MaxRidgeIdx = FMath::Max(0, FMath::FloorToInt((RidgeSpan - 1.0f) / RidgeGridSize));
-						RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
-						SnappedAlongRidge = RidgeStart + (RidgeIdx * RidgeGridSize) + RidgeGridSize / 2.0f;
-						SnappedAlongRidge = FMath::Clamp(SnappedAlongRidge, RidgeStart + SheetHalfLen, RidgeEnd - SheetHalfLen);
-					}
-
-					// Apply ridge snap
-					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
-
-					// --- Grid snap along slope direction ---
-					// The slope direction runs from fascia to ridge along the rafter
+					// === SLOPE DIRECTION (fascia to ridge, 4ft sheets) ===
 					FVector SlopeDir = RafterForward;
 					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
 
-					// Snap at 4ft intervals from the fascia (bottom of rafter = slope distance 0)
-					const float SlopeGridSize = 121.92f; // 4ft
+					// Determine slope row (0 = bottom/fascia, 1 = next row up toward ridge)
+					const float SlopeGridSize = 121.92f; // 4ft per row
+					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
 					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
-					SlopeIdx = FMath::Max(SlopeIdx, 0);
+					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
+
+					// Slope position: row 0 starts at rafter origin (ridge end),
+					// each row moves down the slope by 4ft
 					float SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
 
+					// Clamp so sheet doesn't extend past slope length
+					float SheetHalfW = RoofSheet->SheetWidth / 2.0f;
+					if (SnappedAlongSlope + SheetHalfW > MaxSlopeLen)
+					{
+						SnappedAlongSlope = MaxSlopeLen - SheetHalfW;
+					}
+					if (SnappedAlongSlope - SheetHalfW < 0.0f)
+					{
+						SnappedAlongSlope = SheetHalfW;
+					}
+
+					// === STAGGER: odd rows offset by half a sheet (4ft) along ridge ===
+					float StaggerOffset = 0.0f;
+					if (SlopeIdx % 2 == 1)
+					{
+						StaggerOffset = 121.92f; // 4ft offset for odd rows
+					}
+
+					// === RIDGE GRID: tile 8ft sheets from RidgeStart ===
+					const float RidgeGridSize = 243.84f; // 8ft per sheet
+					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
+
+					// Sheets start from RidgeStart + stagger offset
+					float EffectiveStart = RidgeStart + StaggerOffset;
+					float RelAlongRidge = AlongRidge - EffectiveStart;
+					int32 RidgeIdx = FMath::RoundToInt((RelAlongRidge - SheetHalfLen) / RidgeGridSize);
+					RidgeIdx = FMath::Max(RidgeIdx, 0);
+
+					// How many sheets fit along the ridge
+					float EffectiveSpan = RidgeSpan - StaggerOffset;
+					int32 MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(EffectiveSpan / RidgeGridSize) - 1);
+					RidgeIdx = FMath::Min(RidgeIdx, MaxRidgeIdx);
+
+					// Sheet center position along ridge
+					float SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+
+					// Clamp so sheet doesn't extend past roof edges
+					if (SnappedAlongRidge - SheetHalfLen < RidgeStart)
+					{
+						SnappedAlongRidge = RidgeStart + SheetHalfLen;
+					}
+					if (SnappedAlongRidge + SheetHalfLen > RidgeEnd)
+					{
+						SnappedAlongRidge = RidgeEnd - SheetHalfLen;
+					}
+
+					// Apply final position
+					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
 					CandidateLocation += SlopeDir * (SnappedAlongSlope - AlongSlope);
 
-					UE_LOG(LogTemp, Log, TEXT("RoofSheathing: RidgeYaw=%.1f Pitch=%.1f RidgeIdx=%d SlopeIdx=%d"),
-						RidgeYaw, RafterPitch, RidgeIdx, SlopeIdx);
+					UE_LOG(LogTemp, Log, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d Stagger=%.1f"),
+						RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx, StaggerOffset);
 				}
 			}
 
