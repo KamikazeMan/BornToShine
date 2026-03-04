@@ -1650,14 +1650,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 					}
 
-					// Sheathing stops at the fascia board, not the rafter tail tip.
-					// Rafter tail overhang past fascia = ~16" (40.64cm).
-					const float RafterTailOverhang = 40.64f; // 16 inches
-					if (MaxSlopeLen > RafterTailOverhang)
-					{
-						MaxSlopeLen -= RafterTailOverhang;
-					}
-
 					// Roof edges flush with end rafters (add half rafter width so
 					// sheathing covers the outer face of end rafters)
 					const float RafterHalfWidth = 1.905f; // half of 3.81cm (2x4 width)
@@ -1735,6 +1727,13 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					{
 						// Normal sheet: center at grid position
 						SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+					}
+
+					// Sheathing stops at the fascia board, not the rafter tail tip.
+					const float RafterTailOverhang = 20.32f; // 8 inches
+					if (MaxSlopeLen > RafterTailOverhang)
+					{
+						MaxSlopeLen -= RafterTailOverhang;
 					}
 
 					// Store roof boundaries on the sheet for TryPlace() trimming
