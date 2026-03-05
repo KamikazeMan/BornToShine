@@ -324,6 +324,7 @@ void AMoonshinePlayerController::CloseRadialMenu()
 	{
 		RadialMenu->PlaySoundClose();
 		Selected = RadialMenu->GetHighlightedIndex();
+		UE_LOG(LogTemp, Warning, TEXT("Controller: CloseRadialMenu selected index = %d"), Selected);
 		RadialMenu->RemoveFromParent();
 		RadialMenu = nullptr;
 	}

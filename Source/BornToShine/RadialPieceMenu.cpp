@@ -136,14 +136,17 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& Infos, int32 Cur)
 }
 int32 URadialPieceMenu::GetHighlightedIndex() const
 {
+	int32 Result = -1;
 	if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
 		const auto& P = Categories[ActiveCategory].PieceIndices;
 		int32 S = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
-		if (S >= 0 && P.IsValidIndex(S)) return P[S];
-		if (P.Num() > 0) return P[0];
+		if (S >= 0 && P.IsValidIndex(S)) Result = P[S];
+		else if (P.Num() > 0) Result = P[0];
 	}
-	return -1;
+	UE_LOG(LogTemp, Warning, TEXT("RadialMenu: GetHighlightedIndex() ActiveCat=%d SelectedSlot=%d HoverSlot=%d => %d"),
+		ActiveCategory, SelectedPieceSlot, HighlightedPieceSlot, Result);
+	return Result;
 }
 // ============================================================================
 // INPUT
@@ -193,6 +196,10 @@ FReply URadialPieceMenu::NativeOnMouseButtonDown(const FGeometry& G, const FPoin
 				int32 Hit = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
 				SelectedPieceSlot = Hit;
 				HighlightedPieceSlot = Hit;
+				int32 GlobalIdx = Categories[ActiveCategory].PieceIndices[Hit];
+				UE_LOG(LogTemp, Warning, TEXT("RadialMenu: PIECE CLICKED slot=%d globalIdx=%d name=%s"),
+					Hit, GlobalIdx,
+					AllPieceInfos.IsValidIndex(GlobalIdx) ? *AllPieceInfos[GlobalIdx].DisplayName : TEXT("?"));
 				return FReply::Handled();
 			}
 		}
