@@ -73,6 +73,7 @@ protected:
 	void RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces);
 
 	// --- Radial piece selection menu (Tab) ---
+	void ToggleRadialMenu();
 	void OpenRadialMenu();
 	void CloseRadialMenu();
 

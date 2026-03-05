@@ -67,9 +67,8 @@ void AMoonshinePlayerController::SetupInputComponent()
 		// Delete key: always available as an alternative delete trigger
 		InputComponent->BindKey(EKeys::Delete, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
 
-		// Tab: hold to open radial piece menu, release to select
-		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::OpenRadialMenu);
-		InputComponent->BindKey(EKeys::Tab, IE_Released, this, &AMoonshinePlayerController::CloseRadialMenu);
+		// Tab: toggle radial piece menu (press only — no IE_Released to avoid input-mode feedback loop)
+		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::ToggleRadialMenu);
 
 	}
 }
@@ -272,11 +271,25 @@ void AMoonshinePlayerController::ClearHighlight()
 // ---------------------------------------------------------------------------
 // Radial Piece Menu (Tab hold/release)
 // ---------------------------------------------------------------------------
-void AMoonshinePlayerController::OpenRadialMenu()
+void AMoonshinePlayerController::ToggleRadialMenu()
 {
-	if (bRadialMenuOpen || bRadialMenuToggleLock) return;
+	if (bRadialMenuToggleLock) return;
 	bRadialMenuToggleLock = true;
 	GetWorld()->GetTimerManager().SetTimerForNextTick([this]() { bRadialMenuToggleLock = false; });
+
+	if (bRadialMenuOpen)
+	{
+		CloseRadialMenu();
+	}
+	else
+	{
+		OpenRadialMenu();
+	}
+}
+
+void AMoonshinePlayerController::OpenRadialMenu()
+{
+	if (bRadialMenuOpen) return;
 
 	// Only works in build mode
 	APawn* MyPawn = GetPawn();
@@ -320,9 +333,7 @@ void AMoonshinePlayerController::OpenRadialMenu()
 
 void AMoonshinePlayerController::CloseRadialMenu()
 {
-	if (!bRadialMenuOpen || bRadialMenuToggleLock) return;
-	bRadialMenuToggleLock = true;
-	GetWorld()->GetTimerManager().SetTimerForNextTick([this]() { bRadialMenuToggleLock = false; });
+	if (!bRadialMenuOpen) return;
 
 	int32 Selected = -1;
 	if (RadialMenu)
