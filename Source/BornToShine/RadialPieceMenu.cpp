@@ -170,9 +170,9 @@ int32 URadialPieceMenu::GetHighlightedIndex() const
 	if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
 		const TArray<int32>& Pieces = Categories[ActiveCategory].PieceIndices;
-		int32 Slot = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
-		if (Slot >= 0 && Pieces.IsValidIndex(Slot))
-			return Pieces[Slot];
+		int32 ActiveSlot = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
+		if (ActiveSlot >= 0 && Pieces.IsValidIndex(ActiveSlot))
+			return Pieces[ActiveSlot];
 		if (Pieces.Num() > 0)
 			return Pieces[0];
 	}
