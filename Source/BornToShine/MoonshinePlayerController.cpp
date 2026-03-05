@@ -273,6 +273,9 @@ void AMoonshinePlayerController::ClearHighlight()
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::OpenRadialMenu()
 {
+	// Don't re-open if already open
+	if (RadialMenu && RadialMenu->IsInViewport())
+		return;
 	if (bRadialMenuOpen) return;
 
 	// Only works in build mode
@@ -317,6 +320,9 @@ void AMoonshinePlayerController::OpenRadialMenu()
 
 void AMoonshinePlayerController::CloseRadialMenu()
 {
+	// Don't close if not open
+	if (!RadialMenu || !RadialMenu->IsInViewport())
+		return;
 	if (!bRadialMenuOpen) return;
 
 	int32 Selected = -1;
