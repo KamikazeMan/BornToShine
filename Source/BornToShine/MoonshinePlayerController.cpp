@@ -37,7 +37,6 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	bDeleteModeActive = false;
 	RadialMenu = nullptr;
 	bRadialMenuOpen = false;
-	bRadialMenuToggleLock = false;
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -67,8 +66,9 @@ void AMoonshinePlayerController::SetupInputComponent()
 		// Delete key: always available as an alternative delete trigger
 		InputComponent->BindKey(EKeys::Delete, IE_Pressed, this, &AMoonshinePlayerController::OnDeletePressed);
 
-		// Tab: toggle radial piece menu (press only — no IE_Released to avoid input-mode feedback loop)
-		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::ToggleRadialMenu);
+		// Tab: hold to open radial menu, release to close and confirm selection
+		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::OpenRadialMenu);
+		InputComponent->BindKey(EKeys::Tab, IE_Released, this, &AMoonshinePlayerController::CloseRadialMenu);
 
 	}
 }
@@ -271,22 +271,6 @@ void AMoonshinePlayerController::ClearHighlight()
 // ---------------------------------------------------------------------------
 // Radial Piece Menu (Tab hold/release)
 // ---------------------------------------------------------------------------
-void AMoonshinePlayerController::ToggleRadialMenu()
-{
-	if (bRadialMenuToggleLock) return;
-	bRadialMenuToggleLock = true;
-	GetWorld()->GetTimerManager().SetTimerForNextTick([this]() { bRadialMenuToggleLock = false; });
-
-	if (bRadialMenuOpen)
-	{
-		CloseRadialMenu();
-	}
-	else
-	{
-		OpenRadialMenu();
-	}
-}
-
 void AMoonshinePlayerController::OpenRadialMenu()
 {
 	if (bRadialMenuOpen) return;

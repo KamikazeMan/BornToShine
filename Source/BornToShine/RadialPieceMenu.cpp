@@ -26,7 +26,7 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
 	SelectedPieceSlot = -1;
 	InnerRadius = 60.0f;
 	OuterRadius = 170.0f;
-	HubRadius   = 55.0f;
+	HubRadius   = 48.0f;
 	WedgeGapDeg = 0.5f;
 	IconSize    = 55.0f;
 	FadeAlpha = 0.0f;
@@ -299,8 +299,11 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 			FCatStyle CS = CatStyles.IsValidIndex(i) ? CatStyles[i] : CatStyles[0];
 			// Outer border arc in accent color
 			FLinearColor Bord = CS.Accent;
-			Bord.A = FMath::Lerp(0.35f, 0.85f, HT) * FadeAlpha;
-			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, FMath::Lerp(1.5f, 3.0f, HT));
+			Bord.A = FMath::Lerp(0.45f, 0.90f, HT) * FadeAlpha;
+			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, FMath::Lerp(2.0f, 3.5f, HT));
+			// Inner border arc
+			FLinearColor InBord = Bord; InBord.A *= 0.5f;
+			DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, InBord, HT > 0.5f ? 2.0f : 1.0f);
 			// Dividers
 			FLinearColor DivC = DividerColor; DivC.A *= FadeAlpha;
 			DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DivC, 1.2f);
@@ -357,8 +360,11 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 				int32 GI = Cat.PieceIndices[p];
 				// Border
 				FLinearColor Bord = bLit ? CS.Accent : DividerColor;
-				Bord.A = (bLit ? FMath::Lerp(0.3f, 0.7f, HT) : 0.2f) * FadeAlpha;
-				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, bLit ? 2.5f : 1.0f);
+				Bord.A = (bLit ? FMath::Lerp(0.5f, 0.85f, HT) : 0.3f) * FadeAlpha;
+				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, bLit ? 3.0f : 1.5f);
+				// Inner border arc
+				FLinearColor InBord = Bord; InBord.A *= 0.5f;
+				DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, InBord, bLit ? 2.0f : 1.0f);
 				// Divider
 				FLinearColor DC = DividerColor; DC.A *= FadeAlpha;
 				DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DC, 0.8f);
@@ -396,6 +402,9 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 		? FLinearColor(CatStyles[ActiveCategory].Accent.R, CatStyles[ActiveCategory].Accent.G,
 			CatStyles[ActiveCategory].Accent.B, 0.35f * FadeAlpha)
 		: FLinearColor(HubBorder.R, HubBorder.G, HubBorder.B, HubBorder.A * FadeAlpha);
+	FLinearColor GlowC = HBC; GlowC.A *= 0.4f;
+	DrawArc(Out, LId, Geo, C, sH + 3.0f * Sc, 0, 360, GlowC, 4.0f * Sc);
+	DrawArc(Out, LId, Geo, C, sH + 1.5f * Sc, 0, 360, GlowC, 2.0f * Sc);
 	DrawArc(Out, LId, Geo, C, sH, 0, 360, HBC, 2.0f);
 	if (CurrentView == ERadialMenuView::Sub && ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{

@@ -72,8 +72,7 @@ protected:
 	void RestoreSocketConnections(TArray<ABuildablePiece*>& LoadedPieces);
 	void RestoreRectangleBuilderState(TArray<ABuildablePiece*>& LoadedPieces);
 
-	// --- Radial piece selection menu (Tab) ---
-	void ToggleRadialMenu();
+	// --- Radial piece selection menu (Tab hold/release) ---
 	void OpenRadialMenu();
 	void CloseRadialMenu();
 
@@ -81,7 +80,6 @@ protected:
 	URadialPieceMenu* RadialMenu;
 
 	bool bRadialMenuOpen;
-	bool bRadialMenuToggleLock;
 
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
