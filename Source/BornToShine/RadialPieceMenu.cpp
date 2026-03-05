@@ -27,8 +27,8 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
 	InnerRadius = 60.0f;
 	OuterRadius = 170.0f;
 	HubRadius   = 55.0f;
-	WedgeGapDeg = 1.5f;
-	IconSize    = 40.0f;
+	WedgeGapDeg = 0.5f;
+	IconSize    = 55.0f;
 	FadeAlpha = 0.0f;
 	FadeSpeed = 8.0f;
 	GlowPulseTime = 0.0f;
@@ -37,22 +37,22 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
 	// ---- Category styles: dark fills with subtle color tint ----
 	CatStyles.SetNum(4);
 	// Framing - dark warm
-	CatStyles[0].DarkFill  = FLinearColor(0.09f, 0.04f, 0.03f, 0.93f);
+	CatStyles[0].DarkFill  = FLinearColor(0.07f, 0.03f, 0.02f, 0.94f);
 	CatStyles[0].LitFill   = FLinearColor(0.16f, 0.07f, 0.05f, 0.96f);
 	CatStyles[0].Accent    = FLinearColor(0.95f, 0.45f, 0.30f, 1.0f);
 	CatStyles[0].TextColor = FLinearColor(0.95f, 0.50f, 0.35f, 1.0f);
 	// Roofing - dark green
-	CatStyles[1].DarkFill  = FLinearColor(0.03f, 0.08f, 0.05f, 0.93f);
+	CatStyles[1].DarkFill  = FLinearColor(0.02f, 0.06f, 0.03f, 0.94f);
 	CatStyles[1].LitFill   = FLinearColor(0.05f, 0.14f, 0.08f, 0.96f);
 	CatStyles[1].Accent    = FLinearColor(0.30f, 0.85f, 0.50f, 1.0f);
 	CatStyles[1].TextColor = FLinearColor(0.35f, 0.88f, 0.55f, 1.0f);
 	// Sheathing - dark blue
-	CatStyles[2].DarkFill  = FLinearColor(0.03f, 0.04f, 0.10f, 0.93f);
+	CatStyles[2].DarkFill  = FLinearColor(0.02f, 0.03f, 0.07f, 0.94f);
 	CatStyles[2].LitFill   = FLinearColor(0.05f, 0.06f, 0.18f, 0.96f);
 	CatStyles[2].Accent    = FLinearColor(0.40f, 0.62f, 1.0f, 1.0f);
 	CatStyles[2].TextColor = FLinearColor(0.45f, 0.65f, 1.0f, 1.0f);
 	// Foundation - dark warm grey
-	CatStyles[3].DarkFill  = FLinearColor(0.06f, 0.05f, 0.04f, 0.93f);
+	CatStyles[3].DarkFill  = FLinearColor(0.05f, 0.04f, 0.03f, 0.94f);
 	CatStyles[3].LitFill   = FLinearColor(0.10f, 0.09f, 0.07f, 0.96f);
 	CatStyles[3].Accent    = FLinearColor(0.70f, 0.60f, 0.45f, 1.0f);
 	CatStyles[3].TextColor = FLinearColor(0.75f, 0.65f, 0.50f, 1.0f);
@@ -280,18 +280,26 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 		DrawTextCentered(Out, LId, Geo, C - FVector2D(0, sO + 28.0f * Sc),
 			TEXT("SELECT CATEGORY"), HeadF,
 			FLinearColor(0.38f, 0.42f, 0.52f, FadeAlpha * 0.7f));
+		// Pass 1: Draw all wedge fills
+		for (int32 i = 0; i < N; i++)
+		{
+			float S = i * Sw, E = S + Sw;
+			float HT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
+			FCatStyle CS = CatStyles.IsValidIndex(i) ? CatStyles[i] : CatStyles[0];
+			FLinearColor Fill = FMath::Lerp(CS.DarkFill, CS.LitFill, HT);
+			Fill.A *= FadeAlpha;
+			DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
+		}
+		LId++;
+		// Pass 2: Draw borders, dividers, text, and icons
 		for (int32 i = 0; i < N; i++)
 		{
 			float S = i * Sw, E = S + Sw, M = (S + E) / 2.0f;
 			float HT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
 			FCatStyle CS = CatStyles.IsValidIndex(i) ? CatStyles[i] : CatStyles[0];
-			// Filled wedge
-			FLinearColor Fill = FMath::Lerp(CS.DarkFill, CS.LitFill, HT);
-			Fill.A *= FadeAlpha;
-			DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
 			// Outer border arc in accent color
 			FLinearColor Bord = CS.Accent;
-			Bord.A = FMath::Lerp(0.15f, 0.6f, HT) * FadeAlpha;
+			Bord.A = FMath::Lerp(0.35f, 0.85f, HT) * FadeAlpha;
 			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, FMath::Lerp(1.5f, 3.0f, HT));
 			// Dividers
 			FLinearColor DivC = DividerColor; DivC.A *= FadeAlpha;
@@ -328,18 +336,25 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 			// Header
 			DrawTextCentered(Out, LId, Geo, C - FVector2D(0, sO + 28.0f * Sc),
 				Cat.Name, HeadF, FLinearColor(CS.TextColor.R, CS.TextColor.G, CS.TextColor.B, FadeAlpha * 0.8f));
+			// Pass 1: Draw all wedge fills
+			for (int32 p = 0; p < N; p++)
+			{
+				float S = p * Sw, E = S + Sw;
+				float HT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
+				FLinearColor Fill = FMath::Lerp(
+					FLinearColor(0.05f, 0.05f, 0.07f, 0.93f),
+					FLinearColor(CS.DarkFill.R*2, CS.DarkFill.G*2, CS.DarkFill.B*2, 0.96f), HT);
+				Fill.A *= FadeAlpha;
+				DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
+			}
+			LId++;
+			// Pass 2: Draw borders, dividers, text, and icons
 			for (int32 p = 0; p < N; p++)
 			{
 				float S = p * Sw, E = S + Sw, M = (S + E) / 2.0f;
 				float HT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
 				bool bLit = (p == HighlightedPieceSlot || p == SelectedPieceSlot);
 				int32 GI = Cat.PieceIndices[p];
-				// Fill
-				FLinearColor Fill = FMath::Lerp(
-					FLinearColor(0.05f, 0.05f, 0.07f, 0.93f),
-					FLinearColor(CS.DarkFill.R*2, CS.DarkFill.G*2, CS.DarkFill.B*2, 0.96f), HT);
-				Fill.A *= FadeAlpha;
-				DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
 				// Border
 				FLinearColor Bord = bLit ? CS.Accent : DividerColor;
 				Bord.A = (bLit ? FMath::Lerp(0.3f, 0.7f, HT) : 0.2f) * FadeAlpha;
