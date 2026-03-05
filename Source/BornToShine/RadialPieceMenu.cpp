@@ -199,9 +199,9 @@ int32 URadialPieceMenu::GetHighlightedIndex() const
 	{
 		const TArray<int32>& Pieces = Categories[ActiveCategory].PieceIndices;
 		// SelectedPieceSlot takes priority (persists after click)
-		int32 Slot = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
-		if (Slot >= 0 && Pieces.IsValidIndex(Slot))
-			return Pieces[Slot];
+		int32 ActiveSlot = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
+		if (ActiveSlot >= 0 && Pieces.IsValidIndex(ActiveSlot))
+			return Pieces[ActiveSlot];
 		if (Pieces.Num() > 0)
 			return Pieces[0];
 	}
@@ -846,14 +846,15 @@ void URadialPieceMenu::DrawCurvedText(FSlateWindowElementList& Out, int32 LayerI
 
 		// The rotation angle: tangent to the circle at this point
 		float RotationDeg = CharAngleDeg + 90.0f;
+		float RotationRad = FMath::DegreesToRadians(RotationDeg);
 
 		FVector2D Pivot = CharSize / 2.0f;
 
 		// Build transform: offset so character center is at CharPos, then rotate
-		FSlateRenderTransform FinalTransform =
-			FSlateRenderTransform(-Pivot) *
-			FSlateRenderTransform(FQuat2D(FMath::DegreesToRadians(RotationDeg))) *
-			FSlateRenderTransform(CharPos);
+		// Manually compose: translate(-pivot), rotate, translate(charPos)
+		FQuat2D Rot(RotationRad);
+		FVector2D RotatedPivot = Rot.IsIdentity() ? -Pivot : TransformPoint(Rot, -Pivot);
+		FSlateRenderTransform FinalTransform(Rot, RotatedPivot + CharPos);
 
 		FGeometry CharGeo = Geo.MakeChild(CharSize,
 			FSlateLayoutTransform(1.0f),
