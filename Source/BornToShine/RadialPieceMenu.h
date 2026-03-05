@@ -32,6 +32,8 @@ public:
 	URadialPieceMenu(const FObjectInitializer& ObjectInitializer);
 	void InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 CurrentIndex);
 	int32 GetHighlightedIndex() const;
+	void PlaySoundOpen();
+	void PlaySoundClose();
 protected:
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual int32 NativePaint(const FPaintArgs& Args, const FGeometry& AllottedGeometry,

@@ -584,3 +584,11 @@ void URadialPieceMenu::DrawIconAt(FSlateWindowElementList& Out, int32 LayerId,
 	FSlateDrawElement::MakeBox(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 		&Brush, ESlateDrawEffect::None, Tint);
 }
+void URadialPieceMenu::PlaySoundOpen()
+{
+	// TODO: Play UI open sound
+}
+void URadialPieceMenu::PlaySoundClose()
+{
+	// TODO: Play UI close sound
+}
