@@ -853,7 +853,7 @@ void URadialPieceMenu::DrawCurvedText(FSlateWindowElementList& Out, int32 LayerI
 		// Build transform: offset so character center is at CharPos, then rotate
 		// Manually compose: translate(-pivot), rotate, translate(charPos)
 		FQuat2D Rot(RotationRad);
-		FVector2D RotatedPivot = Rot.IsIdentity() ? -Pivot : TransformPoint(Rot, -Pivot);
+		FVector2D RotatedPivot = TransformPoint(Rot, -Pivot);
 		FSlateRenderTransform FinalTransform(Rot, RotatedPivot + CharPos);
 
 		FGeometry CharGeo = Geo.MakeChild(CharSize,
