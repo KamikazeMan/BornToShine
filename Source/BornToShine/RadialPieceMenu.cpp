@@ -98,10 +98,10 @@ void URadialPieceMenu::BuildCategories()
 	if (C2.PieceIndices.Num() > 0) Categories.Add(C2);
 	if (C3.PieceIndices.Num() > 0) Categories.Add(C3);
 }
-int32 URadialPieceMenu::FindCategoryForPieceIndex(int32 PI) const
+int32 URadialPieceMenu::FindCategoryForPieceIndex(int32 PieceIdx) const
 {
 	for (int32 c = 0; c < Categories.Num(); c++)
-		if (Categories[c].PieceIndices.Contains(PI)) return c;
+		if (Categories[c].PieceIndices.Contains(PieceIdx)) return c;
 	return -1;
 }
 void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& Infos, int32 Cur)
