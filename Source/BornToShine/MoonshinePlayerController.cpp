@@ -37,6 +37,7 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	bDeleteModeActive = false;
 	RadialMenu = nullptr;
 	bRadialMenuOpen = false;
+	bRadialMenuToggleLock = false;
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -273,7 +274,9 @@ void AMoonshinePlayerController::ClearHighlight()
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::OpenRadialMenu()
 {
-	if (bRadialMenuOpen) return;
+	if (bRadialMenuOpen || bRadialMenuToggleLock) return;
+	bRadialMenuToggleLock = true;
+	GetWorld()->GetTimerManager().SetTimerForNextTick([this]() { bRadialMenuToggleLock = false; });
 
 	// Only works in build mode
 	APawn* MyPawn = GetPawn();
@@ -317,7 +320,9 @@ void AMoonshinePlayerController::OpenRadialMenu()
 
 void AMoonshinePlayerController::CloseRadialMenu()
 {
-	if (!bRadialMenuOpen) return;
+	if (!bRadialMenuOpen || bRadialMenuToggleLock) return;
+	bRadialMenuToggleLock = true;
+	GetWorld()->GetTimerManager().SetTimerForNextTick([this]() { bRadialMenuToggleLock = false; });
 
 	int32 Selected = -1;
 	if (RadialMenu)

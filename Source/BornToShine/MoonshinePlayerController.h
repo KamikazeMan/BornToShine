@@ -80,6 +80,7 @@ protected:
 	URadialPieceMenu* RadialMenu;
 
 	bool bRadialMenuOpen;
+	bool bRadialMenuToggleLock;
 
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
