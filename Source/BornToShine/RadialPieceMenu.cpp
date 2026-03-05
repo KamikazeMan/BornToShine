@@ -379,30 +379,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& All
 int32 URadialPieceMenu::PaintRingDecorations(FSlateWindowElementList& Out, int32 LayerId,
 	const FGeometry& Geo, FVector2D Center, float Scale) const
 {
-	float sOuter = OuterRadius * Scale;
-	float Pulse = 0.85f + 0.15f * FMath::Sin(GlowPulseTime * 1.8f);
-
-	DrawArcOutline(Out, LayerId, Geo, Center, sOuter + 18.0f * Scale, -90.0f, 270.0f,
-		WithAlpha(Cyan, 0.05f * Pulse * FadeAlpha), 0.5f);
-	DrawArcOutline(Out, LayerId, Geo, Center, sOuter + 10.0f * Scale, -90.0f, 270.0f,
-		WithAlpha(Cyan, 0.08f * Pulse * FadeAlpha), 0.8f);
-	DrawArcOutline(Out, LayerId, Geo, Center, sOuter + 3.0f * Scale, -90.0f, 270.0f,
-		WithAlpha(Cyan, 0.12f * Pulse * FadeAlpha), 1.0f);
-
-	for (int32 t = 0; t < 72; t++)
-	{
-		float AngDeg = t * 5.0f - 90.0f;
-		float AngRad = FMath::DegreesToRadians(AngDeg);
-		FVector2D Dir(FMath::Cos(AngRad), FMath::Sin(AngRad));
-		bool bMajor = (t % 4 == 0);
-		float TickStart = sOuter + 4.0f * Scale;
-		float TickEnd   = sOuter + (bMajor ? 14.0f : 8.0f) * Scale;
-		DrawLine(Out, LayerId, Geo,
-			Center + Dir * TickStart, Center + Dir * TickEnd,
-			WithAlpha(Cyan, (bMajor ? 0.3f : 0.12f) * Pulse * FadeAlpha),
-			bMajor ? 1.5f : 0.5f);
-	}
-
+	// Clean wheel — no tick marks or outer decoration rings
 	return LayerId + 1;
 }
 
