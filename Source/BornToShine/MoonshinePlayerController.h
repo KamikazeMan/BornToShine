@@ -81,6 +81,10 @@ protected:
 
 	bool bRadialMenuOpen;
 
+	// Timestamp when menu opened — phantom IE_Released from SetInputMode
+	// arrives within a few ms; real release is always 100ms+ later.
+	double RadialMenuOpenTime;
+
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> BuildModeWidgetClass;

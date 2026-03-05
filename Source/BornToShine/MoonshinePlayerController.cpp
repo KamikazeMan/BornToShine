@@ -37,6 +37,7 @@ AMoonshinePlayerController::AMoonshinePlayerController()
 	bDeleteModeActive = false;
 	RadialMenu = nullptr;
 	bRadialMenuOpen = false;
+	RadialMenuOpenTime = 0.0;
 }
 
 void AMoonshinePlayerController::BeginPlay()
@@ -68,8 +69,7 @@ void AMoonshinePlayerController::SetupInputComponent()
 
 		// Tab: hold to open radial menu, release to close and confirm selection
 		InputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshinePlayerController::OpenRadialMenu);
-		// NOTE: IE_Released is NOT used — SetInputMode generates phantom releases.
-		// Instead, PlayerTick polls IsInputKeyDown to detect real Tab release.
+		InputComponent->BindKey(EKeys::Tab, IE_Released, this, &AMoonshinePlayerController::CloseRadialMenu);
 	}
 }
 
@@ -79,13 +79,6 @@ void AMoonshinePlayerController::SetupInputComponent()
 void AMoonshinePlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
-
-	// Poll for Tab release to close radial menu (IE_Released can't be used
-	// because SetInputMode generates phantom release events)
-	if (bRadialMenuOpen && !IsInputKeyDown(EKeys::Tab))
-	{
-		CloseRadialMenu();
-	}
 
 	if (bDeleteModeActive && !bRadialMenuOpen)
 	{
@@ -318,6 +311,7 @@ void AMoonshinePlayerController::OpenRadialMenu()
 	// Pause building preview updates
 	BC->SetComponentTickEnabled(false);
 	bRadialMenuOpen = true;
+	RadialMenuOpenTime = FPlatformTime::Seconds();
 
 	UE_LOG(LogTemp, Log, TEXT("Radial menu opened (%d segments)"), Infos.Num());
 }
@@ -325,6 +319,16 @@ void AMoonshinePlayerController::OpenRadialMenu()
 void AMoonshinePlayerController::CloseRadialMenu()
 {
 	if (!bRadialMenuOpen) return;
+
+	// SetInputMode generates phantom IE_Released events in the same or next
+	// frame. Real human release is always 100ms+ after the press. Ignore
+	// any release that arrives within 0.15s of opening.
+	double Elapsed = FPlatformTime::Seconds() - RadialMenuOpenTime;
+	if (Elapsed < 0.15)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Controller: CloseRadialMenu IGNORED phantom release (%.3fs after open)"), Elapsed);
+		return;
+	}
 
 	int32 Selected = -1;
 	if (RadialMenu)
