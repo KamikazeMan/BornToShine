@@ -1,23 +1,21 @@
 // RadialPieceMenu.cpp - Born To Shine
-// Clean rewrite matching the React prototype screenshots exactly.
-// NO tick marks. NO pulsing outer rings. NO old radial wheel elements.
-// Dark colored wedge fills, thin border lines, category text, icons.
+// Professional radial wheel with triangle-fan wedge fills via MakeCustomVerts.
+// Zero line artifacts. Clean alpha blending. Matches React prototype.
 #include "RadialPieceMenu.h"
 #include "ConstructionPhaseManager.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
+#include "Styling/SlateTypes.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Fonts/FontMeasure.h"
 #include "Engine/Texture2D.h"
-// Helper: degrees to XY position
-FVector2D URadialPieceMenu::PolarToCart(FVector2D Center, float Radius, float Deg) const
+FVector2D URadialPieceMenu::Polar(FVector2D Center, float Radius, float Deg) const
 {
-	float Rad = FMath::DegreesToRadians(Deg - 90.0f); // -90 so 0° = top
+	float Rad = FMath::DegreesToRadians(Deg - 90.0f);
 	return Center + FVector2D(FMath::Cos(Rad), FMath::Sin(Rad)) * Radius;
 }
-// ============================================================================
-URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
+URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
+	: Super(OI)
 {
 	CurrentView = ERadialMenuView::Main;
 	ActiveCategory = -1;
@@ -29,7 +27,6 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	InnerRadius = 60.0f;
 	OuterRadius = 170.0f;
 	HubRadius   = 55.0f;
-	DeadZone    = 40.0f;
 	WedgeGapDeg = 1.5f;
 	IconSize    = 40.0f;
 	FadeAlpha = 0.0f;
@@ -37,34 +34,35 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	GlowPulseTime = 0.0f;
 	ViewTransition = 0.0f;
 	ViewTransitionSpeed = 10.0f;
-	// Category styles matching the React prototype colors
+	// ---- Category styles: dark fills with subtle color tint ----
 	CatStyles.SetNum(4);
-	// Framing - barely tinted dark red
-	CatStyles[0].DarkFill  = FLinearColor(0.08f, 0.03f, 0.03f, 0.92f);
-	CatStyles[0].LitFill   = FLinearColor(0.14f, 0.05f, 0.04f, 0.95f);
-	CatStyles[0].Accent    = FLinearColor(1.0f, 0.42f, 0.26f, 1.0f);
-	CatStyles[0].TextColor = FLinearColor(1.0f, 0.50f, 0.35f, 1.0f);
-	// Roofing - barely tinted dark green
-	CatStyles[1].DarkFill  = FLinearColor(0.02f, 0.07f, 0.04f, 0.92f);
-	CatStyles[1].LitFill   = FLinearColor(0.04f, 0.12f, 0.07f, 0.95f);
-	CatStyles[1].Accent    = FLinearColor(0.24f, 0.86f, 0.52f, 1.0f);
-	CatStyles[1].TextColor = FLinearColor(0.30f, 0.90f, 0.55f, 1.0f);
-	// Sheathing - barely tinted dark blue
-	CatStyles[2].DarkFill  = FLinearColor(0.03f, 0.03f, 0.08f, 0.92f);
-	CatStyles[2].LitFill   = FLinearColor(0.05f, 0.05f, 0.14f, 0.95f);
-	CatStyles[2].Accent    = FLinearColor(0.37f, 0.61f, 1.0f, 1.0f);
+	// Framing - dark warm
+	CatStyles[0].DarkFill  = FLinearColor(0.09f, 0.04f, 0.03f, 0.93f);
+	CatStyles[0].LitFill   = FLinearColor(0.16f, 0.07f, 0.05f, 0.96f);
+	CatStyles[0].Accent    = FLinearColor(0.95f, 0.45f, 0.30f, 1.0f);
+	CatStyles[0].TextColor = FLinearColor(0.95f, 0.50f, 0.35f, 1.0f);
+	// Roofing - dark green
+	CatStyles[1].DarkFill  = FLinearColor(0.03f, 0.08f, 0.05f, 0.93f);
+	CatStyles[1].LitFill   = FLinearColor(0.05f, 0.14f, 0.08f, 0.96f);
+	CatStyles[1].Accent    = FLinearColor(0.30f, 0.85f, 0.50f, 1.0f);
+	CatStyles[1].TextColor = FLinearColor(0.35f, 0.88f, 0.55f, 1.0f);
+	// Sheathing - dark blue
+	CatStyles[2].DarkFill  = FLinearColor(0.03f, 0.04f, 0.10f, 0.93f);
+	CatStyles[2].LitFill   = FLinearColor(0.05f, 0.06f, 0.18f, 0.96f);
+	CatStyles[2].Accent    = FLinearColor(0.40f, 0.62f, 1.0f, 1.0f);
 	CatStyles[2].TextColor = FLinearColor(0.45f, 0.65f, 1.0f, 1.0f);
 	// Foundation - dark warm grey
-	CatStyles[3].DarkFill  = FLinearColor(0.06f, 0.05f, 0.04f, 0.92f);
-	CatStyles[3].LitFill   = FLinearColor(0.10f, 0.08f, 0.06f, 0.95f);
+	CatStyles[3].DarkFill  = FLinearColor(0.06f, 0.05f, 0.04f, 0.93f);
+	CatStyles[3].LitFill   = FLinearColor(0.10f, 0.09f, 0.07f, 0.96f);
 	CatStyles[3].Accent    = FLinearColor(0.70f, 0.60f, 0.45f, 1.0f);
 	CatStyles[3].TextColor = FLinearColor(0.75f, 0.65f, 0.50f, 1.0f);
-	// Shared colors
-	HubBg       = FLinearColor(0.02f, 0.03f, 0.06f, 0.95f);
-	HubBorder   = FLinearColor(0.15f, 0.20f, 0.30f, 0.6f);
-	TextWhite   = FLinearColor(0.9f, 0.9f, 0.9f, 1.0f);
-	TextDim     = FLinearColor(0.4f, 0.45f, 0.5f, 1.0f);
-	DividerColor = FLinearColor(0.2f, 0.25f, 0.3f, 0.5f);
+	HubBg       = FLinearColor(0.02f, 0.025f, 0.05f, 0.96f);
+	HubBorder   = FLinearColor(0.18f, 0.22f, 0.30f, 0.5f);
+	TextWhite   = FLinearColor(0.92f, 0.92f, 0.92f, 1.0f);
+	TextDim     = FLinearColor(0.42f, 0.47f, 0.55f, 1.0f);
+	DividerColor = FLinearColor(0.22f, 0.26f, 0.32f, 0.6f);
+	// White brush for MakeCustomVerts
+	WhiteBrush = *FCoreStyle::Get().GetBrush("WhiteBrush");
 	SetIsFocusable(true);
 	SetVisibility(ESlateVisibility::Visible);
 }
@@ -72,59 +70,47 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 void URadialPieceMenu::BuildCategories()
 {
 	Categories.Empty();
-	FCategoryInfo Cat0; Cat0.Name = TEXT("FRAMING");     Cat0.Icon = TEXT("F");
-	FCategoryInfo Cat1; Cat1.Name = TEXT("ROOFING");     Cat1.Icon = TEXT("R");
-	FCategoryInfo Cat2; Cat2.Name = TEXT("SHEATHING");   Cat2.Icon = TEXT("S");
-	FCategoryInfo Cat3; Cat3.Name = TEXT("FOUNDATION");  Cat3.Icon = TEXT("B");
+	FCategoryInfo C0; C0.Name = TEXT("FRAMING");    C0.Icon = TEXT("F");
+	FCategoryInfo C1; C1.Name = TEXT("ROOFING");    C1.Icon = TEXT("R");
+	FCategoryInfo C2; C2.Name = TEXT("SHEATHING");  C2.Icon = TEXT("S");
+	FCategoryInfo C3; C3.Name = TEXT("FOUNDATION"); C3.Icon = TEXT("B");
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
-		EPieceType PT = AllPieceInfos[i].PieceType;
-		switch (PT)
+		switch (AllPieceInfos[i].PieceType)
 		{
-		case EPieceType::WallStud:
-		case EPieceType::WallPlate:
-		case EPieceType::CornerPost:
-		case EPieceType::TopPlate:
-		case EPieceType::DoubleTopPlate:
-		case EPieceType::DoorFrame:
-		case EPieceType::WindowFrame:
-		case EPieceType::Header:
-			Cat0.PieceIndices.Add(i); break;
-		case EPieceType::RidgePost:
-		case EPieceType::RidgeBoard:
-		case EPieceType::Rafter:
-		case EPieceType::FasciaBoard:
-			Cat1.PieceIndices.Add(i); break;
-		case EPieceType::RimBoard:
-		case EPieceType::FloorJoist:
-		case EPieceType::Plywood:
-			Cat2.PieceIndices.Add(i); break;
+		case EPieceType::WallStud: case EPieceType::WallPlate: case EPieceType::CornerPost:
+		case EPieceType::TopPlate: case EPieceType::DoubleTopPlate:
+		case EPieceType::DoorFrame: case EPieceType::WindowFrame: case EPieceType::Header:
+			C0.PieceIndices.Add(i); break;
+		case EPieceType::RidgePost: case EPieceType::RidgeBoard:
+		case EPieceType::Rafter: case EPieceType::FasciaBoard:
+			C1.PieceIndices.Add(i); break;
+		case EPieceType::RimBoard: case EPieceType::FloorJoist: case EPieceType::Plywood:
+			C2.PieceIndices.Add(i); break;
 		case EPieceType::Foundation:
-			Cat3.PieceIndices.Add(i); break;
+			C3.PieceIndices.Add(i); break;
 		default:
-			Cat0.PieceIndices.Add(i); break;
+			C0.PieceIndices.Add(i); break;
 		}
 	}
-	if (Cat0.PieceIndices.Num() > 0) Categories.Add(Cat0);
-	if (Cat1.PieceIndices.Num() > 0) Categories.Add(Cat1);
-	if (Cat2.PieceIndices.Num() > 0) Categories.Add(Cat2);
-	if (Cat3.PieceIndices.Num() > 0) Categories.Add(Cat3);
+	if (C0.PieceIndices.Num() > 0) Categories.Add(C0);
+	if (C1.PieceIndices.Num() > 0) Categories.Add(C1);
+	if (C2.PieceIndices.Num() > 0) Categories.Add(C2);
+	if (C3.PieceIndices.Num() > 0) Categories.Add(C3);
 }
-int32 URadialPieceMenu::FindCategoryForPieceIndex(int32 PieceIndex) const
+int32 URadialPieceMenu::FindCategoryForPieceIndex(int32 PI) const
 {
 	for (int32 c = 0; c < Categories.Num(); c++)
-		if (Categories[c].PieceIndices.Contains(PieceIndex))
-			return c;
+		if (Categories[c].PieceIndices.Contains(PI)) return c;
 	return -1;
 }
-// ============================================================================
-void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 CurrentIndex)
+void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& Infos, int32 Cur)
 {
-	AllPieceInfos = InInfos;
+	AllPieceInfos = Infos;
 	BuildCategories();
 	CurrentView = ERadialMenuView::Main;
 	ActiveCategory = -1;
-	HighlightedCategory = FindCategoryForPieceIndex(CurrentIndex);
+	HighlightedCategory = FindCategoryForPieceIndex(Cur);
 	PrevHighlightedCategory = HighlightedCategory;
 	HighlightedPieceSlot = -1;
 	SelectedPieceSlot = -1;
@@ -137,23 +123,22 @@ void URadialPieceMenu::InitMenu(const TArray<FPieceTypeInfo>& InInfos, int32 Cur
 	IconBrushes.SetNum(AllPieceInfos.Num());
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
-		UTexture2D* Tex = AllPieceInfos[i].Icon.LoadSynchronous();
-		if (Tex)
+		UTexture2D* T = AllPieceInfos[i].Icon.LoadSynchronous();
+		if (T)
 		{
-			IconBrushes[i].SetResourceObject(Tex);
+			IconBrushes[i].SetResourceObject(T);
 			IconBrushes[i].ImageSize = FVector2D(IconSize, IconSize);
 			IconBrushes[i].DrawAs = ESlateBrushDrawType::Image;
 			IconBrushes[i].Tiling = ESlateBrushTileType::NoTile;
 		}
 	}
-	UE_LOG(LogTemp, Log, TEXT("RadialPieceMenu: Init %d pieces, %d categories"),
-		AllPieceInfos.Num(), Categories.Num());
+	UE_LOG(LogTemp, Log, TEXT("RadialMenu: %d pieces, %d cats"), AllPieceInfos.Num(), Categories.Num());
 }
 int32 URadialPieceMenu::GetHighlightedIndex() const
 {
 	if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
-		const TArray<int32>& P = Categories[ActiveCategory].PieceIndices;
+		const auto& P = Categories[ActiveCategory].PieceIndices;
 		int32 S = (SelectedPieceSlot >= 0) ? SelectedPieceSlot : HighlightedPieceSlot;
 		if (S >= 0 && P.IsValidIndex(S)) return P[S];
 		if (P.Num() > 0) return P[0];
@@ -163,62 +148,51 @@ int32 URadialPieceMenu::GetHighlightedIndex() const
 // ============================================================================
 // INPUT
 // ============================================================================
-FReply URadialPieceMenu::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+FReply URadialPieceMenu::NativeOnMouseButtonDown(const FGeometry& G, const FPointerEvent& E)
 {
 	if (Categories.Num() == 0) return FReply::Unhandled();
-	FVector2D Size = InGeometry.GetLocalSize();
-	FVector2D Center = Size / 2.0f;
-	float Scale = (Size.Y * 0.55f) / (OuterRadius * 2.0f);
-	FVector2D Mouse = InGeometry.AbsoluteToLocal(InMouseEvent.GetScreenSpacePosition());
-	float DX = Mouse.X - Center.X;
-	float DY = Mouse.Y - Center.Y;
-	float Dist = FMath::Sqrt(DX * DX + DY * DY);
-	float sI = InnerRadius * Scale;
-	float sO = OuterRadius * Scale;
-	float sH = HubRadius * Scale;
-	// Angle from top, clockwise
+	FVector2D Sz = G.GetLocalSize();
+	FVector2D C = Sz / 2.0f;
+	float Sc = (FMath::Min(Sz.X, Sz.Y) * 0.55f) / (OuterRadius * 2.0f);
+	FVector2D M = G.AbsoluteToLocal(E.GetScreenSpacePosition());
+	float DX = M.X - C.X, DY = M.Y - C.Y;
+	float Dist = FMath::Sqrt(DX*DX + DY*DY);
+	float sI = InnerRadius * Sc, sO = OuterRadius * Sc, sH = HubRadius * Sc;
 	float Ang = FMath::RadiansToDegrees(FMath::Atan2(DX, -DY));
-	if (Ang < 0.0f) Ang += 360.0f;
-	UE_LOG(LogTemp, Log, TEXT("RadialMenu Click: Dist=%.0f Inner=%.0f Outer=%.0f Hub=%.0f Ang=%.0f View=%d"),
-		Dist, sI, sO, sH, Ang, (int32)CurrentView);
+	if (Ang < 0) Ang += 360.0f;
 	if (CurrentView == ERadialMenuView::Main)
 	{
 		if (Dist >= sI && Dist <= sO)
 		{
 			int32 N = Categories.Num();
-			int32 Clicked = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
-			ActiveCategory = Clicked;
+			int32 Hit = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
+			ActiveCategory = Hit;
 			HighlightedPieceSlot = -1;
 			SelectedPieceSlot = -1;
 			PieceHoverScales.Empty();
 			CurrentView = ERadialMenuView::Sub;
-			UE_LOG(LogTemp, Log, TEXT("RadialMenu: Entered category %d: %s"), Clicked, *Categories[Clicked].Name);
 			return FReply::Handled();
 		}
 	}
 	else
 	{
-		// Center hub = back
-		if (Dist <= sH + 8.0f * Scale)
+		if (Dist <= sH + 8.0f * Sc)
 		{
 			CurrentView = ERadialMenuView::Main;
 			ActiveCategory = -1;
 			HighlightedPieceSlot = -1;
 			SelectedPieceSlot = -1;
 			PieceHoverScales.Empty();
-			UE_LOG(LogTemp, Log, TEXT("RadialMenu: Back to main"));
 			return FReply::Handled();
 		}
-		// Piece wedge
 		if (Dist >= sI && Dist <= sO && ActiveCategory >= 0)
 		{
 			int32 N = Categories[ActiveCategory].PieceIndices.Num();
 			if (N > 0)
 			{
-				int32 Clicked = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
-				SelectedPieceSlot = Clicked;
-				HighlightedPieceSlot = Clicked;
-				UE_LOG(LogTemp, Log, TEXT("RadialMenu: Selected piece slot %d"), Clicked);
+				int32 Hit = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
+				SelectedPieceSlot = Hit;
+				HighlightedPieceSlot = Hit;
 				return FReply::Handled();
 			}
 		}
@@ -228,361 +202,350 @@ FReply URadialPieceMenu::NativeOnMouseButtonDown(const FGeometry& InGeometry, co
 // ============================================================================
 // TICK
 // ============================================================================
-void URadialPieceMenu::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+void URadialPieceMenu::NativeTick(const FGeometry& MyGeo, float DT)
 {
-	Super::NativeTick(MyGeometry, InDeltaTime);
+	Super::NativeTick(MyGeo, DT);
 	if (Categories.Num() == 0) return;
-	FadeAlpha = FMath::FInterpTo(FadeAlpha, 1.0f, InDeltaTime, FadeSpeed);
-	GlowPulseTime += InDeltaTime;
-	float Target = (CurrentView == ERadialMenuView::Sub) ? 1.0f : 0.0f;
-	ViewTransition = FMath::FInterpTo(ViewTransition, Target, InDeltaTime, ViewTransitionSpeed);
+	FadeAlpha = FMath::FInterpTo(FadeAlpha, 1.0f, DT, FadeSpeed);
+	GlowPulseTime += DT;
+	ViewTransition = FMath::FInterpTo(ViewTransition,
+		(CurrentView == ERadialMenuView::Sub) ? 1.0f : 0.0f, DT, ViewTransitionSpeed);
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC) return;
 	float MX, MY;
 	PC->GetMousePosition(MX, MY);
 	FVector2D VP;
-	if (GEngine && GEngine->GameViewport)
-		GEngine->GameViewport->GetViewportSize(VP);
-	FVector2D Center = VP / 2.0f;
-	float Scale = (VP.Y * 0.55f) / (OuterRadius * 2.0f);
-	float sI = InnerRadius * Scale;
-	float sO = OuterRadius * Scale;
-	float DX = MX - Center.X;
-	float DY = MY - Center.Y;
-	float Dist = FMath::Sqrt(DX * DX + DY * DY);
+	if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(VP);
+	FVector2D C = VP / 2.0f;
+	float Sc = (FMath::Min(VP.X, VP.Y) * 0.55f) / (OuterRadius * 2.0f);
+	float sI = InnerRadius * Sc, sO = OuterRadius * Sc;
+	float DX = MX - C.X, DY = MY - C.Y;
+	float Dist = FMath::Sqrt(DX*DX + DY*DY);
 	float Ang = FMath::RadiansToDegrees(FMath::Atan2(DX, -DY));
-	if (Ang < 0.0f) Ang += 360.0f;
+	if (Ang < 0) Ang += 360.0f;
 	if (CurrentView == ERadialMenuView::Main)
 	{
 		int32 N = Categories.Num();
-		if (Dist >= sI && Dist <= sO && N > 0)
-			HighlightedCategory = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
-		else
-			HighlightedCategory = -1;
+		HighlightedCategory = (Dist >= sI && Dist <= sO && N > 0)
+			? FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1) : -1;
 		if (CategoryHoverScales.Num() != N) CategoryHoverScales.Init(0.0f, N);
 		for (int32 i = 0; i < N; i++)
 			CategoryHoverScales[i] = FMath::FInterpTo(CategoryHoverScales[i],
-				(i == HighlightedCategory) ? 1.0f : 0.0f, InDeltaTime, 12.0f);
+				(i == HighlightedCategory) ? 1.0f : 0.0f, DT, 12.0f);
 	}
 	else if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
 		int32 N = Categories[ActiveCategory].PieceIndices.Num();
-		if (Dist >= sI && Dist <= sO && N > 0)
-			HighlightedPieceSlot = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
-		else
-			HighlightedPieceSlot = -1;
+		HighlightedPieceSlot = (Dist >= sI && Dist <= sO && N > 0)
+			? FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1) : -1;
 		if (PieceHoverScales.Num() != N) PieceHoverScales.Init(0.0f, N);
 		for (int32 i = 0; i < N; i++)
 			PieceHoverScales[i] = FMath::FInterpTo(PieceHoverScales[i],
-				(i == HighlightedPieceSlot || i == SelectedPieceSlot) ? 1.0f : 0.0f, InDeltaTime, 12.0f);
+				(i == HighlightedPieceSlot || i == SelectedPieceSlot) ? 1.0f : 0.0f, DT, 12.0f);
 	}
-	if (HighlightedCategory != PrevHighlightedCategory || HighlightedPieceSlot != PrevHighlightedPieceSlot)
-	{
-		PrevHighlightedCategory = HighlightedCategory;
-		PrevHighlightedPieceSlot = HighlightedPieceSlot;
-	}
+	PrevHighlightedCategory = HighlightedCategory;
+	PrevHighlightedPieceSlot = HighlightedPieceSlot;
 }
 // ============================================================================
 // PAINT
 // ============================================================================
 int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo,
 	const FSlateRect& Cull, FSlateWindowElementList& Out,
-	int32 LayerId, const FWidgetStyle& Style, bool bEnabled) const
+	int32 LId, const FWidgetStyle& WS, bool bE) const
 {
-	if (Categories.Num() == 0 || FadeAlpha < 0.001f) return LayerId;
-	FVector2D Size = Geo.GetLocalSize();
-	FVector2D Center = Size / 2.0f;
-	float Scale = (Size.Y * 0.55f) / (OuterRadius * 2.0f);
-	float sI = InnerRadius * Scale;
-	float sO = OuterRadius * Scale;
-	float sH = HubRadius * Scale;
-	int32 NameSz = FMath::Clamp(FMath::RoundToInt(16.0f * Scale), 11, 24);
-	int32 SmallSz = FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 18);
-	int32 HubNameSz = FMath::Clamp(FMath::RoundToInt(16.0f * Scale), 11, 24);
-	int32 HubSmallSz = FMath::Clamp(FMath::RoundToInt(11.0f * Scale), 8, 16);
-	int32 HeaderSz = FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 18);
-	int32 BigIconSz = FMath::Clamp(FMath::RoundToInt(22.0f * Scale), 14, 30);
-	FSlateFontInfo NameFont = FCoreStyle::GetDefaultFontStyle("Bold", NameSz);
-	FSlateFontInfo SmallFont = FCoreStyle::GetDefaultFontStyle("Regular", SmallSz);
-	FSlateFontInfo HubNameFont = FCoreStyle::GetDefaultFontStyle("Bold", HubNameSz);
-	FSlateFontInfo HubSmallFont = FCoreStyle::GetDefaultFontStyle("Regular", HubSmallSz);
-	FSlateFontInfo HeaderFont = FCoreStyle::GetDefaultFontStyle("Regular", HeaderSz);
-	FSlateFontInfo BigIconFont = FCoreStyle::GetDefaultFontStyle("Bold", BigIconSz);
+	if (Categories.Num() == 0 || FadeAlpha < 0.001f) return LId;
+	FVector2D Sz = Geo.GetLocalSize();
+	FVector2D C = Sz / 2.0f;
+	float Sc = (FMath::Min(Sz.X, Sz.Y) * 0.55f) / (OuterRadius * 2.0f);
+	float sI = InnerRadius * Sc;
+	float sO = OuterRadius * Sc;
+	float sH = HubRadius * Sc;
+	float Gap = WedgeGapDeg / 2.0f;
+	// Fonts
+	int32 NS = FMath::Clamp(FMath::RoundToInt(15.0f * Sc), 10, 22);
+	int32 SS = FMath::Clamp(FMath::RoundToInt(11.0f * Sc), 8, 16);
+	int32 HS = FMath::Clamp(FMath::RoundToInt(11.0f * Sc), 8, 16);
+	int32 BI = FMath::Clamp(FMath::RoundToInt(20.0f * Sc), 14, 28);
+	FSlateFontInfo NameF  = FCoreStyle::GetDefaultFontStyle("Bold", NS);
+	FSlateFontInfo SmallF = FCoreStyle::GetDefaultFontStyle("Regular", SS);
+	FSlateFontInfo HeadF  = FCoreStyle::GetDefaultFontStyle("Regular", HS);
+	FSlateFontInfo BigF   = FCoreStyle::GetDefaultFontStyle("Bold", BI);
 	bool bMain = ViewTransition < 0.5f;
-	// ===== MAIN VIEW: 4 Category wedges =====
 	if (bMain)
 	{
+		// ===== MAIN: Category wedges =====
 		int32 N = Categories.Num();
-		float Sweep = 360.0f / N;
-		// Draw header text
-		FVector2D HeaderPos = Center - FVector2D(0.0f, sO + 30.0f * Scale);
-		FLinearColor HeaderCol = FLinearColor(0.35f, 0.40f, 0.50f, FadeAlpha * 0.7f);
-		DrawTextCentered(Out, LayerId, Geo, HeaderPos, TEXT("SELECT CATEGORY"), HeaderFont, HeaderCol);
+		float Sw = 360.0f / N;
+		// Header
+		DrawTextCentered(Out, LId, Geo, C - FVector2D(0, sO + 28.0f * Sc),
+			TEXT("SELECT CATEGORY"), HeadF,
+			FLinearColor(0.38f, 0.42f, 0.52f, FadeAlpha * 0.7f));
 		for (int32 i = 0; i < N; i++)
 		{
-			float Start = i * Sweep;
-			float End = Start + Sweep;
-			float Gap = WedgeGapDeg / 2.0f;
-			float Mid = (Start + End) / 2.0f;
-			float HoverT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
+			float S = i * Sw, E = S + Sw, M = (S + E) / 2.0f;
+			float HT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
 			FCatStyle CS = CatStyles.IsValidIndex(i) ? CatStyles[i] : CatStyles[0];
-			// Wedge fill
-			FLinearColor Fill = FMath::Lerp(CS.DarkFill, CS.LitFill, HoverT);
+			// Filled wedge
+			FLinearColor Fill = FMath::Lerp(CS.DarkFill, CS.LitFill, HT);
 			Fill.A *= FadeAlpha;
-			DrawWedgeFill(Out, LayerId, Geo, Center, sI, sO, Start + Gap, End - Gap, Fill);
-			// Thin border on outer edge
-			FLinearColor BorderCol = FLinearColor::LerpUsingHSV(DividerColor, CS.Accent, HoverT * 0.5f);
-			BorderCol.A *= FadeAlpha;
-			DrawArc(Out, LayerId, Geo, Center, sO, Start + Gap, End - Gap, BorderCol, 1.5f);
-			// Divider lines
-			FVector2D P1 = PolarToCart(Center, sI, Start);
-			FVector2D P2 = PolarToCart(Center, sO, Start);
-			DrawRadialLine(Out, LayerId, Geo, P1, P2,
-				FLinearColor(DividerColor.R, DividerColor.G, DividerColor.B, DividerColor.A * FadeAlpha), 1.0f);
-			// Category name
-			FVector2D NamePos = PolarToCart(Center, sI + (sO - sI) * 0.72f, Mid);
-			FLinearColor NameCol = CS.TextColor;
-			NameCol.A *= FadeAlpha;
-			DrawTextCentered(Out, LayerId, Geo, NamePos, Categories[i].Name, NameFont, NameCol);
-			// Icon (texture) at 38% of band
-			float IconR = sI + (sO - sI) * 0.38f;
-			FVector2D IconPos = PolarToCart(Center, IconR, Mid);
-			float DrawIconSz = IconSize * Scale * 0.65f * (1.0f + 0.08f * HoverT);
-			// If we have a texture icon for first piece in category, use it
+			DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
+			// Outer border arc in accent color
+			FLinearColor Bord = CS.Accent;
+			Bord.A = FMath::Lerp(0.15f, 0.6f, HT) * FadeAlpha;
+			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, FMath::Lerp(1.5f, 3.0f, HT));
+			// Dividers
+			FLinearColor DivC = DividerColor; DivC.A *= FadeAlpha;
+			DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DivC, 1.2f);
+			// Icon at 38%
+			float IR = sI + (sO - sI) * 0.38f;
+			FVector2D IP = Polar(C, IR, M);
+			float ISz = IconSize * Sc * 0.65f * (1.0f + 0.08f * HT);
 			if (Categories[i].PieceIndices.Num() > 0)
 			{
-				int32 FirstPiece = Categories[i].PieceIndices[0];
-				if (IconBrushes.IsValidIndex(FirstPiece) && IconBrushes[FirstPiece].GetResourceObject())
+				int32 FP = Categories[i].PieceIndices[0];
+				if (IconBrushes.IsValidIndex(FP) && IconBrushes[FP].GetResourceObject())
 				{
-					FLinearColor IconTint = FMath::Lerp(
-						FLinearColor(0.5f, 0.55f, 0.6f, FadeAlpha),
-						FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha), HoverT);
-					DrawIconAt(Out, LayerId, Geo, IconPos, IconBrushes[FirstPiece], DrawIconSz, IconTint);
+					FLinearColor IT = FMath::Lerp(FLinearColor(0.55f, 0.6f, 0.65f, FadeAlpha),
+						FLinearColor(1, 1, 1, FadeAlpha), HT);
+					DrawIcon(Out, LId, Geo, IP, IconBrushes[FP], ISz, IT);
 				}
 			}
+			// Name at 72%
+			FVector2D NP = Polar(C, sI + (sO - sI) * 0.72f, M);
+			FLinearColor NC = CS.TextColor; NC.A *= FadeAlpha;
+			DrawTextCentered(Out, LId, Geo, NP, Categories[i].Name, NameF, NC);
 		}
 	}
-	// ===== SUB VIEW: Piece wedges =====
 	else if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
+		// ===== SUB: Piece wedges =====
 		const FCategoryInfo& Cat = Categories[ActiveCategory];
 		int32 N = Cat.PieceIndices.Num();
+		FCatStyle CS = CatStyles.IsValidIndex(ActiveCategory) ? CatStyles[ActiveCategory] : CatStyles[0];
 		if (N > 0)
 		{
-			float Sweep = 360.0f / N;
-			FCatStyle CS = CatStyles.IsValidIndex(ActiveCategory) ? CatStyles[ActiveCategory] : CatStyles[0];
+			float Sw = 360.0f / N;
 			// Header
-			FVector2D HeaderPos = Center - FVector2D(0.0f, sO + 30.0f * Scale);
-			DrawTextCentered(Out, LayerId, Geo, HeaderPos,
-				Cat.Name, HeaderFont, FLinearColor(CS.TextColor.R, CS.TextColor.G, CS.TextColor.B, FadeAlpha * 0.8f));
+			DrawTextCentered(Out, LId, Geo, C - FVector2D(0, sO + 28.0f * Sc),
+				Cat.Name, HeadF, FLinearColor(CS.TextColor.R, CS.TextColor.G, CS.TextColor.B, FadeAlpha * 0.8f));
 			for (int32 p = 0; p < N; p++)
 			{
-				float Start = p * Sweep;
-				float End = Start + Sweep;
-				float Gap = WedgeGapDeg / 2.0f;
-				float Mid = (Start + End) / 2.0f;
-				float HoverT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
+				float S = p * Sw, E = S + Sw, M = (S + E) / 2.0f;
+				float HT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
 				bool bLit = (p == HighlightedPieceSlot || p == SelectedPieceSlot);
-				int32 GIdx = Cat.PieceIndices[p];
-				// Wedge fill - very dark, tinted by category
+				int32 GI = Cat.PieceIndices[p];
+				// Fill
 				FLinearColor Fill = FMath::Lerp(
-					FLinearColor(0.06f, 0.06f, 0.08f, 0.90f),
-					FLinearColor(CS.DarkFill.R * 1.5f, CS.DarkFill.G * 1.5f, CS.DarkFill.B * 1.5f, 0.95f),
-					HoverT);
+					FLinearColor(0.05f, 0.05f, 0.07f, 0.93f),
+					FLinearColor(CS.DarkFill.R*2, CS.DarkFill.G*2, CS.DarkFill.B*2, 0.96f), HT);
 				Fill.A *= FadeAlpha;
-				DrawWedgeFill(Out, LayerId, Geo, Center, sI, sO, Start + Gap, End - Gap, Fill);
+				DrawFilledWedge(Out, LId, Geo, C, sI, sO, S + Gap, E - Gap, Fill);
 				// Border
-				FLinearColor BorderCol = bLit
-					? FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, 0.6f * FadeAlpha)
-					: FLinearColor(DividerColor.R, DividerColor.G, DividerColor.B, DividerColor.A * FadeAlpha);
-				DrawArc(Out, LayerId, Geo, Center, sO, Start + Gap, End - Gap, BorderCol, bLit ? 2.0f : 1.0f);
+				FLinearColor Bord = bLit ? CS.Accent : DividerColor;
+				Bord.A = (bLit ? FMath::Lerp(0.3f, 0.7f, HT) : 0.2f) * FadeAlpha;
+				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, bLit ? 2.5f : 1.0f);
 				// Divider
-				FVector2D P1 = PolarToCart(Center, sI, Start);
-				FVector2D P2 = PolarToCart(Center, sO, Start);
-				DrawRadialLine(Out, LayerId, Geo, P1, P2,
-					FLinearColor(DividerColor.R, DividerColor.G, DividerColor.B, DividerColor.A * FadeAlpha), 0.8f);
-				// Icon at 38%
-				float IconR = sI + (sO - sI) * 0.35f;
-				FVector2D IconPos = PolarToCart(Center, IconR, Mid);
-				float DrawSz = IconSize * Scale * 0.5f * (1.0f + 0.06f * HoverT);
-				if (IconBrushes.IsValidIndex(GIdx) && IconBrushes[GIdx].GetResourceObject())
+				FLinearColor DC = DividerColor; DC.A *= FadeAlpha;
+				DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DC, 0.8f);
+				// Icon at 33%
+				float IR = sI + (sO - sI) * 0.33f;
+				float DSz = IconSize * Sc * 0.5f * (1 + 0.06f * HT);
+				if (IconBrushes.IsValidIndex(GI) && IconBrushes[GI].GetResourceObject())
 				{
-					FLinearColor Tint = FMath::Lerp(
-						FLinearColor(0.5f, 0.55f, 0.65f, FadeAlpha),
-						FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha), HoverT);
-					DrawIconAt(Out, LayerId, Geo, IconPos, IconBrushes[GIdx], DrawSz, Tint);
+					FLinearColor IT = FMath::Lerp(FLinearColor(0.5f, 0.55f, 0.6f, FadeAlpha),
+						FLinearColor(1, 1, 1, FadeAlpha), HT);
+					DrawIcon(Out, LId, Geo, Polar(C, IR, M), IconBrushes[GI], DSz, IT);
 				}
 				// Piece name at 65%
-				FString Name = AllPieceInfos.IsValidIndex(GIdx) ? AllPieceInfos[GIdx].DisplayName : TEXT("");
-				if (!Name.IsEmpty())
+				FString Nm = AllPieceInfos.IsValidIndex(GI) ? AllPieceInfos[GI].DisplayName : TEXT("");
+				if (!Nm.IsEmpty())
 				{
-					FVector2D NPos = PolarToCart(Center, sI + (sO - sI) * 0.68f, Mid);
-					FLinearColor NCol = FMath::Lerp(TextDim, TextWhite, HoverT);
-					NCol.A *= FadeAlpha;
-					DrawTextCentered(Out, LayerId, Geo, NPos, Name, SmallFont, NCol);
+					FLinearColor NC = FMath::Lerp(TextDim, TextWhite, HT); NC.A *= FadeAlpha;
+					DrawTextCentered(Out, LId, Geo, Polar(C, sI + (sO-sI)*0.65f, M), Nm, SmallF, NC);
 				}
 				// Subtitle at 85%
-				FString Sub = AllPieceInfos.IsValidIndex(GIdx) ? AllPieceInfos[GIdx].Subtitle : TEXT("");
+				FString Sub = AllPieceInfos.IsValidIndex(GI) ? AllPieceInfos[GI].Subtitle : TEXT("");
 				if (!Sub.IsEmpty())
 				{
-					FVector2D SPos = PolarToCart(Center, sI + (sO - sI) * 0.88f, Mid);
-					FLinearColor SCol = CS.Accent;
-					SCol.A = FMath::Lerp(0.3f, 0.7f, HoverT) * FadeAlpha;
-					FSlateFontInfo SubFont = FCoreStyle::GetDefaultFontStyle("Regular",
-						FMath::Clamp(FMath::RoundToInt(8.0f * Scale), 6, 12));
-					DrawTextCentered(Out, LayerId, Geo, SPos, Sub, SubFont, SCol);
+					FLinearColor SC = CS.Accent; SC.A = FMath::Lerp(0.3f, 0.65f, HT) * FadeAlpha;
+					FSlateFontInfo SF = FCoreStyle::GetDefaultFontStyle("Regular",
+						FMath::Clamp(FMath::RoundToInt(9.0f * Sc), 6, 13));
+					DrawTextCentered(Out, LId, Geo, Polar(C, sI + (sO-sI)*0.85f, M), Sub, SF, SC);
 				}
 			}
 		}
 	}
-	// ===== CENTER HUB (always) =====
-	// Hub fill
-	DrawCircle(Out, LayerId, Geo, Center, sH, FLinearColor(HubBg.R, HubBg.G, HubBg.B, HubBg.A * FadeAlpha));
-	// Hub border
-	FLinearColor HBCol = (ActiveCategory >= 0 && CatStyles.IsValidIndex(ActiveCategory))
+	// ===== CENTER HUB =====
+	DrawFilledCircle(Out, LId, Geo, C, sH, FLinearColor(HubBg.R, HubBg.G, HubBg.B, HubBg.A * FadeAlpha));
+	FLinearColor HBC = (ActiveCategory >= 0 && CatStyles.IsValidIndex(ActiveCategory))
 		? FLinearColor(CatStyles[ActiveCategory].Accent.R, CatStyles[ActiveCategory].Accent.G,
-			CatStyles[ActiveCategory].Accent.B, 0.4f * FadeAlpha)
+			CatStyles[ActiveCategory].Accent.B, 0.35f * FadeAlpha)
 		: FLinearColor(HubBorder.R, HubBorder.G, HubBorder.B, HubBorder.A * FadeAlpha);
-	DrawArc(Out, LayerId, Geo, Center, sH, 0.0f, 360.0f, HBCol, 2.0f);
-	// Hub content
+	DrawArc(Out, LId, Geo, C, sH, 0, 360, HBC, 2.0f);
 	if (CurrentView == ERadialMenuView::Sub && ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
 		FCatStyle CS = CatStyles.IsValidIndex(ActiveCategory) ? CatStyles[ActiveCategory] : CatStyles[0];
-		// Category letter icon
-		DrawTextCentered(Out, LayerId, Geo, Center - FVector2D(0, 12.0f * Scale),
-			Categories[ActiveCategory].Icon, BigIconFont,
-			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.8f));
-		// "< BACK"
-		DrawTextCentered(Out, LayerId, Geo, Center + FVector2D(0, 12.0f * Scale),
-			TEXT("< BACK"), HubSmallFont,
-			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.5f));
+		DrawTextCentered(Out, LId, Geo, C - FVector2D(0, 10.0f * Sc),
+			Categories[ActiveCategory].Icon, BigF,
+			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.75f));
+		DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 14.0f * Sc),
+			TEXT("< BACK"), SmallF,
+			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.45f));
 	}
 	else
 	{
-		// BUILD text + hammer
-		DrawTextCentered(Out, LayerId, Geo, Center + FVector2D(0, 8.0f * Scale),
-			TEXT("BUILD"), HubSmallFont,
-			FLinearColor(TextDim.R, TextDim.G, TextDim.B, FadeAlpha * 0.8f));
+		DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 6.0f * Sc),
+			TEXT("BUILD"), SmallF,
+			FLinearColor(TextDim.R, TextDim.G, TextDim.B, FadeAlpha * 0.75f));
 	}
-	// Outer ring border (single thin line, no tick marks)
-	DrawArc(Out, LayerId, Geo, Center, sO, 0.0f, 360.0f,
-		FLinearColor(DividerColor.R, DividerColor.G, DividerColor.B, DividerColor.A * FadeAlpha * 0.5f), 1.0f);
-	// Inner ring border
-	DrawArc(Out, LayerId, Geo, Center, sI, 0.0f, 360.0f,
-		FLinearColor(DividerColor.R, DividerColor.G, DividerColor.B, DividerColor.A * FadeAlpha * 0.3f), 1.0f);
-	return LayerId + 1;
+	// Thin outer + inner ring borders
+	FLinearColor RC = DividerColor; RC.A *= FadeAlpha * 0.4f;
+	DrawArc(Out, LId, Geo, C, sO, 0, 360, RC, 1.0f);
+	DrawArc(Out, LId, Geo, C, sI, 0, 360, RC, 0.8f);
+	return LId + 1;
 }
 // ============================================================================
-// DRAWING HELPERS
+// DRAWING: Triangle-fan filled wedge via MakeCustomVerts
 // ============================================================================
-void URadialPieceMenu::DrawWedgeFill(FSlateWindowElementList& Out, int32 LayerId,
+void URadialPieceMenu::DrawFilledWedge(FSlateWindowElementList& Out, int32 LId,
 	const FGeometry& Geo, FVector2D Center, float InR, float OutR,
 	float StartDeg, float EndDeg, FLinearColor Color) const
 {
 	if (Color.A < 0.001f) return;
-	// Use NON-overlapping rings to avoid alpha stacking
-	float Span = OutR - InR;
-	if (Span < 1.0f) return;
-	// Each ring exactly touches the next - no overlap
-	int32 NumRings = FMath::Max(4, FMath::CeilToInt(Span / 3.0f));
-	float RingW = Span / (float)NumRings;
-	for (int32 r = 0; r < NumRings; r++)
-	{
-		float Radius = InR + RingW * (r + 0.5f);
-		TArray<FVector2D> Points;
-		int32 Steps = 32;
-		Points.Reserve(Steps + 1);
-		for (int32 s = 0; s <= Steps; s++)
-		{
-			float T = (float)s / Steps;
-			float Deg = FMath::Lerp(StartDeg, EndDeg, T) - 90.0f;
-			float Rad = FMath::DegreesToRadians(Deg);
-			Points.Add(Center + FVector2D(FMath::Cos(Rad), FMath::Sin(Rad)) * Radius);
-		}
-		// Line width = ring spacing exactly (no overlap)
-		FSlateDrawElement::MakeLines(Out, LayerId, Geo.ToPaintGeometry(),
-			Points, ESlateDrawEffect::None, Color, false, RingW);
-	}
-}
-void URadialPieceMenu::DrawArc(FSlateWindowElementList& Out, int32 LayerId,
-	const FGeometry& Geo, FVector2D Center, float Radius,
-	float StartDeg, float EndDeg, FLinearColor Color, float Thickness) const
-{
-	if (Color.A < 0.001f) return;
-	TArray<FVector2D> Points;
-	int32 Steps = 48;
-	Points.Reserve(Steps + 1);
+	const int32 Steps = 24;
+	const FSlateRenderTransform& RT = Geo.GetAccumulatedRenderTransform();
+	// Build triangle strip: inner[i], outer[i], inner[i+1], outer[i+1]...
+	TArray<FSlateVertex> Verts;
+	TArray<SlateIndex> Indices;
+	Verts.Reserve((Steps + 1) * 2);
+	Indices.Reserve(Steps * 6);
+	FColor VertColor = Color.ToFColor(true);
 	for (int32 i = 0; i <= Steps; i++)
 	{
 		float T = (float)i / Steps;
 		float Deg = FMath::Lerp(StartDeg, EndDeg, T) - 90.0f;
 		float Rad = FMath::DegreesToRadians(Deg);
-		Points.Add(Center + FVector2D(FMath::Cos(Rad), FMath::Sin(Rad)) * Radius);
+		FVector2D Dir(FMath::Cos(Rad), FMath::Sin(Rad));
+		FVector2D InnerPt = Center + Dir * InR;
+		FVector2D OuterPt = Center + Dir * OutR;
+		// Transform to render space
+		FVector2D InT = RT.TransformPoint(InnerPt);
+		FVector2D OutT = RT.TransformPoint(OuterPt);
+		FSlateVertex InV;
+		InV.Position = FVector2f(InT.X, InT.Y);
+		InV.Color = VertColor;
+		InV.TexCoords[0] = 0.0f; InV.TexCoords[1] = 0.0f;
+		InV.TexCoords[2] = 1.0f; InV.TexCoords[3] = 1.0f;
+		FSlateVertex OutV;
+		OutV.Position = FVector2f(OutT.X, OutT.Y);
+		OutV.Color = VertColor;
+		OutV.TexCoords[0] = 1.0f; OutV.TexCoords[1] = 0.0f;
+		OutV.TexCoords[2] = 1.0f; OutV.TexCoords[3] = 1.0f;
+		Verts.Add(InV);
+		Verts.Add(OutV);
 	}
-	FSlateDrawElement::MakeLines(Out, LayerId, Geo.ToPaintGeometry(),
-		Points, ESlateDrawEffect::None, Color, true, Thickness);
+	// Build triangle indices
+	for (int32 i = 0; i < Steps; i++)
+	{
+		int32 Base = i * 2;
+		// Triangle 1: inner[i], outer[i], inner[i+1]
+		Indices.Add(Base);
+		Indices.Add(Base + 1);
+		Indices.Add(Base + 2);
+		// Triangle 2: outer[i], outer[i+1], inner[i+1]
+		Indices.Add(Base + 1);
+		Indices.Add(Base + 3);
+		Indices.Add(Base + 2);
+	}
+	const FSlateResourceHandle Handle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(WhiteBrush);
+	FSlateDrawElement::MakeCustomVerts(Out, LId, Handle, Verts, Indices, nullptr, 0, 0);
 }
-void URadialPieceMenu::DrawRadialLine(FSlateWindowElementList& Out, int32 LayerId,
+void URadialPieceMenu::DrawFilledCircle(FSlateWindowElementList& Out, int32 LId,
+	const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const
+{
+	if (Color.A < 0.001f || Radius < 1.0f) return;
+	const int32 Steps = 32;
+	const FSlateRenderTransform& RT = Geo.GetAccumulatedRenderTransform();
+	FColor VC = Color.ToFColor(true);
+	TArray<FSlateVertex> Verts;
+	TArray<SlateIndex> Indices;
+	Verts.Reserve(Steps + 2);
+	Indices.Reserve(Steps * 3);
+	// Center vertex
+	FVector2D CT = RT.TransformPoint(Center);
+	FSlateVertex CV;
+	CV.Position = FVector2f(CT.X, CT.Y);
+	CV.Color = VC;
+	CV.TexCoords[0] = 0.5f; CV.TexCoords[1] = 0.5f;
+	CV.TexCoords[2] = 1.0f; CV.TexCoords[3] = 1.0f;
+	Verts.Add(CV);
+	// Edge vertices
+	for (int32 i = 0; i <= Steps; i++)
+	{
+		float Rad = FMath::DegreesToRadians((float)i / Steps * 360.0f);
+		FVector2D P = Center + FVector2D(FMath::Cos(Rad), FMath::Sin(Rad)) * Radius;
+		FVector2D PT = RT.TransformPoint(P);
+		FSlateVertex V;
+		V.Position = FVector2f(PT.X, PT.Y);
+		V.Color = VC;
+		V.TexCoords[0] = 0.5f + FMath::Cos(Rad) * 0.5f;
+		V.TexCoords[1] = 0.5f + FMath::Sin(Rad) * 0.5f;
+		V.TexCoords[2] = 1.0f; V.TexCoords[3] = 1.0f;
+		Verts.Add(V);
+	}
+	for (int32 i = 0; i < Steps; i++)
+	{
+		Indices.Add(0);
+		Indices.Add(i + 1);
+		Indices.Add(i + 2);
+	}
+	const FSlateResourceHandle Handle = FSlateApplication::Get().GetRenderer()->GetResourceHandle(WhiteBrush);
+	FSlateDrawElement::MakeCustomVerts(Out, LId, Handle, Verts, Indices, nullptr, 0, 0);
+}
+void URadialPieceMenu::DrawArc(FSlateWindowElementList& Out, int32 LId,
+	const FGeometry& Geo, FVector2D Center, float Radius,
+	float StartDeg, float EndDeg, FLinearColor Color, float Thickness) const
+{
+	if (Color.A < 0.001f) return;
+	TArray<FVector2D> Pts;
+	int32 Steps = 48;
+	Pts.Reserve(Steps + 1);
+	for (int32 i = 0; i <= Steps; i++)
+	{
+		float Deg = FMath::Lerp(StartDeg, EndDeg, (float)i / Steps) - 90.0f;
+		float R = FMath::DegreesToRadians(Deg);
+		Pts.Add(Center + FVector2D(FMath::Cos(R), FMath::Sin(R)) * Radius);
+	}
+	FSlateDrawElement::MakeLines(Out, LId, Geo.ToPaintGeometry(),
+		Pts, ESlateDrawEffect::None, Color, true, Thickness);
+}
+void URadialPieceMenu::DrawLine2D(FSlateWindowElementList& Out, int32 LId,
 	const FGeometry& Geo, FVector2D A, FVector2D B, FLinearColor Color, float Thickness) const
 {
 	if (Color.A < 0.001f) return;
-	TArray<FVector2D> P;
-	P.Add(A);
-	P.Add(B);
-	FSlateDrawElement::MakeLines(Out, LayerId, Geo.ToPaintGeometry(),
+	TArray<FVector2D> P; P.Add(A); P.Add(B);
+	FSlateDrawElement::MakeLines(Out, LId, Geo.ToPaintGeometry(),
 		P, ESlateDrawEffect::None, Color, true, Thickness);
 }
-void URadialPieceMenu::DrawCircle(FSlateWindowElementList& Out, int32 LayerId,
-	const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const
-{
-	// Fill circle using non-overlapping rings
-	if (Color.A < 0.001f || Radius < 1.0f) return;
-	int32 NumRings = FMath::Max(4, FMath::CeilToInt(Radius / 3.0f));
-	float RingW = Radius / (float)NumRings;
-	for (int32 r = 0; r < NumRings; r++)
-	{
-		float R = RingW * (r + 0.5f);
-		TArray<FVector2D> Points;
-		int32 Steps = 36;
-		Points.Reserve(Steps + 1);
-		for (int32 s = 0; s <= Steps; s++)
-		{
-			float Rad = FMath::DegreesToRadians((float)s / Steps * 360.0f);
-			Points.Add(Center + FVector2D(FMath::Cos(Rad), FMath::Sin(Rad)) * R);
-		}
-		FSlateDrawElement::MakeLines(Out, LayerId, Geo.ToPaintGeometry(),
-			Points, ESlateDrawEffect::None, Color, false, RingW);
-	}
-}
-void URadialPieceMenu::DrawText(FSlateWindowElementList& Out, int32 LayerId,
-	const FGeometry& Geo, FVector2D Position, const FString& Text,
+void URadialPieceMenu::DrawTextCentered(FSlateWindowElementList& Out, int32 LId,
+	const FGeometry& Geo, FVector2D Pos, const FString& Text,
 	const FSlateFontInfo& Font, FLinearColor Color) const
 {
 	if (Text.IsEmpty() || Color.A < 0.001f) return;
 	TSharedRef<FSlateFontMeasure> FM = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
 	FVector2D Sz = FM->Measure(Text, Font);
-	FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Position)),
+	FVector2D TL = Pos - Sz / 2.0f;
+	FSlateDrawElement::MakeText(Out, LId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(TL)),
 		Text, Font, ESlateDrawEffect::None, Color);
 }
-void URadialPieceMenu::DrawTextCentered(FSlateWindowElementList& Out, int32 LayerId,
-	const FGeometry& Geo, FVector2D Center, const FString& Text,
-	const FSlateFontInfo& Font, FLinearColor Color) const
-{
-	if (Text.IsEmpty() || Color.A < 0.001f) return;
-	TSharedRef<FSlateFontMeasure> FM = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
-	FVector2D Sz = FM->Measure(Text, Font);
-	FVector2D Pos = Center - Sz / 2.0f;
-	FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
-		Text, Font, ESlateDrawEffect::None, Color);
-}
-void URadialPieceMenu::DrawIconAt(FSlateWindowElementList& Out, int32 LayerId,
-	const FGeometry& Geo, FVector2D Center, const FSlateBrush& Brush,
+void URadialPieceMenu::DrawIcon(FSlateWindowElementList& Out, int32 LId,
+	const FGeometry& Geo, FVector2D Pos, const FSlateBrush& Brush,
 	float Size, FLinearColor Tint) const
 {
 	if (Tint.A < 0.001f) return;
-	FVector2D Sz(Size, Size);
-	FVector2D Pos = Center - Sz / 2.0f;
-	FSlateDrawElement::MakeBox(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
+	FVector2D S(Size, Size);
+	FVector2D TL = Pos - S / 2.0f;
+	FSlateDrawElement::MakeBox(Out, LId, Geo.ToPaintGeometry(S, FSlateLayoutTransform(TL)),
 		&Brush, ESlateDrawEffect::None, Tint);
 }
 void URadialPieceMenu::PlaySoundOpen()

@@ -1,9 +1,6 @@
 // RadialPieceMenu.h - Born To Shine
-// Matches the React prototype EXACTLY:
-//   Dark background wheel, 4 colored category wedges, emoji icons
-//   Click category -> wheel swaps to piece wedges in-place
-//   Click center -> back to categories
-//   NO tick marks, NO pulsing outer rings, NO old radial wheel elements
+// Professional radial wheel using FSlateDrawElement::MakeCustomVerts
+// for artifact-free filled wedges. No line-stroke hacks.
 #pragma once
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -60,20 +57,18 @@ private:
 	float InnerRadius;
 	float OuterRadius;
 	float HubRadius;
-	float DeadZone;
 	float WedgeGapDeg;
 	float IconSize;
 	TArray<FSlateBrush> IconBrushes;
-	// Per-category colors (dark fills + accent borders)
+	FSlateBrush WhiteBrush; // Cached white brush for MakeCustomVerts
 	struct FCatStyle
 	{
-		FLinearColor DarkFill;   // The dark tinted wedge background
-		FLinearColor LitFill;    // Hovered/selected wedge fill
-		FLinearColor Accent;     // Border and text glow color
-		FLinearColor TextColor;  // Category name color
+		FLinearColor DarkFill;
+		FLinearColor LitFill;
+		FLinearColor Accent;
+		FLinearColor TextColor;
 	};
 	TArray<FCatStyle> CatStyles;
-	// Shared colors
 	FLinearColor HubBg;
 	FLinearColor HubBorder;
 	FLinearColor TextWhite;
@@ -81,25 +76,23 @@ private:
 	FLinearColor DividerColor;
 	void BuildCategories();
 	int32 FindCategoryForPieceIndex(int32 PieceIndex) const;
-	// Drawing helpers - simple and clean
-	void DrawWedgeFill(FSlateWindowElementList& Out, int32 LayerId,
+	// Professional drawing: triangle-based fills, clean arcs, centered text
+	void DrawFilledWedge(FSlateWindowElementList& Out, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float InR, float OutR,
 		float StartDeg, float EndDeg, FLinearColor Color) const;
+	void DrawFilledCircle(FSlateWindowElementList& Out, int32 LayerId,
+		const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const;
 	void DrawArc(FSlateWindowElementList& Out, int32 LayerId,
 		const FGeometry& Geo, FVector2D Center, float Radius,
 		float StartDeg, float EndDeg, FLinearColor Color, float Thickness) const;
-	void DrawRadialLine(FSlateWindowElementList& Out, int32 LayerId,
-		const FGeometry& Geo, FVector2D A, FVector2D B, FLinearColor Color, float Thickness) const;
-	void DrawCircle(FSlateWindowElementList& Out, int32 LayerId,
-		const FGeometry& Geo, FVector2D Center, float Radius, FLinearColor Color) const;
-	void DrawText(FSlateWindowElementList& Out, int32 LayerId,
-		const FGeometry& Geo, FVector2D Position, const FString& Text,
-		const FSlateFontInfo& Font, FLinearColor Color) const;
+	void DrawLine2D(FSlateWindowElementList& Out, int32 LayerId,
+		const FGeometry& Geo, FVector2D A, FVector2D B,
+		FLinearColor Color, float Thickness) const;
 	void DrawTextCentered(FSlateWindowElementList& Out, int32 LayerId,
-		const FGeometry& Geo, FVector2D Center, const FString& Text,
+		const FGeometry& Geo, FVector2D Pos, const FString& Text,
 		const FSlateFontInfo& Font, FLinearColor Color) const;
-	void DrawIconAt(FSlateWindowElementList& Out, int32 LayerId,
-		const FGeometry& Geo, FVector2D Center, const FSlateBrush& Brush,
+	void DrawIcon(FSlateWindowElementList& Out, int32 LayerId,
+		const FGeometry& Geo, FVector2D Pos, const FSlateBrush& Brush,
 		float Size, FLinearColor Tint) const;
-	FVector2D PolarToCart(FVector2D Center, float Radius, float Deg) const;
+	FVector2D Polar(FVector2D Center, float Radius, float Deg) const;
 };
