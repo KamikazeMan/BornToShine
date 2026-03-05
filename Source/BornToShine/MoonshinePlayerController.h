@@ -81,9 +81,6 @@ protected:
 
 	bool bRadialMenuOpen;
 
-	// Frame the menu was opened — blocks phantom release from SetInputMode
-	uint64 RadialMenuOpenFrame;
-
 	// UI Widget references
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
 	TSubclassOf<class UUserWidget> BuildModeWidgetClass;
