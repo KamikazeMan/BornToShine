@@ -33,10 +33,10 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	ViewTransition = 0.0f;
 	ViewTransitionSpeed = 8.0f;
 
-	DarkBg          = FLinearColor(0.024f, 0.031f, 0.063f, 1.0f);
-	DarkWedge       = FLinearColor(0.059f, 0.082f, 0.125f, 0.90f);
+	DarkBg          = FLinearColor(0.024f, 0.031f, 0.063f, 0.85f);
+	DarkWedge       = FLinearColor(0.059f, 0.082f, 0.125f, 0.35f);
 	DarkHover       = FLinearColor(0.078f, 0.118f, 0.176f, 0.95f);
-	ActiveWedgeFill = FLinearColor(0.047f, 0.102f, 0.165f, 0.90f);
+	ActiveWedgeFill = FLinearColor(0.047f, 0.102f, 0.165f, 0.40f);
 
 	Cyan    = FLinearColor(0.0f, 0.898f, 1.0f, 1.0f);
 	CyanDim = FLinearColor(0.0f, 0.898f, 1.0f, 0.27f);
@@ -48,19 +48,19 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 
 	CategoryColorTable.SetNum(4);
 	CategoryColorTable[0].Accent   = FLinearColor(1.0f, 0.416f, 0.259f, 1.0f);
-	CategoryColorTable[0].WedgeDim = FLinearColor(1.0f, 0.416f, 0.259f, 0.08f);
+	CategoryColorTable[0].WedgeDim = FLinearColor(1.0f, 0.416f, 0.259f, 0.04f);
 	CategoryColorTable[0].WedgeLit = FLinearColor(1.0f, 0.416f, 0.259f, 0.30f);
 
 	CategoryColorTable[1].Accent   = FLinearColor(0.239f, 0.863f, 0.518f, 1.0f);
-	CategoryColorTable[1].WedgeDim = FLinearColor(0.239f, 0.863f, 0.518f, 0.08f);
+	CategoryColorTable[1].WedgeDim = FLinearColor(0.239f, 0.863f, 0.518f, 0.04f);
 	CategoryColorTable[1].WedgeLit = FLinearColor(0.239f, 0.863f, 0.518f, 0.30f);
 
 	CategoryColorTable[2].Accent   = FLinearColor(0.369f, 0.612f, 1.0f, 1.0f);
-	CategoryColorTable[2].WedgeDim = FLinearColor(0.369f, 0.612f, 1.0f, 0.08f);
+	CategoryColorTable[2].WedgeDim = FLinearColor(0.369f, 0.612f, 1.0f, 0.04f);
 	CategoryColorTable[2].WedgeLit = FLinearColor(0.369f, 0.612f, 1.0f, 0.30f);
 
 	CategoryColorTable[3].Accent   = FLinearColor(0.941f, 0.784f, 0.314f, 1.0f);
-	CategoryColorTable[3].WedgeDim = FLinearColor(0.941f, 0.784f, 0.314f, 0.08f);
+	CategoryColorTable[3].WedgeDim = FLinearColor(0.941f, 0.784f, 0.314f, 0.04f);
 	CategoryColorTable[3].WedgeLit = FLinearColor(0.941f, 0.784f, 0.314f, 0.30f);
 
 	SetIsFocusable(true);
@@ -617,8 +617,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Bold", FSz);
 			FVector2D Sz = FM->Measure(Cat.Icon, F);
 			FVector2D Pos = Center - FVector2D(Sz.X / 2.0f, Sz.Y / 2.0f + 14.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				Cat.Icon, F, ESlateDrawEffect::None, Faded(AccCol));
 		}
 
@@ -627,8 +626,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Bold", FSz);
 			FVector2D Sz = FM->Measure(Cat.Name, F);
 			FVector2D Pos = Center + FVector2D(-Sz.X / 2.0f, 2.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				Cat.Name, F, ESlateDrawEffect::None, Faded(TextWhite));
 		}
 
@@ -638,8 +636,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Regular", FSz);
 			FVector2D Sz = FM->Measure(CountText, F);
 			FVector2D Pos = Center + FVector2D(-Sz.X / 2.0f, 15.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				CountText, F, ESlateDrawEffect::None, WithAlpha(AccCol, 0.5f * FadeAlpha));
 		}
 
@@ -649,8 +646,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FSlateFontInfo F = FCoreStyle::GetDefaultFontStyle("Regular", FSz);
 			FVector2D Sz = FM->Measure(BackText, F);
 			FVector2D Pos = Center + FVector2D(-Sz.X / 2.0f, 25.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				BackText, F, ESlateDrawEffect::None, WithAlpha(AccCol, 0.45f * FadeAlpha));
 		}
 	}
@@ -671,8 +667,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FString T = TEXT("BUILD");
 			FVector2D Sz = FM->Measure(T, F);
 			FVector2D Pos = Center - FVector2D(Sz.X / 2.0f, Sz.Y / 2.0f + 4.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				T, F, ESlateDrawEffect::None, Faded(Cyan));
 		}
 
@@ -682,8 +677,7 @@ int32 URadialPieceMenu::PaintCenterHub(FSlateWindowElementList& Out, int32 Layer
 			FString T = TEXT("select category");
 			FVector2D Sz = FM->Measure(T, F);
 			FVector2D Pos = Center + FVector2D(-Sz.X / 2.0f, 9.0f * Scale);
-			FGeometry G = Geo.MakeChild(Sz, FSlateLayoutTransform(Pos));
-			FSlateDrawElement::MakeText(Out, LayerId, G.ToPaintGeometry(),
+			FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(Sz, FSlateLayoutTransform(Pos)),
 				T, F, ESlateDrawEffect::None, WithAlpha(Cyan, 0.35f * FadeAlpha));
 		}
 	}
@@ -706,8 +700,7 @@ void URadialPieceMenu::DrawTextAtAngle(FSlateWindowElementList& Out, int32 Layer
 	FVector2D TextSize = FM->Measure(Text, Font);
 	FVector2D TopLeft = Pos - TextSize / 2.0f;
 
-	FGeometry TextGeo = Geo.MakeChild(TextSize, FSlateLayoutTransform(TopLeft));
-	FSlateDrawElement::MakeText(Out, LayerId, TextGeo.ToPaintGeometry(),
+	FSlateDrawElement::MakeText(Out, LayerId, Geo.ToPaintGeometry(TextSize, FSlateLayoutTransform(TopLeft)),
 		Text, Font, ESlateDrawEffect::None, Color);
 }
 
@@ -722,8 +715,7 @@ void URadialPieceMenu::DrawIconAtAngle(FSlateWindowElementList& Out, int32 Layer
 	FVector2D Size(DrawSize, DrawSize);
 	FVector2D TopLeft = Pos - Size / 2.0f;
 
-	FGeometry IconGeo = Geo.MakeChild(Size, FSlateLayoutTransform(TopLeft));
-	FSlateDrawElement::MakeBox(Out, LayerId, IconGeo.ToPaintGeometry(),
+	FSlateDrawElement::MakeBox(Out, LayerId, Geo.ToPaintGeometry(Size, FSlateLayoutTransform(TopLeft)),
 		&Brush, ESlateDrawEffect::None, Tint);
 }
 
