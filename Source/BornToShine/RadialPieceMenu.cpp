@@ -62,6 +62,9 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	CategoryColorTable[3].Accent   = FLinearColor(0.941f, 0.784f, 0.314f, 1.0f);
 	CategoryColorTable[3].WedgeDim = FLinearColor(0.941f, 0.784f, 0.314f, 0.08f);
 	CategoryColorTable[3].WedgeLit = FLinearColor(0.941f, 0.784f, 0.314f, 0.30f);
+
+	SetIsFocusable(true);
+	SetVisibility(ESlateVisibility::Visible);
 }
 
 void URadialPieceMenu::BuildCategories()

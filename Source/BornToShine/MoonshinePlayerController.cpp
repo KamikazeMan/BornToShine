@@ -289,6 +289,11 @@ void AMoonshinePlayerController::OpenRadialMenu()
 
 	RadialMenu->InitMenu(Infos, BC->GetCurrentPieceTypeIndex());
 	RadialMenu->AddToViewport(100);
+
+	// Force full-screen size so GetLocalSize() is non-zero (needed for text positioning & hit testing)
+	RadialMenu->SetAnchorsInViewport(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+	RadialMenu->SetAlignmentInViewport(FVector2D(0.0f, 0.0f));
+
 	RadialMenu->PlaySoundOpen();
 
 	// Center mouse on screen
@@ -296,8 +301,12 @@ void AMoonshinePlayerController::OpenRadialMenu()
 	GetViewportSize(VPX, VPY);
 	SetMouseLocation(VPX / 2, VPY / 2);
 
+	// Give focus to the widget so NativeOnMouseButtonDown fires
 	bShowMouseCursor = true;
-	SetInputMode(FInputModeGameAndUI().SetHideCursorDuringCapture(false));
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(RadialMenu->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::LockAlways);
+	SetInputMode(InputMode);
 
 	// Pause building preview updates
 	BC->SetComponentTickEnabled(false);
