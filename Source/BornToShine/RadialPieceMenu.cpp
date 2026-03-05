@@ -39,26 +39,26 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 	ViewTransitionSpeed = 10.0f;
 	// Category styles matching the React prototype colors
 	CatStyles.SetNum(4);
-	// Framing - warm red/orange
-	CatStyles[0].DarkFill  = FLinearColor(0.12f, 0.04f, 0.04f, 0.92f);
-	CatStyles[0].LitFill   = FLinearColor(0.20f, 0.08f, 0.06f, 0.95f);
+	// Framing - barely tinted dark red
+	CatStyles[0].DarkFill  = FLinearColor(0.08f, 0.03f, 0.03f, 0.92f);
+	CatStyles[0].LitFill   = FLinearColor(0.14f, 0.05f, 0.04f, 0.95f);
 	CatStyles[0].Accent    = FLinearColor(1.0f, 0.42f, 0.26f, 1.0f);
-	CatStyles[0].TextColor = FLinearColor(1.0f, 0.42f, 0.26f, 1.0f);
-	// Roofing - green
-	CatStyles[1].DarkFill  = FLinearColor(0.03f, 0.10f, 0.06f, 0.92f);
-	CatStyles[1].LitFill   = FLinearColor(0.06f, 0.18f, 0.10f, 0.95f);
+	CatStyles[0].TextColor = FLinearColor(1.0f, 0.50f, 0.35f, 1.0f);
+	// Roofing - barely tinted dark green
+	CatStyles[1].DarkFill  = FLinearColor(0.02f, 0.07f, 0.04f, 0.92f);
+	CatStyles[1].LitFill   = FLinearColor(0.04f, 0.12f, 0.07f, 0.95f);
 	CatStyles[1].Accent    = FLinearColor(0.24f, 0.86f, 0.52f, 1.0f);
-	CatStyles[1].TextColor = FLinearColor(0.24f, 0.86f, 0.52f, 1.0f);
-	// Sheathing - blue
-	CatStyles[2].DarkFill  = FLinearColor(0.04f, 0.05f, 0.12f, 0.92f);
-	CatStyles[2].LitFill   = FLinearColor(0.06f, 0.08f, 0.20f, 0.95f);
+	CatStyles[1].TextColor = FLinearColor(0.30f, 0.90f, 0.55f, 1.0f);
+	// Sheathing - barely tinted dark blue
+	CatStyles[2].DarkFill  = FLinearColor(0.03f, 0.03f, 0.08f, 0.92f);
+	CatStyles[2].LitFill   = FLinearColor(0.05f, 0.05f, 0.14f, 0.95f);
 	CatStyles[2].Accent    = FLinearColor(0.37f, 0.61f, 1.0f, 1.0f);
-	CatStyles[2].TextColor = FLinearColor(0.37f, 0.61f, 1.0f, 1.0f);
-	// Utilities - gold/yellow
-	CatStyles[3].DarkFill  = FLinearColor(0.10f, 0.08f, 0.03f, 0.92f);
-	CatStyles[3].LitFill   = FLinearColor(0.18f, 0.14f, 0.04f, 0.95f);
-	CatStyles[3].Accent    = FLinearColor(0.94f, 0.78f, 0.31f, 1.0f);
-	CatStyles[3].TextColor = FLinearColor(0.94f, 0.78f, 0.31f, 1.0f);
+	CatStyles[2].TextColor = FLinearColor(0.45f, 0.65f, 1.0f, 1.0f);
+	// Foundation - dark warm grey
+	CatStyles[3].DarkFill  = FLinearColor(0.06f, 0.05f, 0.04f, 0.92f);
+	CatStyles[3].LitFill   = FLinearColor(0.10f, 0.08f, 0.06f, 0.95f);
+	CatStyles[3].Accent    = FLinearColor(0.70f, 0.60f, 0.45f, 1.0f);
+	CatStyles[3].TextColor = FLinearColor(0.75f, 0.65f, 0.50f, 1.0f);
 	// Shared colors
 	HubBg       = FLinearColor(0.02f, 0.03f, 0.06f, 0.95f);
 	HubBorder   = FLinearColor(0.15f, 0.20f, 0.30f, 0.6f);
@@ -72,16 +72,15 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& ObjectInitializer)
 void URadialPieceMenu::BuildCategories()
 {
 	Categories.Empty();
-	FCategoryInfo Cat0; Cat0.Name = TEXT("FRAMING");    Cat0.Icon = TEXT("F");
-	FCategoryInfo Cat1; Cat1.Name = TEXT("ROOFING");    Cat1.Icon = TEXT("R");
-	FCategoryInfo Cat2; Cat2.Name = TEXT("SHEATHING");  Cat2.Icon = TEXT("S");
-	FCategoryInfo Cat3; Cat3.Name = TEXT("UTILITIES");  Cat3.Icon = TEXT("U");
+	FCategoryInfo Cat0; Cat0.Name = TEXT("FRAMING");     Cat0.Icon = TEXT("F");
+	FCategoryInfo Cat1; Cat1.Name = TEXT("ROOFING");     Cat1.Icon = TEXT("R");
+	FCategoryInfo Cat2; Cat2.Name = TEXT("SHEATHING");   Cat2.Icon = TEXT("S");
+	FCategoryInfo Cat3; Cat3.Name = TEXT("FOUNDATION");  Cat3.Icon = TEXT("B");
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
 		EPieceType PT = AllPieceInfos[i].PieceType;
 		switch (PT)
 		{
-		case EPieceType::Foundation:
 		case EPieceType::WallStud:
 		case EPieceType::WallPlate:
 		case EPieceType::CornerPost:
@@ -100,8 +99,10 @@ void URadialPieceMenu::BuildCategories()
 		case EPieceType::FloorJoist:
 		case EPieceType::Plywood:
 			Cat2.PieceIndices.Add(i); break;
-		default:
+		case EPieceType::Foundation:
 			Cat3.PieceIndices.Add(i); break;
+		default:
+			Cat0.PieceIndices.Add(i); break;
 		}
 	}
 	if (Cat0.PieceIndices.Num() > 0) Categories.Add(Cat0);
@@ -295,12 +296,12 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 	float sI = InnerRadius * Scale;
 	float sO = OuterRadius * Scale;
 	float sH = HubRadius * Scale;
-	int32 NameSz = FMath::Clamp(FMath::RoundToInt(13.0f * Scale), 9, 20);
-	int32 SmallSz = FMath::Clamp(FMath::RoundToInt(10.0f * Scale), 7, 15);
-	int32 HubNameSz = FMath::Clamp(FMath::RoundToInt(14.0f * Scale), 10, 22);
-	int32 HubSmallSz = FMath::Clamp(FMath::RoundToInt(9.0f * Scale), 7, 13);
-	int32 HeaderSz = FMath::Clamp(FMath::RoundToInt(10.0f * Scale), 7, 14);
-	int32 BigIconSz = FMath::Clamp(FMath::RoundToInt(18.0f * Scale), 12, 26);
+	int32 NameSz = FMath::Clamp(FMath::RoundToInt(16.0f * Scale), 11, 24);
+	int32 SmallSz = FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 18);
+	int32 HubNameSz = FMath::Clamp(FMath::RoundToInt(16.0f * Scale), 11, 24);
+	int32 HubSmallSz = FMath::Clamp(FMath::RoundToInt(11.0f * Scale), 8, 16);
+	int32 HeaderSz = FMath::Clamp(FMath::RoundToInt(12.0f * Scale), 9, 18);
+	int32 BigIconSz = FMath::Clamp(FMath::RoundToInt(22.0f * Scale), 14, 30);
 	FSlateFontInfo NameFont = FCoreStyle::GetDefaultFontStyle("Bold", NameSz);
 	FSlateFontInfo SmallFont = FCoreStyle::GetDefaultFontStyle("Regular", SmallSz);
 	FSlateFontInfo HubNameFont = FCoreStyle::GetDefaultFontStyle("Bold", HubNameSz);
@@ -385,7 +386,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 				int32 GIdx = Cat.PieceIndices[p];
 				// Wedge fill - very dark, tinted by category
 				FLinearColor Fill = FMath::Lerp(
-					FLinearColor(0.04f, 0.04f, 0.06f, 0.90f),
+					FLinearColor(0.06f, 0.06f, 0.08f, 0.90f),
 					FLinearColor(CS.DarkFill.R * 1.5f, CS.DarkFill.G * 1.5f, CS.DarkFill.B * 1.5f, 0.95f),
 					HoverT);
 				Fill.A *= FadeAlpha;
