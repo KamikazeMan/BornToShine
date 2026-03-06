@@ -284,6 +284,16 @@ void AMoonshinePlayerController::OpenRadialMenu()
 	TArray<FPieceTypeInfo> Infos = BC->GetPieceTypeInfos();
 	if (Infos.Num() == 0) return;
 
+	// Update availability from phase manager
+	AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+	if (PM)
+	{
+		for (FPieceTypeInfo& Info : Infos)
+		{
+			Info.bAvailable = PM->CanPlacePieceType(Info.PieceType);
+		}
+	}
+
 	RadialMenu = CreateWidget<URadialPieceMenu>(this);
 	if (!RadialMenu) return;
 
@@ -355,6 +365,18 @@ void AMoonshinePlayerController::CloseRadialMenu()
 			if (Selected >= 0)
 			{
 				BC->SetPieceTypeIndex(Selected);
+
+				// Reset build cycle if player selected Foundation
+				TArray<FPieceTypeInfo> Infos = BC->GetPieceTypeInfos();
+				if (Selected < Infos.Num() && Infos[Selected].PieceType == EPieceType::Foundation)
+				{
+					AConstructionPhaseManager* PM = AConstructionPhaseManager::Instance;
+					if (PM)
+					{
+						PM->ResetBuildCycle();
+						UE_LOG(LogTemp, Log, TEXT("Build cycle reset - Foundation selected"));
+					}
+				}
 			}
 		}
 	}

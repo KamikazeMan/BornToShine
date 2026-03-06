@@ -21,63 +21,52 @@ void AConstructionPhaseManager::BeginPlay()
 
 bool AConstructionPhaseManager::CanPlacePieceType(EPieceType PieceType) const
 {
-	// Phase gating uses CYCLE counts (resets each time player starts a new section).
-	// Foundation is always available. Going backward is always allowed.
 	switch (PieceType)
 	{
 	case EPieceType::Foundation:
 		return true; // Always available
 
 	case EPieceType::RimBoard:
-		return GetCyclePieceCount(EPieceType::Foundation) >= 1;
+		return GetCyclePieceCount(EPieceType::Foundation) >= 4;
 
 	case EPieceType::FloorJoist:
 		return GetCyclePieceCount(EPieceType::RimBoard) >= 4;
 
 	case EPieceType::Plywood:
-		return GetCyclePieceCount(EPieceType::FloorJoist) >= 1;
+		return GetCyclePieceCount(EPieceType::FloorJoist) >= 5;
 
-	case EPieceType::WallPlate:
-		return GetCyclePieceCount(EPieceType::Plywood) >= 1;
+	case EPieceType::WallPlate: // Bottom Plate
+		return GetCyclePieceCount(EPieceType::Plywood) >= 2;
+
+	case EPieceType::CornerPost:
+		return GetCyclePieceCount(EPieceType::WallPlate) >= 4;
 
 	case EPieceType::WallStud:
-	case EPieceType::CornerPost:
-	case EPieceType::DoorFrame:
-	case EPieceType::WindowFrame:
-		return GetCyclePieceCount(EPieceType::WallPlate) >= 1;
-
-	case EPieceType::Header:
-		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
+		return GetCyclePieceCount(EPieceType::CornerPost) >= 4;
 
 	case EPieceType::TopPlate:
-		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
+		return GetCyclePieceCount(EPieceType::WallStud) >= 20;
 
 	case EPieceType::DoubleTopPlate:
-		return GetCyclePieceCount(EPieceType::TopPlate) >= 1;
+		return GetCyclePieceCount(EPieceType::TopPlate) >= 4;
 
+	case EPieceType::DoorFrame:
+		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 4;
+
+	case EPieceType::WindowFrame:
+		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 4; // Unlocks with door frame
+
+	case EPieceType::Header:
+		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 4; // Unlocks with door frame
+
+	// Everything below unlocks after door frame is placed
 	case EPieceType::RidgePost:
-		// Both first and double top plates are placed as ATopPlate actors
-		// (PieceType::TopPlate). DoubleTopPlate cycle count is only incremented
-		// by the RectangleBuilder suggestion system. To handle manual placement,
-		// save/load, and edge cases, also accept a TopPlate count that implies
-		// both layers are partially done (4 first + at least 1 double = 5).
-		return GetCyclePieceCount(EPieceType::DoubleTopPlate) >= 1
-			|| GetCyclePieceCount(EPieceType::TopPlate) >= 5;
-
 	case EPieceType::RidgeBoard:
-		return GetCyclePieceCount(EPieceType::RidgePost) >= 1;
-
 	case EPieceType::Rafter:
-		return GetCyclePieceCount(EPieceType::RidgeBoard) >= 1;
-
 	case EPieceType::FasciaBoard:
-		return GetCyclePieceCount(EPieceType::Rafter) >= 1;
-
 	case EPieceType::WallSheathing:
-		return GetCyclePieceCount(EPieceType::WallStud) >= 1;
-
 	case EPieceType::RoofSheathing:
-		return GetCyclePieceCount(EPieceType::Rafter) >= 1;
+		return GetCyclePieceCount(EPieceType::DoorFrame) >= 1;
 
 	default:
 		return true;
@@ -91,53 +80,50 @@ FString AConstructionPhaseManager::GetPrerequisiteMessage(EPieceType PieceType) 
 	switch (PieceType)
 	{
 	case EPieceType::RimBoard:
-		return TEXT("Place at least 1 foundation first");
+		return FString::Printf(TEXT("Place 4 foundations first (%d/4)"),
+			GetCyclePieceCount(EPieceType::Foundation));
 
 	case EPieceType::FloorJoist:
-		return FString::Printf(TEXT("Complete rim board rectangle first (%d/4 placed)"),
+		return FString::Printf(TEXT("Place 4 rim boards first (%d/4)"),
 			GetCyclePieceCount(EPieceType::RimBoard));
 
 	case EPieceType::Plywood:
-		return TEXT("Place floor joists first");
+		return FString::Printf(TEXT("Place 5 floor joists first (%d/5)"),
+			GetCyclePieceCount(EPieceType::FloorJoist));
 
 	case EPieceType::WallPlate:
-		return TEXT("Install plywood sheathing first");
+		return FString::Printf(TEXT("Place 2 plywood sheets first (%d/2)"),
+			GetCyclePieceCount(EPieceType::Plywood));
+
+	case EPieceType::CornerPost:
+		return FString::Printf(TEXT("Place 4 bottom plates first (%d/4)"),
+			GetCyclePieceCount(EPieceType::WallPlate));
 
 	case EPieceType::WallStud:
-	case EPieceType::CornerPost:
-	case EPieceType::DoorFrame:
-	case EPieceType::WindowFrame:
-		return TEXT("Place bottom plates first");
+		return FString::Printf(TEXT("Place 4 corner posts first (%d/4)"),
+			GetCyclePieceCount(EPieceType::CornerPost));
 
-	case EPieceType::Header:
 	case EPieceType::TopPlate:
-		return TEXT("Place wall studs first");
+		return FString::Printf(TEXT("Place 20 wall studs first (%d/20)"),
+			GetCyclePieceCount(EPieceType::WallStud));
 
 	case EPieceType::DoubleTopPlate:
-		return TEXT("Place top plates first");
+		return FString::Printf(TEXT("Place 4 top plates first (%d/4)"),
+			GetCyclePieceCount(EPieceType::TopPlate));
+
+	case EPieceType::DoorFrame:
+	case EPieceType::WindowFrame:
+	case EPieceType::Header:
+		return FString::Printf(TEXT("Place 4 double top plates first (%d/4)"),
+			GetCyclePieceCount(EPieceType::DoubleTopPlate));
 
 	case EPieceType::RidgePost:
-	{
-		int32 DblCount = GetCyclePieceCount(EPieceType::DoubleTopPlate);
-		int32 TopCount = GetCyclePieceCount(EPieceType::TopPlate);
-		return FString::Printf(TEXT("Place double top plates first (TopPlate: %d, DoubleTopPlate: %d)"),
-			TopCount, DblCount);
-	}
-
 	case EPieceType::RidgeBoard:
-		return TEXT("Place ridge posts first");
-
 	case EPieceType::Rafter:
-		return TEXT("Place ridge board first");
-
 	case EPieceType::FasciaBoard:
-		return TEXT("Place rafters first");
-
 	case EPieceType::WallSheathing:
-		return TEXT("Place wall studs first");
-
 	case EPieceType::RoofSheathing:
-		return TEXT("Place rafters first");
+		return TEXT("Place a door frame first");
 
 	default:
 		return TEXT("Prerequisites not met");
