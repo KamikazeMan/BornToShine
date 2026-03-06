@@ -164,21 +164,7 @@ FReply URadialPieceMenu::NativeOnMouseButtonDown(const FGeometry& G, const FPoin
 	float sI = InnerRadius * Sc, sO = OuterRadius * Sc, sH = HubRadius * Sc;
 	float Ang = FMath::RadiansToDegrees(FMath::Atan2(DX, -DY));
 	if (Ang < 0) Ang += 360.0f;
-	if (CurrentView == ERadialMenuView::Main)
-	{
-		if (Dist >= sI && Dist <= sO)
-		{
-			int32 N = Categories.Num();
-			int32 Hit = FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1);
-			ActiveCategory = Hit;
-			HighlightedPieceSlot = -1;
-			SelectedPieceSlot = -1;
-			PieceHoverScales.Empty();
-			CurrentView = ERadialMenuView::Sub;
-			return FReply::Handled();
-		}
-	}
-	else
+	if (CurrentView == ERadialMenuView::Sub)
 	{
 		if (Dist <= sH + 8.0f * Sc)
 		{
@@ -240,6 +226,16 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeo, float DT)
 		for (int32 i = 0; i < N; i++)
 			CategoryHoverScales[i] = FMath::FInterpTo(CategoryHoverScales[i],
 				(i == HighlightedCategory) ? 1.0f : 0.0f, DT, 12.0f);
+		// Auto-enter sub view when hovering a category
+		if (HighlightedCategory >= 0 && CategoryHoverScales.IsValidIndex(HighlightedCategory)
+			&& CategoryHoverScales[HighlightedCategory] > 0.8f)
+		{
+			ActiveCategory = HighlightedCategory;
+			HighlightedPieceSlot = -1;
+			SelectedPieceSlot = -1;
+			PieceHoverScales.Empty();
+			CurrentView = ERadialMenuView::Sub;
+		}
 	}
 	else if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
