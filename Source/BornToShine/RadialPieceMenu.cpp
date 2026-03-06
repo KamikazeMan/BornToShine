@@ -26,7 +26,7 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
 	SelectedPieceSlot = -1;
 	InnerRadius = 60.0f;
 	OuterRadius = 170.0f;
-	HubRadius   = 48.0f;
+	HubRadius   = 60.0f;
 	WedgeGapDeg = 0.0f;
 	IconSize    = 55.0f;
 	FadeAlpha = 0.0f;
@@ -74,26 +74,59 @@ void URadialPieceMenu::BuildCategories()
 	FCategoryInfo C1; C1.Name = TEXT("ROOFING");    C1.Icon = TEXT("R");
 	FCategoryInfo C2; C2.Name = TEXT("SHEATHING");  C2.Icon = TEXT("S");
 	FCategoryInfo C3; C3.Name = TEXT("FOUNDATION"); C3.Icon = TEXT("B");
+
+	// Define the desired piece order per category
+	// Framing order: Bottom Plate, Wall Stud, Corner Post, Top Plate, Dbl Top Plate, Door Frame, Window Frame, Header, Rim Board, Floor Joist
+	TArray<EPieceType> FramingOrder = {
+		EPieceType::WallPlate, EPieceType::WallStud, EPieceType::CornerPost,
+		EPieceType::TopPlate, EPieceType::DoubleTopPlate,
+		EPieceType::DoorFrame, EPieceType::WindowFrame, EPieceType::Header,
+		EPieceType::RimBoard, EPieceType::FloorJoist
+	};
+
+	// Roofing order: Ridge Post, Ridge Board, Rafter, Fascia Board
+	TArray<EPieceType> RoofingOrder = {
+		EPieceType::RidgePost, EPieceType::RidgeBoard,
+		EPieceType::Rafter, EPieceType::FasciaBoard
+	};
+
+	// Sheathing order: Plywood (all sheathing types)
+	TArray<EPieceType> SheathingOrder = {
+		EPieceType::Plywood
+	};
+
+	// Foundation order: Foundation
+	TArray<EPieceType> FoundationOrder = {
+		EPieceType::Foundation
+	};
+
+	// Build each category in the specified order
+	auto AddInOrder = [&](FCategoryInfo& Cat, const TArray<EPieceType>& Order)
+	{
+		for (EPieceType PT : Order)
+		{
+			for (int32 i = 0; i < AllPieceInfos.Num(); i++)
+			{
+				if (AllPieceInfos[i].PieceType == PT && !Cat.PieceIndices.Contains(i))
+					Cat.PieceIndices.Add(i);
+			}
+		}
+	};
+
+	AddInOrder(C0, FramingOrder);
+	AddInOrder(C1, RoofingOrder);
+	AddInOrder(C2, SheathingOrder);
+	AddInOrder(C3, FoundationOrder);
+
+	// Add any pieces that weren't in any order list to Framing as fallback
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
-		switch (AllPieceInfos[i].PieceType)
-		{
-		case EPieceType::WallStud: case EPieceType::WallPlate: case EPieceType::CornerPost:
-		case EPieceType::TopPlate: case EPieceType::DoubleTopPlate:
-		case EPieceType::DoorFrame: case EPieceType::WindowFrame: case EPieceType::Header:
-		case EPieceType::RimBoard: case EPieceType::FloorJoist:
-			C0.PieceIndices.Add(i); break;
-		case EPieceType::RidgePost: case EPieceType::RidgeBoard:
-		case EPieceType::Rafter: case EPieceType::FasciaBoard:
-			C1.PieceIndices.Add(i); break;
-		case EPieceType::Plywood:
-			C2.PieceIndices.Add(i); break;
-		case EPieceType::Foundation:
-			C3.PieceIndices.Add(i); break;
-		default:
-			C0.PieceIndices.Add(i); break;
-		}
+		bool bFound = C0.PieceIndices.Contains(i) || C1.PieceIndices.Contains(i) ||
+		              C2.PieceIndices.Contains(i) || C3.PieceIndices.Contains(i);
+		if (!bFound)
+			C0.PieceIndices.Add(i);
 	}
+
 	if (C0.PieceIndices.Num() > 0) Categories.Add(C0);
 	if (C1.PieceIndices.Num() > 0) Categories.Add(C1);
 	if (C2.PieceIndices.Num() > 0) Categories.Add(C2);
@@ -343,7 +376,11 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 			// Name at 72%
 			FVector2D NP = Polar(C, sI + (sO - sI) * 0.72f, M);
 			FLinearColor NC = CS.TextColor; NC.A *= FadeAlpha;
-			DrawTextCentered(Out, LId, Geo, NP, Categories[i].Name, NameF, NC);
+			// Scale font smaller if name is long to prevent overflow
+			int32 NameLen = Categories[i].Name.Len();
+			int32 AdjustedNS = (NameLen > 7) ? FMath::Clamp(FMath::RoundToInt(12.0f * Sc), 8, 18) : NS;
+			FSlateFontInfo AdjNameF = FCoreStyle::GetDefaultFontStyle("Bold", AdjustedNS);
+			DrawTextCentered(Out, LId, Geo, NP, Categories[i].Name, AdjNameF, NC);
 		}
 	}
 	else if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
@@ -403,7 +440,10 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 				if (!Nm.IsEmpty())
 				{
 					FLinearColor NC = FMath::Lerp(TextDim, TextWhite, HT); NC.A *= FadeAlpha;
-					DrawTextCentered(Out, LId, Geo, Polar(C, sI + (sO-sI)*0.65f, M), Nm, SmallF, NC);
+					int32 PNameLen = Nm.Len();
+					int32 AdjSS = (PNameLen > 12) ? FMath::Clamp(FMath::RoundToInt(9.0f * Sc), 7, 13) : SS;
+					FSlateFontInfo AdjSmallF = FCoreStyle::GetDefaultFontStyle("Bold", AdjSS);
+					DrawTextCentered(Out, LId, Geo, Polar(C, sI + (sO-sI)*0.65f, M), Nm, AdjSmallF, NC);
 				}
 				// Subtitle at 85%
 				FString Sub = AllPieceInfos.IsValidIndex(GI) ? AllPieceInfos[GI].Subtitle : TEXT("");
