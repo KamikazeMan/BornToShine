@@ -106,7 +106,7 @@ void URadialPieceMenu::BuildCategories()
 	// Framing: RimBoard, FloorJoist, Floor Plywood, BottomPlate, CornerPost, WallStud, TopPlate, DblTopPlate, DoorFrame, WindowFrame
 	AddByType(C0, EPieceType::RimBoard, Claimed);
 	AddByType(C0, EPieceType::FloorJoist, Claimed);
-	AddByName(C0, TEXT("PlyWood Floor"), Claimed);  // Floor deck plywood specifically
+	AddByName(C0, TEXT("PlyWoodSheet"), Claimed);
 	AddByType(C0, EPieceType::WallPlate, Claimed);  // Bottom Plate
 	AddByType(C0, EPieceType::CornerPost, Claimed);
 	AddByType(C0, EPieceType::WallStud, Claimed);
@@ -122,8 +122,8 @@ void URadialPieceMenu::BuildCategories()
 	AddByType(C1, EPieceType::FasciaBoard, Claimed);
 
 	// Sheathing: Wall Sheathing, Roof Sheathing (remaining Plywood pieces)
-	AddByName(C2, TEXT("Wall"), Claimed);
-	AddByName(C2, TEXT("Roof"), Claimed);
+	AddByName(C2, TEXT("WallSheathing"), Claimed);
+	AddByName(C2, TEXT("RoofSheathing"), Claimed);
 
 	// Foundation
 	AddByType(C3, EPieceType::Foundation, Claimed);
