@@ -27,7 +27,7 @@ URadialPieceMenu::URadialPieceMenu(const FObjectInitializer& OI)
 	InnerRadius = 60.0f;
 	OuterRadius = 170.0f;
 	HubRadius   = 48.0f;
-	WedgeGapDeg = 0.5f;
+	WedgeGapDeg = 0.0f;
 	IconSize    = 55.0f;
 	FadeAlpha = 0.0f;
 	FadeSpeed = 8.0f;
@@ -239,6 +239,16 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeo, float DT)
 	}
 	else if (ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
+		// If mouse is over center hub area, go back to main view
+		float sH = HubRadius * Sc;
+		if (Dist <= sH + 5.0f * Sc)
+		{
+			CurrentView = ERadialMenuView::Main;
+			ActiveCategory = -1;
+			HighlightedPieceSlot = -1;
+			SelectedPieceSlot = -1;
+			PieceHoverScales.Empty();
+		}
 		int32 N = Categories[ActiveCategory].PieceIndices.Num();
 		HighlightedPieceSlot = (Dist >= sI && Dist <= sO && N > 0)
 			? FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1) : -1;
@@ -304,7 +314,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 			// Full border glow around entire wedge
 			FLinearColor Bord = CS.Accent;
 			Bord.A = FMath::Lerp(0.45f, 0.90f, HT) * FadeAlpha;
-			float BordW = FMath::Lerp(2.0f, 3.5f, HT);
+			float BordW = FMath::Lerp(3.0f, 5.0f, HT);
 			// Outer arc
 			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, BordW);
 			// Inner arc
@@ -367,7 +377,7 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 				// Full border glow around entire piece wedge
 				FLinearColor Bord = bLit ? CS.Accent : FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, 0.3f);
 				Bord.A = (bLit ? FMath::Lerp(0.5f, 0.85f, HT) : 0.3f) * FadeAlpha;
-				float BordW = bLit ? 3.0f : 1.5f;
+				float BordW = bLit ? 5.0f : 2.5f;
 				// Outer arc
 				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, BordW);
 				// Inner arc
@@ -405,30 +415,110 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 		}
 	}
 	// ===== CENTER HUB =====
-	DrawFilledCircle(Out, LId, Geo, C, sH, FLinearColor(HubBg.R, HubBg.G, HubBg.B, HubBg.A * FadeAlpha));
-	FLinearColor HBC = (ActiveCategory >= 0 && CatStyles.IsValidIndex(ActiveCategory))
-		? FLinearColor(CatStyles[ActiveCategory].Accent.R, CatStyles[ActiveCategory].Accent.G,
-			CatStyles[ActiveCategory].Accent.B, 0.35f * FadeAlpha)
-		: FLinearColor(HubBorder.R, HubBorder.G, HubBorder.B, HubBorder.A * FadeAlpha);
-	FLinearColor GlowC = HBC; GlowC.A *= 0.4f;
+	// Check if mouse is near center
+	float HubDist = 999.0f;
+	{
+		APlayerController* PC = GetOwningPlayer();
+		if (PC)
+		{
+			float MX, MY;
+			PC->GetMousePosition(MX, MY);
+			FVector2D VP;
+			if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(VP);
+			float DX = MX - VP.X / 2.0f;
+			float DY = MY - VP.Y / 2.0f;
+			HubDist = FMath::Sqrt(DX * DX + DY * DY);
+		}
+	}
+	bool bHubHovered = HubDist <= sH + 5.0f * Sc;
+
+	// Hub glow ring (outer)
+	FLinearColor GlowC;
+	if (bHubHovered)
+		GlowC = FLinearColor(1.0f, 1.0f, 1.0f, 0.4f * FadeAlpha);
+	else if (ActiveCategory >= 0 && CatStyles.IsValidIndex(ActiveCategory))
+		GlowC = FLinearColor(CatStyles[ActiveCategory].Accent.R, CatStyles[ActiveCategory].Accent.G,
+			CatStyles[ActiveCategory].Accent.B, 0.25f * FadeAlpha);
+	else
+		GlowC = FLinearColor(HubBorder.R, HubBorder.G, HubBorder.B, 0.2f * FadeAlpha);
 	DrawArc(Out, LId, Geo, C, sH + 3.0f * Sc, 0, 360, GlowC, 4.0f * Sc);
 	DrawArc(Out, LId, Geo, C, sH + 1.5f * Sc, 0, 360, GlowC, 2.0f * Sc);
-	DrawArc(Out, LId, Geo, C, sH, 0, 360, HBC, 2.0f);
+
+	// Hub fill — white when hovered, dark when not
+	FLinearColor HubFill;
+	if (bHubHovered)
+		HubFill = FLinearColor(0.25f, 0.27f, 0.32f, 0.97f * FadeAlpha);
+	else
+		HubFill = FLinearColor(HubBg.R, HubBg.G, HubBg.B, HubBg.A * FadeAlpha);
+	DrawFilledCircle(Out, LId, Geo, C, sH, HubFill);
+
+	// Hub border ring
+	FLinearColor HBC;
+	if (bHubHovered)
+		HBC = FLinearColor(1.0f, 1.0f, 1.0f, 0.7f * FadeAlpha);
+	else if (ActiveCategory >= 0 && CatStyles.IsValidIndex(ActiveCategory))
+		HBC = FLinearColor(CatStyles[ActiveCategory].Accent.R, CatStyles[ActiveCategory].Accent.G,
+			CatStyles[ActiveCategory].Accent.B, 0.35f * FadeAlpha);
+	else
+		HBC = FLinearColor(HubBorder.R, HubBorder.G, HubBorder.B, HubBorder.A * FadeAlpha);
+	DrawArc(Out, LId, Geo, C, sH, 0, 360, HBC, bHubHovered ? 3.0f : 2.0f);
+
+	// Hub text content
 	if (CurrentView == ERadialMenuView::Sub && ActiveCategory >= 0 && Categories.IsValidIndex(ActiveCategory))
 	{
 		FCatStyle CS = CatStyles.IsValidIndex(ActiveCategory) ? CatStyles[ActiveCategory] : CatStyles[0];
-		DrawTextCentered(Out, LId, Geo, C - FVector2D(0, 10.0f * Sc),
-			Categories[ActiveCategory].Icon, BigF,
-			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.75f));
-		DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 14.0f * Sc),
-			TEXT("< BACK"), SmallF,
-			FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.45f));
+
+		// Show hovered piece name if hovering a piece, otherwise show category info
+		if (HighlightedPieceSlot >= 0 && Categories[ActiveCategory].PieceIndices.IsValidIndex(HighlightedPieceSlot))
+		{
+			int32 GI = Categories[ActiveCategory].PieceIndices[HighlightedPieceSlot];
+			FString PName = AllPieceInfos.IsValidIndex(GI) ? AllPieceInfos[GI].DisplayName : TEXT("");
+			FString PSub = AllPieceInfos.IsValidIndex(GI) ? AllPieceInfos[GI].Subtitle : TEXT("");
+
+			// Piece name
+			if (!PName.IsEmpty())
+				DrawTextCentered(Out, LId, Geo, C - FVector2D(0, 8.0f * Sc), PName, SmallF,
+					FLinearColor(TextWhite.R, TextWhite.G, TextWhite.B, FadeAlpha * 0.95f));
+			// Piece subtitle
+			if (!PSub.IsEmpty())
+				DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 8.0f * Sc), PSub,
+					FCoreStyle::GetDefaultFontStyle("Regular", FMath::Clamp(FMath::RoundToInt(9.0f * Sc), 6, 13)),
+					FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.7f));
+		}
+		else if (!bHubHovered)
+		{
+			// Show category icon + back
+			DrawTextCentered(Out, LId, Geo, C - FVector2D(0, 10.0f * Sc),
+				Categories[ActiveCategory].Icon, BigF,
+				FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.75f));
+			DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 14.0f * Sc),
+				TEXT("< BACK"), SmallF,
+				FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, FadeAlpha * 0.45f));
+		}
+		else
+		{
+			// Hovered over hub — show "BACK" prominently
+			DrawTextCentered(Out, LId, Geo, C,
+				TEXT("BACK"), NameF,
+				FLinearColor(1.0f, 1.0f, 1.0f, FadeAlpha * 0.9f));
+		}
 	}
 	else
 	{
-		DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 6.0f * Sc),
-			TEXT("BUILD"), SmallF,
-			FLinearColor(TextDim.R, TextDim.G, TextDim.B, FadeAlpha * 0.75f));
+		// Main view — show hovered category name or BUILD
+		if (HighlightedCategory >= 0 && Categories.IsValidIndex(HighlightedCategory))
+		{
+			FCatStyle CS = CatStyles.IsValidIndex(HighlightedCategory) ? CatStyles[HighlightedCategory] : CatStyles[0];
+			DrawTextCentered(Out, LId, Geo, C,
+				Categories[HighlightedCategory].Name, SmallF,
+				FLinearColor(CS.TextColor.R, CS.TextColor.G, CS.TextColor.B, FadeAlpha * 0.9f));
+		}
+		else
+		{
+			DrawTextCentered(Out, LId, Geo, C + FVector2D(0, 6.0f * Sc),
+				TEXT("BUILD"), SmallF,
+				FLinearColor(TextDim.R, TextDim.G, TextDim.B, FadeAlpha * 0.75f));
+		}
 	}
 	// Thin outer + inner ring borders
 	FLinearColor RC = DividerColor; RC.A *= FadeAlpha * 0.4f;
