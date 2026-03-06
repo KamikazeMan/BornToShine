@@ -81,11 +81,12 @@ void URadialPieceMenu::BuildCategories()
 		case EPieceType::WallStud: case EPieceType::WallPlate: case EPieceType::CornerPost:
 		case EPieceType::TopPlate: case EPieceType::DoubleTopPlate:
 		case EPieceType::DoorFrame: case EPieceType::WindowFrame: case EPieceType::Header:
+		case EPieceType::RimBoard: case EPieceType::FloorJoist:
 			C0.PieceIndices.Add(i); break;
 		case EPieceType::RidgePost: case EPieceType::RidgeBoard:
 		case EPieceType::Rafter: case EPieceType::FasciaBoard:
 			C1.PieceIndices.Add(i); break;
-		case EPieceType::RimBoard: case EPieceType::FloorJoist: case EPieceType::Plywood:
+		case EPieceType::Plywood:
 			C2.PieceIndices.Add(i); break;
 		case EPieceType::Foundation:
 			C3.PieceIndices.Add(i); break;
@@ -304,16 +305,18 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 			float S = i * Sw, E = S + Sw, M = (S + E) / 2.0f;
 			float HT = CategoryHoverScales.IsValidIndex(i) ? CategoryHoverScales[i] : 0.0f;
 			FCatStyle CS = CatStyles.IsValidIndex(i) ? CatStyles[i] : CatStyles[0];
-			// Outer border arc in accent color
+			// Full border glow around entire wedge
 			FLinearColor Bord = CS.Accent;
 			Bord.A = FMath::Lerp(0.45f, 0.90f, HT) * FadeAlpha;
-			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, FMath::Lerp(2.0f, 3.5f, HT));
-			// Inner border arc
-			FLinearColor InBord = Bord; InBord.A *= 0.5f;
-			DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, InBord, HT > 0.5f ? 2.0f : 1.0f);
-			// Dividers
-			FLinearColor DivC = DividerColor; DivC.A *= FadeAlpha;
-			DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DivC, 1.2f);
+			float BordW = FMath::Lerp(2.0f, 3.5f, HT);
+			// Outer arc
+			DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, BordW);
+			// Inner arc
+			DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, Bord, BordW * 0.8f);
+			// Left edge
+			DrawLine2D(Out, LId, Geo, Polar(C, sI, S + Gap), Polar(C, sO, S + Gap), Bord, BordW * 0.6f);
+			// Right edge
+			DrawLine2D(Out, LId, Geo, Polar(C, sI, E - Gap), Polar(C, sO, E - Gap), Bord, BordW * 0.6f);
 			// Icon at 38%
 			float IR = sI + (sO - sI) * 0.38f;
 			FVector2D IP = Polar(C, IR, M);
@@ -365,16 +368,18 @@ int32 URadialPieceMenu::NativePaint(const FPaintArgs& Args, const FGeometry& Geo
 				float HT = PieceHoverScales.IsValidIndex(p) ? PieceHoverScales[p] : 0.0f;
 				bool bLit = (p == HighlightedPieceSlot || p == SelectedPieceSlot);
 				int32 GI = Cat.PieceIndices[p];
-				// Border
-				FLinearColor Bord = bLit ? CS.Accent : DividerColor;
+				// Full border glow around entire piece wedge
+				FLinearColor Bord = bLit ? CS.Accent : FLinearColor(CS.Accent.R, CS.Accent.G, CS.Accent.B, 0.3f);
 				Bord.A = (bLit ? FMath::Lerp(0.5f, 0.85f, HT) : 0.3f) * FadeAlpha;
-				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, bLit ? 3.0f : 1.5f);
-				// Inner border arc
-				FLinearColor InBord = Bord; InBord.A *= 0.5f;
-				DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, InBord, bLit ? 2.0f : 1.0f);
-				// Divider
-				FLinearColor DC = DividerColor; DC.A *= FadeAlpha;
-				DrawLine2D(Out, LId, Geo, Polar(C, sI, S), Polar(C, sO, S), DC, 0.8f);
+				float BordW = bLit ? 3.0f : 1.5f;
+				// Outer arc
+				DrawArc(Out, LId, Geo, C, sO, S + Gap, E - Gap, Bord, BordW);
+				// Inner arc
+				DrawArc(Out, LId, Geo, C, sI, S + Gap, E - Gap, Bord, BordW * 0.8f);
+				// Left edge
+				DrawLine2D(Out, LId, Geo, Polar(C, sI, S + Gap), Polar(C, sO, S + Gap), Bord, BordW * 0.6f);
+				// Right edge
+				DrawLine2D(Out, LId, Geo, Polar(C, sI, E - Gap), Polar(C, sO, E - Gap), Bord, BordW * 0.6f);
 				// Icon at 33%
 				float IR = sI + (sO - sI) * 0.33f;
 				float DSz = IconSize * Sc * 0.5f * (1 + 0.06f * HT);
