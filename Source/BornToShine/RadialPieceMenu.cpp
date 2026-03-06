@@ -115,15 +115,15 @@ void URadialPieceMenu::BuildCategories()
 	AddByType(C0, EPieceType::DoorFrame, Claimed);
 	AddByType(C0, EPieceType::WindowFrame, Claimed);
 
-	// Roofing: RidgePost, RidgeBoard, Rafter, FasciaBoard, RoofSheathing
+	// Roofing: RidgePost, RidgeBoard, Rafter, FasciaBoard
 	AddByType(C1, EPieceType::RidgePost, Claimed);
 	AddByType(C1, EPieceType::RidgeBoard, Claimed);
 	AddByType(C1, EPieceType::Rafter, Claimed);
 	AddByType(C1, EPieceType::FasciaBoard, Claimed);
-	AddByType(C1, EPieceType::RoofSheathing, Claimed);
 
-	// Sheathing: Wall sheathing only
+	// Sheathing: Wall and Roof sheathing
 	AddByType(C2, EPieceType::WallSheathing, Claimed);
+	AddByType(C2, EPieceType::RoofSheathing, Claimed);
 
 	// Foundation
 	AddByType(C3, EPieceType::Foundation, Claimed);
