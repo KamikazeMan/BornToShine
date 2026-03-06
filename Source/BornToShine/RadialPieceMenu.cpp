@@ -75,56 +75,67 @@ void URadialPieceMenu::BuildCategories()
 	FCategoryInfo C2; C2.Name = TEXT("SHEATHING");  C2.Icon = TEXT("S");
 	FCategoryInfo C3; C3.Name = TEXT("FOUNDATION"); C3.Icon = TEXT("B");
 
-	// Define the desired piece order per category
-	// Framing order: Bottom Plate, Wall Stud, Corner Post, Top Plate, Dbl Top Plate, Door Frame, Window Frame, Header, Rim Board, Floor Joist
-	TArray<EPieceType> FramingOrder = {
-		EPieceType::WallPlate, EPieceType::WallStud, EPieceType::CornerPost,
-		EPieceType::TopPlate, EPieceType::DoubleTopPlate,
-		EPieceType::DoorFrame, EPieceType::WindowFrame, EPieceType::Header,
-		EPieceType::RimBoard, EPieceType::FloorJoist
-	};
-
-	// Roofing order: Ridge Post, Ridge Board, Rafter, Fascia Board
-	TArray<EPieceType> RoofingOrder = {
-		EPieceType::RidgePost, EPieceType::RidgeBoard,
-		EPieceType::Rafter, EPieceType::FasciaBoard
-	};
-
-	// Sheathing order: Plywood (all sheathing types)
-	TArray<EPieceType> SheathingOrder = {
-		EPieceType::Plywood
-	};
-
-	// Foundation order: Foundation
-	TArray<EPieceType> FoundationOrder = {
-		EPieceType::Foundation
-	};
-
-	// Build each category in the specified order
-	auto AddInOrder = [&](FCategoryInfo& Cat, const TArray<EPieceType>& Order)
+	// Helper: add piece to category by type, but skip if already claimed by another category
+	auto AddByType = [&](FCategoryInfo& Cat, EPieceType PT, TSet<int32>& Claimed)
 	{
-		for (EPieceType PT : Order)
+		for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 		{
-			for (int32 i = 0; i < AllPieceInfos.Num(); i++)
+			if (AllPieceInfos[i].PieceType == PT && !Claimed.Contains(i))
 			{
-				if (AllPieceInfos[i].PieceType == PT && !Cat.PieceIndices.Contains(i))
-					Cat.PieceIndices.Add(i);
+				Cat.PieceIndices.Add(i);
+				Claimed.Add(i);
 			}
 		}
 	};
 
-	AddInOrder(C0, FramingOrder);
-	AddInOrder(C1, RoofingOrder);
-	AddInOrder(C2, SheathingOrder);
-	AddInOrder(C3, FoundationOrder);
+	// Helper: add piece by display name substring match
+	auto AddByName = [&](FCategoryInfo& Cat, const FString& NameContains, TSet<int32>& Claimed)
+	{
+		for (int32 i = 0; i < AllPieceInfos.Num(); i++)
+		{
+			if (!Claimed.Contains(i) && AllPieceInfos[i].DisplayName.Contains(NameContains))
+			{
+				Cat.PieceIndices.Add(i);
+				Claimed.Add(i);
+			}
+		}
+	};
 
-	// Add any pieces that weren't in any order list to Framing as fallback
+	TSet<int32> Claimed;
+
+	// Framing: RimBoard, FloorJoist, Floor Plywood, BottomPlate, CornerPost, WallStud, TopPlate, DblTopPlate, DoorFrame, WindowFrame
+	AddByType(C0, EPieceType::RimBoard, Claimed);
+	AddByType(C0, EPieceType::FloorJoist, Claimed);
+	AddByName(C0, TEXT("PlyWood Floor"), Claimed);  // Floor deck plywood specifically
+	AddByType(C0, EPieceType::WallPlate, Claimed);  // Bottom Plate
+	AddByType(C0, EPieceType::CornerPost, Claimed);
+	AddByType(C0, EPieceType::WallStud, Claimed);
+	AddByType(C0, EPieceType::TopPlate, Claimed);
+	AddByType(C0, EPieceType::DoubleTopPlate, Claimed);
+	AddByType(C0, EPieceType::DoorFrame, Claimed);
+	AddByType(C0, EPieceType::WindowFrame, Claimed);
+
+	// Roofing: RidgePost, RidgeBoard, Rafter, FasciaBoard
+	AddByType(C1, EPieceType::RidgePost, Claimed);
+	AddByType(C1, EPieceType::RidgeBoard, Claimed);
+	AddByType(C1, EPieceType::Rafter, Claimed);
+	AddByType(C1, EPieceType::FasciaBoard, Claimed);
+
+	// Sheathing: Wall Sheathing, Roof Sheathing (remaining Plywood pieces)
+	AddByName(C2, TEXT("Wall"), Claimed);
+	AddByName(C2, TEXT("Roof"), Claimed);
+
+	// Foundation
+	AddByType(C3, EPieceType::Foundation, Claimed);
+
+	// Anything unclaimed goes to Framing
 	for (int32 i = 0; i < AllPieceInfos.Num(); i++)
 	{
-		bool bFound = C0.PieceIndices.Contains(i) || C1.PieceIndices.Contains(i) ||
-		              C2.PieceIndices.Contains(i) || C3.PieceIndices.Contains(i);
-		if (!bFound)
+		if (!Claimed.Contains(i))
+		{
 			C0.PieceIndices.Add(i);
+			Claimed.Add(i);
+		}
 	}
 
 	if (C0.PieceIndices.Num() > 0) Categories.Add(C0);
