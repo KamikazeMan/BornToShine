@@ -249,13 +249,16 @@ void URadialPieceMenu::NativeTick(const FGeometry& MyGeo, float DT)
 			SelectedPieceSlot = -1;
 			PieceHoverScales.Empty();
 		}
-		int32 N = Categories[ActiveCategory].PieceIndices.Num();
-		HighlightedPieceSlot = (Dist >= sI && Dist <= sO && N > 0)
-			? FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1) : -1;
-		if (PieceHoverScales.Num() != N) PieceHoverScales.Init(0.0f, N);
-		for (int32 i = 0; i < N; i++)
-			PieceHoverScales[i] = FMath::FInterpTo(PieceHoverScales[i],
-				(i == HighlightedPieceSlot || i == SelectedPieceSlot) ? 1.0f : 0.0f, DT, 12.0f);
+		else
+		{
+			int32 N = Categories[ActiveCategory].PieceIndices.Num();
+			HighlightedPieceSlot = (Dist >= sI && Dist <= sO && N > 0)
+				? FMath::Clamp((int32)(Ang / (360.0f / N)), 0, N - 1) : -1;
+			if (PieceHoverScales.Num() != N) PieceHoverScales.Init(0.0f, N);
+			for (int32 i = 0; i < N; i++)
+				PieceHoverScales[i] = FMath::FInterpTo(PieceHoverScales[i],
+					(i == HighlightedPieceSlot || i == SelectedPieceSlot) ? 1.0f : 0.0f, DT, 12.0f);
+		}
 	}
 	PrevHighlightedCategory = HighlightedCategory;
 	PrevHighlightedPieceSlot = HighlightedPieceSlot;
