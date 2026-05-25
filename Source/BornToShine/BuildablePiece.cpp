@@ -1664,15 +1664,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 							*P->GetName(), FasciaAlongSlope, MaxSlopeLen);
 						if (FasciaAlongSlope > 0.0f && FasciaAlongSlope < OriginalMaxSlopeLen)
 						{
-							// Sheathing extends to the fascia OUTER face (flush with fascia front).
-							// FasciaAlongSlope is the fascia center; ADD half-height
-							// to get the outer face position (away from ridge).
-							const float FasciaHalfHeight = 6.985f; // half of 13.97cm (2x6)
-							float NewMax = FasciaAlongSlope + FasciaHalfHeight;
+							// Use half-thickness (1.905cm = half of 3.81cm 2x lumber thickness),
+							// NOT half-height. The fascia's thickness direction aligns with the rafter slope.
+							const float FasciaHalfThickness = 1.905f;
+							float NewMax = FasciaAlongSlope + FasciaHalfThickness;
 							if (NewMax < MaxSlopeLen && NewMax > 0.0f)
 							{
 								MaxSlopeLen = NewMax;
-								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Trimmed MaxSlopeLen to %.1f"), MaxSlopeLen);
+								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Trimmed MaxSlopeLen to %.1f (was %.1f, fascia center=%.1f)"),
+									MaxSlopeLen, OriginalMaxSlopeLen, FasciaAlongSlope);
+							}
+							else
+							{
+								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: NewMax=%.1f skipped (MaxSlopeLen=%.1f)"),
+									NewMax, MaxSlopeLen);
 							}
 						}
 					}
