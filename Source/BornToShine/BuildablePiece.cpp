@@ -1690,32 +1690,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector SlopeDir = RafterForward;
 					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
 
-					// Snap at 4ft intervals from the ridge (rafter origin = slope distance 0)
+					// Row-derived slope positioning (ChatGPT's fix):
+					// Compute the row interval first (RowStart to RowEnd clamped at MaxSlopeLen),
+					// then derive the actor center from the trimmed interval — not the other way around.
+					// This produces correct results even when the last row is shorter than a full sheet.
 					const float SlopeGridSize = 121.92f; // 4ft
 					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
 					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
 					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
-					float SnappedAlongSlope;
-					if (SlopeIdx == MaxSlopeIdx)
-					{
-						float RowStart = SlopeIdx * SlopeGridSize;
-						float RowEnd = MaxSlopeLen;
-						float Remaining = RowEnd - RowStart;
-						if (Remaining < SlopeGridSize && Remaining > 1.0f)
-						{
-							// Last row: center on remaining space
-							SnappedAlongSlope = (RowStart + RowEnd) / 2.0f;
-						}
-						else
-						{
-							SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
-						}
-					}
-					else
-					{
-						// Normal row: center at grid position
-						SnappedAlongSlope = (SlopeIdx * SlopeGridSize) + SlopeGridSize / 2.0f;
-					}
+
+					// Compute the actual row interval first
+					float RowStart = SlopeIdx * SlopeGridSize;
+					float RowEnd = FMath::Min(RowStart + SlopeGridSize, MaxSlopeLen);
+
+					// Actor center is the midpoint of the trimmed row interval
+					float SnappedAlongSlope = (RowStart + RowEnd) * 0.5f;
 
 					// Clamp so sheet doesn't extend past slope length
 					// No clamping — TryPlace() will trim sheets that extend past roof edges
