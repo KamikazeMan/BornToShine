@@ -244,6 +244,16 @@ bool AFasciaBoard::TryPlace()
 						UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Rafter %s CutStation=%.1f (was %.1f slope)"),
 							*Raft->GetName(), CutStation, CurrentSlope);
 						TrimCount++;
+
+						// Shift the entire rafter down-slope to close the fascia gap at the eave
+						// and pull the rafter top down so it doesn't stick through the ridge board.
+						const float DownSlopeShiftCm = 6.0f; // Tune this value to taste
+						FVector RafterSlopeDir = Raft->GetActorRotation().RotateVector(FVector::ForwardVector);
+						FVector NewRafterLoc = Raft->GetActorLocation() + RafterSlopeDir * DownSlopeShiftCm;
+						Raft->SetActorLocation(NewRafterLoc);
+
+						UE_LOG(LogTemp, Warning, TEXT("Fascia: Shifted rafter %s down-slope by %.1fcm"),
+							*Raft->GetName(), DownSlopeShiftCm);
 					}
 					else
 					{
