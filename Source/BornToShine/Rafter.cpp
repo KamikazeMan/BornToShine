@@ -351,12 +351,61 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 
 	const float UVTileCm = 30.48f;
 
-	// AddQuad: takes 4 vertices in CCW order (when viewed from outside, i.e., facing the normal)
-	// Creates two triangles: P0-P1-P2 and P0-P2-P3
-	auto AddQuad = [&](
-		const FVector& P0, const FVector& P1, const FVector& P2, const FVector& P3,
-		const FVector& Normal)
+	// AddQuadChecked: verifies winding matches desired normal, auto-flips if reversed,
+	// logs warnings if either triangle still doesn't match after fix attempt.
+	auto AddQuadChecked = [&](
+		const TCHAR* FaceName,
+		FVector P0, FVector P1, FVector P2, FVector P3,
+		const FVector& InDesiredNormal,
+		const FVector& InTangentHint)
 	{
+		const FVector DesiredNormal = InDesiredNormal.GetSafeNormal();
+
+		auto GetTriNormal = [](const FVector& A, const FVector& B, const FVector& C)
+		{
+			return FVector::CrossProduct(B - A, C - A).GetSafeNormal();
+		};
+
+		FVector Tri0Normal = GetTriNormal(P0, P1, P2);
+		FVector Tri1Normal = GetTriNormal(P0, P2, P3);
+		float Dot0 = FVector::DotProduct(Tri0Normal, DesiredNormal);
+		float Dot1 = FVector::DotProduct(Tri1Normal, DesiredNormal);
+
+		if (Dot0 < 0.0f || Dot1 < 0.0f)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("RafterMesh Winding Fix: %s was reversed. Dot0=%.3f Dot1=%.3f"),
+				FaceName, Dot0, Dot1);
+
+			Swap(P1, P3);
+
+			Tri0Normal = GetTriNormal(P0, P1, P2);
+			Tri1Normal = GetTriNormal(P0, P2, P3);
+			Dot0 = FVector::DotProduct(Tri0Normal, DesiredNormal);
+			Dot1 = FVector::DotProduct(Tri1Normal, DesiredNormal);
+		}
+
+		if (Dot0 < 0.95f || Dot1 < 0.95f)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("RafterMesh Winding ERROR: %s still bad. Dot0=%.3f Dot1=%.3f Desired=%s Tri0=%s Tri1=%s"),
+				FaceName, Dot0, Dot1,
+				*DesiredNormal.ToString(), *Tri0Normal.ToString(), *Tri1Normal.ToString());
+		}
+
+		// Build tangent perpendicular to the face normal
+		FVector TangentX = InTangentHint;
+		TangentX = TangentX - DesiredNormal * FVector::DotProduct(TangentX, DesiredNormal);
+		TangentX.Normalize();
+		if (TangentX.IsNearlyZero())
+		{
+			TangentX = FVector::CrossProduct(FVector::UpVector, DesiredNormal).GetSafeNormal();
+		}
+		if (TangentX.IsNearlyZero())
+		{
+			TangentX = FVector::CrossProduct(FVector::RightVector, DesiredNormal).GetSafeNormal();
+		}
+
 		const int32 BaseIndex = Vertices.Num();
 		Vertices.Add(P0);
 		Vertices.Add(P1);
@@ -377,17 +426,10 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		UV0.Add(FVector2D(USize, VSize));
 		UV0.Add(FVector2D(0.0f, VSize));
 
-		FVector N = Normal.GetSafeNormal();
 		for (int32 i = 0; i < 4; ++i)
 		{
-			Normals.Add(N);
+			Normals.Add(DesiredNormal);
 			VertexColors.Add(FLinearColor::White);
-		}
-
-		FVector TangentX = (P1 - P0).GetSafeNormal();
-		if (TangentX.IsNearlyZero()) TangentX = FVector::ForwardVector;
-		for (int32 i = 0; i < 4; ++i)
-		{
 			Tangents.Add(FProcMeshTangent(TangentX, false));
 		}
 	};
@@ -398,23 +440,12 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	const FVector RightNormal(0.0f, +1.0f, 0.0f);
 	const FVector PlumbFaceNormalLocal(FMath::Cos(PitchRad), 0.0f, FMath::Sin(PitchRad));
 
-	// Top face (looking down from +Z): CCW from above: STL -> ETL -> ETR -> STR
-	AddQuad(STL, ETL, ETR, STR, TopNormal);
-
-	// Bottom face (looking up from -Z): CCW from below: SBL -> SBR -> EBR -> EBL
-	AddQuad(SBL, SBR, EBR, EBL, BottomNormal);
-
-	// Left face (-Y): CCW from -Y: SBL -> EBL -> ETL -> STL
-	AddQuad(SBL, EBL, ETL, STL, LeftNormal);
-
-	// Right face (+Y): CCW from +Y: SBR -> STR -> ETR -> EBR
-	AddQuad(SBR, STR, ETR, EBR, RightNormal);
-
-	// Start/ridge face: CCW from -X: SBL -> STL -> STR -> SBR
-	AddQuad(SBL, STL, STR, SBR, -PlumbFaceNormalLocal);
-
-	// End/fascia face: CCW from +X: EBL -> EBR -> ETR -> ETL
-	AddQuad(EBL, EBR, ETR, ETL, PlumbFaceNormalLocal);
+	AddQuadChecked(TEXT("Top"),    STL, ETL, ETR, STR, FVector(0, 0, +1), FVector(+1, 0, 0));
+	AddQuadChecked(TEXT("Bottom"), SBL, SBR, EBR, EBL, FVector(0, 0, -1), FVector(+1, 0, 0));
+	AddQuadChecked(TEXT("Left"),   SBL, EBL, ETL, STL, FVector(0, -1, 0), FVector(+1, 0, 0));
+	AddQuadChecked(TEXT("Right"),  SBR, STR, ETR, EBR, FVector(0, +1, 0), FVector(+1, 0, 0));
+	AddQuadChecked(TEXT("Start"),  SBL, STL, STR, SBR, -PlumbFaceNormalLocal, FVector(0, +1, 0));
+	AddQuadChecked(TEXT("End"),    EBL, EBR, ETR, ETL, PlumbFaceNormalLocal, FVector(0, +1, 0));
 
 	UE_LOG(LogTemp, Warning, TEXT("ProceduralRafterMesh: %d vertices, %d triangles, %d normals"),
 		Vertices.Num(), Triangles.Num() / 3, Normals.Num());
@@ -439,6 +470,31 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	ProceduralRafterMesh->SetRelativeLocation(MeshComponent->GetRelativeLocation());
 	ProceduralRafterMesh->SetRelativeRotation(MeshComponent->GetRelativeRotation());
 	ProceduralRafterMesh->SetRelativeScale3D(FVector::OneVector);
+
+	// Diagnostic: check for negative scale or inverted handedness that would flip culling
+	const FVector CompScale = ProceduralRafterMesh->GetComponentScale();
+	if (CompScale.X < 0.0f || CompScale.Y < 0.0f || CompScale.Z < 0.0f)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("RafterMesh ERROR: Negative component scale detected: %s. This can flip winding/backface culling."),
+			*CompScale.ToString());
+	}
+
+	const FTransform CompTransform = ProceduralRafterMesh->GetComponentTransform();
+	const FVector AxisX = CompTransform.GetUnitAxis(EAxis::X);
+	const FVector AxisY = CompTransform.GetUnitAxis(EAxis::Y);
+	const FVector AxisZ = CompTransform.GetUnitAxis(EAxis::Z);
+	const float Handedness = FVector::DotProduct(FVector::CrossProduct(AxisX, AxisY), AxisZ);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("RafterMesh Transform Handedness=%.3f Scale=%s"),
+		Handedness, *CompScale.ToString());
+
+	if (Handedness < 0.0f)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("RafterMesh ERROR: Transform has inverted handedness. Do not use negative scale on procedural mesh parents."));
+	}
 
 	ProceduralRafterMesh->CreateMeshSection_LinearColor(
 		0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, true, true);
