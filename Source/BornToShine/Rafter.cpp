@@ -286,3 +286,16 @@ void ARafter::TrimToFasciaFace(float FasciaFaceWorldZ, const FVector& FasciaLoca
 		TEXT("Rafter trimmed: OldSlope=%.1f NewLength=%.1f XScale=%.3f"),
 		GetSlopeLengthCm(), TrimDist, NewXScale);
 }
+
+void ARafter::ReplaceWithProceduralPlumbCutRafter(float TrimDistanceAlongSlopeCm, float PitchAngleDegrees, float RafterWidthCm, float RafterDepthCm)
+{
+	UE_LOG(LogTemp, Warning, TEXT("ReplaceWithProceduralPlumbCutRafter: called (TrimDist=%.1f, Pitch=%.1f)"),
+		TrimDistanceAlongSlopeCm, PitchAngleDegrees);
+}
+
+bool ARafter::ComputeCutStationFromFasciaPlane(const FVector& FasciaBackFaceWorldPoint, const FVector& FasciaBackFaceWorldNormal, float& OutCutStationCm) const
+{
+	OutCutStationCm = 0.0f;
+	UE_LOG(LogTemp, Warning, TEXT("ComputeCutStationFromFasciaPlane: called"));
+	return false;
+}

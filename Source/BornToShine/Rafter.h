@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BuildablePiece.h"
 #include "ConstructionTypes.h"
+#include "ProceduralMeshComponent.h"
 #include "Rafter.generated.h"
 
 /**
@@ -80,6 +81,20 @@ public:
 
 	// Get the pitch angle in radians
 	float GetPitchAngleRadians() const;
+
+	UPROPERTY(Transient)
+	UProceduralMeshComponent* ProceduralRafterMesh = nullptr;
+
+	void ReplaceWithProceduralPlumbCutRafter(
+		float TrimDistanceAlongSlopeCm,
+		float PitchAngleDegrees,
+		float RafterWidthCm,
+		float RafterDepthCm);
+
+	bool ComputeCutStationFromFasciaPlane(
+		const FVector& FasciaBackFaceWorldPoint,
+		const FVector& FasciaBackFaceWorldNormal,
+		float& OutCutStationCm) const;
 
 protected:
 	virtual void BeginPlay() override;
