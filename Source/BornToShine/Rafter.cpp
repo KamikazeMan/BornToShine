@@ -351,21 +351,12 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 
 	const float UVTileCm = 30.48f;
 
+	// AddQuad: takes 4 vertices in CCW order (when viewed from outside, i.e., facing the normal)
+	// Creates two triangles: P0-P1-P2 and P0-P2-P3
 	auto AddQuad = [&](
-		FVector P0, FVector P1, FVector P2, FVector P3,
-		const FVector& DesiredNormal)
+		const FVector& P0, const FVector& P1, const FVector& P2, const FVector& P3,
+		const FVector& Normal)
 	{
-		FVector N = DesiredNormal.GetSafeNormal();
-		if (N.IsNearlyZero()) N = FVector::UpVector;
-
-		const FVector CurrentNormal = FVector::CrossProduct(P1 - P0, P2 - P0).GetSafeNormal();
-		// If winding is backwards, reverse the vertex order entirely (P0,P3,P2,P1)
-		bool bReverseWinding = (FVector::DotProduct(CurrentNormal, N) < 0.0f);
-		if (bReverseWinding)
-		{
-			Swap(P1, P3);
-		}
-
 		const int32 BaseIndex = Vertices.Num();
 		Vertices.Add(P0);
 		Vertices.Add(P1);
@@ -386,6 +377,7 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		UV0.Add(FVector2D(USize, VSize));
 		UV0.Add(FVector2D(0.0f, VSize));
 
+		FVector N = Normal.GetSafeNormal();
 		for (int32 i = 0; i < 4; ++i)
 		{
 			Normals.Add(N);
@@ -393,9 +385,7 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		}
 
 		FVector TangentX = (P1 - P0).GetSafeNormal();
-		if (TangentX.IsNearlyZero()) TangentX = FVector::CrossProduct(FVector::UpVector, N).GetSafeNormal();
 		if (TangentX.IsNearlyZero()) TangentX = FVector::ForwardVector;
-
 		for (int32 i = 0; i < 4; ++i)
 		{
 			Tangents.Add(FProcMeshTangent(TangentX, false));
@@ -408,12 +398,23 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	const FVector RightNormal(0.0f, +1.0f, 0.0f);
 	const FVector PlumbFaceNormalLocal(FMath::Cos(PitchRad), 0.0f, FMath::Sin(PitchRad));
 
-	AddQuad(STL, STR, ETR, ETL, TopNormal);
-	AddQuad(SBL, EBL, EBR, SBR, BottomNormal);
-	AddQuad(SBL, STL, ETL, EBL, LeftNormal);
-	AddQuad(SBR, EBR, ETR, STR, RightNormal);
-	AddQuad(SBL, SBR, STR, STL, -PlumbFaceNormalLocal);
-	AddQuad(EBL, ETL, ETR, EBR, PlumbFaceNormalLocal);
+	// Top face (looking down from +Z): CCW from above: STL -> ETL -> ETR -> STR
+	AddQuad(STL, ETL, ETR, STR, TopNormal);
+
+	// Bottom face (looking up from -Z): CCW from below: SBL -> SBR -> EBR -> EBL
+	AddQuad(SBL, SBR, EBR, EBL, BottomNormal);
+
+	// Left face (-Y): CCW from -Y: SBL -> EBL -> ETL -> STL
+	AddQuad(SBL, EBL, ETL, STL, LeftNormal);
+
+	// Right face (+Y): CCW from +Y: SBR -> STR -> ETR -> EBR
+	AddQuad(SBR, STR, ETR, EBR, RightNormal);
+
+	// Start/ridge face: CCW from -X: SBL -> STL -> STR -> SBR
+	AddQuad(SBL, STL, STR, SBR, -PlumbFaceNormalLocal);
+
+	// End/fascia face: CCW from +X: EBL -> EBR -> ETR -> ETL
+	AddQuad(EBL, EBR, ETR, ETL, PlumbFaceNormalLocal);
 
 	UE_LOG(LogTemp, Warning, TEXT("ProceduralRafterMesh: %d vertices, %d triangles, %d normals"),
 		Vertices.Num(), Triangles.Num() / 3, Normals.Num());
@@ -442,8 +443,33 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	ProceduralRafterMesh->CreateMeshSection_LinearColor(
 		0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, true, true);
 
-	UMaterialInterface* ExistingMaterial = MeshComponent->GetMaterial(0);
-	if (ExistingMaterial) ProceduralRafterMesh->SetMaterial(0, ExistingMaterial);
+	// Try multiple material sources to find the wood texture material
+	UMaterialInterface* WoodMat = nullptr;
+
+	// First try the OriginalMeshMaterial saved at BeginPlay (the "real" material)
+	if (OriginalMeshMaterial)
+	{
+		WoodMat = OriginalMeshMaterial;
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Using OriginalMeshMaterial [%s]"), *WoodMat->GetName());
+	}
+	// Fallback: try the NailedMaterial (set in Blueprint for wood)
+	else if (NailedMaterial)
+	{
+		WoodMat = NailedMaterial;
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Using NailedMaterial [%s]"), *WoodMat->GetName());
+	}
+	// Last resort: current mesh material (may be preview/dynamic)
+	else
+	{
+		WoodMat = MeshComponent->GetMaterial(0);
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Using current mesh material [%s]"),
+			WoodMat ? *WoodMat->GetName() : TEXT("NULL"));
+	}
+
+	if (WoodMat)
+	{
+		ProceduralRafterMesh->SetMaterial(0, WoodMat);
+	}
 
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	ProceduralRafterMesh->SetCollisionObjectType(ECC_WorldStatic);
