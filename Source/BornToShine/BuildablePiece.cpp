@@ -1664,9 +1664,12 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 							*P->GetName(), FasciaAlongSlope, MaxSlopeLen);
 						if (FasciaAlongSlope > 0.0f && FasciaAlongSlope < OriginalMaxSlopeLen)
 						{
+							// Sheathing stops AT the fascia outer face, not past it.
+							// FasciaAlongSlope is the fascia center; subtract half-height
+							// to get the outer face position (closer to the ridge).
 							const float FasciaHalfHeight = 6.985f; // half of 13.97cm (2x6)
-							float NewMax = FasciaAlongSlope + FasciaHalfHeight;
-							if (NewMax < MaxSlopeLen)
+							float NewMax = FasciaAlongSlope - FasciaHalfHeight;
+							if (NewMax < MaxSlopeLen && NewMax > 0.0f)
 							{
 								MaxSlopeLen = NewMax;
 								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Trimmed MaxSlopeLen to %.1f"), MaxSlopeLen);
