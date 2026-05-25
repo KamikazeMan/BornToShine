@@ -492,15 +492,24 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 			WoodMat ? *WoodMat->GetName() : TEXT("NULL"));
 	}
 
-	if (WoodMat)
+	// DIAGNOSTIC: Use the default world grid material to test if procedural mesh
+	// renders at all. If the rafters show gray/checkered grid pattern from all
+	// angles, the procedural mesh is fine and the Rafter1 material is the issue.
+	UMaterialInterface* DiagMat = LoadObject<UMaterialInterface>(nullptr,
+		TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
+
+	if (DiagMat)
 	{
-		// CRITICAL: Set the SAME material on BOTH sections
+		ProceduralRafterMesh->SetMaterial(0, DiagMat);
+		ProceduralRafterMesh->SetMaterial(1, DiagMat);
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: DIAGNOSTIC using WorldGridMaterial on both sections"));
+	}
+	else if (WoodMat)
+	{
+		// Fallback to wood if test material can't load
 		ProceduralRafterMesh->SetMaterial(0, WoodMat);
 		ProceduralRafterMesh->SetMaterial(1, WoodMat);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL"));
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Fallback to wood material"));
 	}
 
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
