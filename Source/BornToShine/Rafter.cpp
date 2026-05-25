@@ -3,6 +3,90 @@
 #include "Rafter.h"
 #include "Components/StaticMeshComponent.h"
 
+struct FRafterProcBuffers
+{
+	TArray<FVector> Vertices;
+	TArray<int32> Triangles;
+	TArray<FVector> Normals;
+	TArray<FVector2D> UV0;
+	TArray<FLinearColor> VertexColors;
+	TArray<FProcMeshTangent> Tangents;
+
+	void Check(const FString& Name) const
+	{
+		const int32 VCount = Vertices.Num();
+		if (Triangles.Num() % 3 != 0)
+			UE_LOG(LogTemp, Error, TEXT("%s: Triangle index count not divisible by 3."), *Name);
+		if (Normals.Num() != VCount)
+			UE_LOG(LogTemp, Error, TEXT("%s: Normals count mismatch. Verts=%d Normals=%d"), *Name, VCount, Normals.Num());
+		if (UV0.Num() != VCount)
+			UE_LOG(LogTemp, Error, TEXT("%s: UV0 count mismatch. Verts=%d UV0=%d"), *Name, VCount, UV0.Num());
+		if (VertexColors.Num() != VCount)
+			UE_LOG(LogTemp, Error, TEXT("%s: VertexColors count mismatch. Verts=%d Colors=%d"), *Name, VCount, VertexColors.Num());
+		if (Tangents.Num() != VCount)
+			UE_LOG(LogTemp, Error, TEXT("%s: Tangents count mismatch. Verts=%d Tangents=%d"), *Name, VCount, Tangents.Num());
+	}
+};
+
+static void AddQuadToBuffers(
+	FRafterProcBuffers& Buffers,
+	const FVector& P0, const FVector& P1, const FVector& P2, const FVector& P3,
+	const FVector& OutwardNormal, const FVector& TangentHint,
+	const float UVTileCm, const bool bReverseForBackSide)
+{
+	const int32 Base = Buffers.Vertices.Num();
+
+	const FVector Normal = bReverseForBackSide
+		? -OutwardNormal.GetSafeNormal()
+		:  OutwardNormal.GetSafeNormal();
+
+	FVector TangentX = TangentHint;
+	TangentX = TangentX - Normal * FVector::DotProduct(TangentX, Normal);
+	if (!TangentX.Normalize())
+		TangentX = FVector::CrossProduct(FVector::UpVector, Normal).GetSafeNormal();
+	if (TangentX.IsNearlyZero())
+		TangentX = FVector::CrossProduct(FVector::RightVector, Normal).GetSafeNormal();
+
+	Buffers.Vertices.Add(P0);
+	Buffers.Vertices.Add(P1);
+	Buffers.Vertices.Add(P2);
+	Buffers.Vertices.Add(P3);
+
+	if (!bReverseForBackSide)
+	{
+		Buffers.Triangles.Add(Base + 0);
+		Buffers.Triangles.Add(Base + 1);
+		Buffers.Triangles.Add(Base + 2);
+		Buffers.Triangles.Add(Base + 0);
+		Buffers.Triangles.Add(Base + 2);
+		Buffers.Triangles.Add(Base + 3);
+	}
+	else
+	{
+		Buffers.Triangles.Add(Base + 0);
+		Buffers.Triangles.Add(Base + 2);
+		Buffers.Triangles.Add(Base + 1);
+		Buffers.Triangles.Add(Base + 0);
+		Buffers.Triangles.Add(Base + 3);
+		Buffers.Triangles.Add(Base + 2);
+	}
+
+	const float USize = FVector::Distance(P0, P1) / UVTileCm;
+	const float VSize = FVector::Distance(P0, P3) / UVTileCm;
+
+	Buffers.UV0.Add(FVector2D(0.0f, 0.0f));
+	Buffers.UV0.Add(FVector2D(USize, 0.0f));
+	Buffers.UV0.Add(FVector2D(USize, VSize));
+	Buffers.UV0.Add(FVector2D(0.0f, VSize));
+
+	for (int32 i = 0; i < 4; ++i)
+	{
+		Buffers.Normals.Add(Normal);
+		Buffers.VertexColors.Add(FLinearColor::White);
+		Buffers.Tangents.Add(FProcMeshTangent(TangentX, false));
+	}
+}
+
 ARafter::ARafter()
 {
 	PieceType = EPieceType::Rafter;
@@ -305,21 +389,18 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 
 	const float PitchRad = FMath::DegreesToRadians(PitchAngleDegrees);
 	const float TanPitch = FMath::Tan(PitchRad);
-
 	const float HalfWidth = RafterWidthCm * 0.5f;
 	const float HalfDepth = RafterDepthCm * 0.5f;
-
 	const float ZTop = +HalfDepth;
 	const float ZBottom = -HalfDepth;
 
-	auto XOnPlumbCut = [TanPitch](float CutStationCm, float LocalZ)
+	auto XOnPlumbCut = [TanPitch](float StationCm, float LocalZ)
 	{
-		return CutStationCm - LocalZ * TanPitch;
+		return StationCm - LocalZ * TanPitch;
 	};
 
 	const float StartStation = 0.0f;
 	const float EndStation = TrimDistanceAlongSlopeCm;
-
 	const float StartTopX = XOnPlumbCut(StartStation, ZTop);
 	const float StartBottomX = XOnPlumbCut(StartStation, ZBottom);
 	const float EndTopX = XOnPlumbCut(EndStation, ZTop);
@@ -329,126 +410,37 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	const FVector SBR(StartBottomX, +HalfWidth, ZBottom);
 	const FVector STL(StartTopX,    -HalfWidth, ZTop);
 	const FVector STR(StartTopX,    +HalfWidth, ZTop);
-
 	const FVector EBL(EndBottomX, -HalfWidth, ZBottom);
 	const FVector EBR(EndBottomX, +HalfWidth, ZBottom);
 	const FVector ETL(EndTopX,    -HalfWidth, ZTop);
 	const FVector ETR(EndTopX,    +HalfWidth, ZTop);
 
-	TArray<FVector> Vertices;
-	TArray<int32> Triangles;
-	TArray<FVector> Normals;
-	TArray<FVector2D> UV0;
-	TArray<FLinearColor> VertexColors;
-	TArray<FProcMeshTangent> Tangents;
-
-	Vertices.Reserve(24);
-	Triangles.Reserve(36);
-	Normals.Reserve(24);
-	UV0.Reserve(24);
-	VertexColors.Reserve(24);
-	Tangents.Reserve(24);
-
-	const float UVTileCm = 30.48f;
-
-	// AddQuadChecked: verifies winding matches desired normal, auto-flips if reversed,
-	// logs warnings if either triangle still doesn't match after fix attempt.
-	auto AddQuadChecked = [&](
-		const TCHAR* FaceName,
-		FVector P0, FVector P1, FVector P2, FVector P3,
-		const FVector& InDesiredNormal,
-		const FVector& InTangentHint)
-	{
-		const FVector DesiredNormal = InDesiredNormal.GetSafeNormal();
-
-		auto GetTriNormal = [](const FVector& A, const FVector& B, const FVector& C)
-		{
-			return FVector::CrossProduct(B - A, C - A).GetSafeNormal();
-		};
-
-		FVector Tri0Normal = GetTriNormal(P0, P1, P2);
-		FVector Tri1Normal = GetTriNormal(P0, P2, P3);
-		float Dot0 = FVector::DotProduct(Tri0Normal, DesiredNormal);
-		float Dot1 = FVector::DotProduct(Tri1Normal, DesiredNormal);
-
-		if (Dot0 < 0.0f || Dot1 < 0.0f)
-		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("RafterMesh Winding Fix: %s was reversed. Dot0=%.3f Dot1=%.3f"),
-				FaceName, Dot0, Dot1);
-
-			Swap(P1, P3);
-
-			Tri0Normal = GetTriNormal(P0, P1, P2);
-			Tri1Normal = GetTriNormal(P0, P2, P3);
-			Dot0 = FVector::DotProduct(Tri0Normal, DesiredNormal);
-			Dot1 = FVector::DotProduct(Tri1Normal, DesiredNormal);
-		}
-
-		if (Dot0 < 0.95f || Dot1 < 0.95f)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("RafterMesh Winding ERROR: %s still bad. Dot0=%.3f Dot1=%.3f Desired=%s Tri0=%s Tri1=%s"),
-				FaceName, Dot0, Dot1,
-				*DesiredNormal.ToString(), *Tri0Normal.ToString(), *Tri1Normal.ToString());
-		}
-
-		// Build tangent perpendicular to the face normal
-		FVector TangentX = InTangentHint;
-		TangentX = TangentX - DesiredNormal * FVector::DotProduct(TangentX, DesiredNormal);
-		TangentX.Normalize();
-		if (TangentX.IsNearlyZero())
-		{
-			TangentX = FVector::CrossProduct(FVector::UpVector, DesiredNormal).GetSafeNormal();
-		}
-		if (TangentX.IsNearlyZero())
-		{
-			TangentX = FVector::CrossProduct(FVector::RightVector, DesiredNormal).GetSafeNormal();
-		}
-
-		const int32 BaseIndex = Vertices.Num();
-		Vertices.Add(P0);
-		Vertices.Add(P1);
-		Vertices.Add(P2);
-		Vertices.Add(P3);
-
-		Triangles.Add(BaseIndex + 0);
-		Triangles.Add(BaseIndex + 1);
-		Triangles.Add(BaseIndex + 2);
-		Triangles.Add(BaseIndex + 0);
-		Triangles.Add(BaseIndex + 2);
-		Triangles.Add(BaseIndex + 3);
-
-		const float USize = FVector::Distance(P0, P1) / UVTileCm;
-		const float VSize = FVector::Distance(P0, P3) / UVTileCm;
-		UV0.Add(FVector2D(0.0f, 0.0f));
-		UV0.Add(FVector2D(USize, 0.0f));
-		UV0.Add(FVector2D(USize, VSize));
-		UV0.Add(FVector2D(0.0f, VSize));
-
-		for (int32 i = 0; i < 4; ++i)
-		{
-			Normals.Add(DesiredNormal);
-			VertexColors.Add(FLinearColor::White);
-			Tangents.Add(FProcMeshTangent(TangentX, false));
-		}
-	};
-
 	const FVector TopNormal(0.0f, 0.0f, +1.0f);
 	const FVector BottomNormal(0.0f, 0.0f, -1.0f);
 	const FVector LeftNormal(0.0f, -1.0f, 0.0f);
 	const FVector RightNormal(0.0f, +1.0f, 0.0f);
-	const FVector PlumbFaceNormalLocal(FMath::Cos(PitchRad), 0.0f, FMath::Sin(PitchRad));
+	const FVector PlumbNormalLocal(FMath::Cos(PitchRad), 0.0f, FMath::Sin(PitchRad));
 
-	AddQuadChecked(TEXT("Top"),    STL, ETL, ETR, STR, FVector(0, 0, +1), FVector(+1, 0, 0));
-	AddQuadChecked(TEXT("Bottom"), SBL, SBR, EBR, EBL, FVector(0, 0, -1), FVector(+1, 0, 0));
-	AddQuadChecked(TEXT("Left"),   SBL, EBL, ETL, STL, FVector(0, -1, 0), FVector(+1, 0, 0));
-	AddQuadChecked(TEXT("Right"),  SBR, STR, ETR, EBR, FVector(0, +1, 0), FVector(+1, 0, 0));
-	AddQuadChecked(TEXT("Start"),  SBL, STL, STR, SBR, -PlumbFaceNormalLocal, FVector(0, +1, 0));
-	AddQuadChecked(TEXT("End"),    EBL, EBR, ETR, ETL, PlumbFaceNormalLocal, FVector(0, +1, 0));
+	const float UVTileCm = 30.48f;
 
-	UE_LOG(LogTemp, Warning, TEXT("ProceduralRafterMesh: %d vertices, %d triangles, %d normals"),
-		Vertices.Num(), Triangles.Num() / 3, Normals.Num());
+	FRafterProcBuffers Front;
+	FRafterProcBuffers Back;
+
+	auto AddRafterQuads = [&](FRafterProcBuffers& Buffers, bool bReverse)
+	{
+		AddQuadToBuffers(Buffers, STL, ETL, ETR, STR, TopNormal,         FVector(+1, 0, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, SBL, SBR, EBR, EBL, BottomNormal,      FVector(+1, 0, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, SBL, EBL, ETL, STL, LeftNormal,        FVector(+1, 0, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, SBR, STR, ETR, EBR, RightNormal,       FVector(+1, 0, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, SBL, STL, STR, SBR, -PlumbNormalLocal, FVector(0, +1, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, EBL, EBR, ETR, ETL, +PlumbNormalLocal, FVector(0, +1, 0), UVTileCm, bReverse);
+	};
+
+	AddRafterQuads(Front, false);
+	AddRafterQuads(Back, true);
+
+	Front.Check(TEXT("Rafter Front Section"));
+	Back.Check(TEXT("Rafter Back Section"));
 
 	if (!ProceduralRafterMesh)
 	{
@@ -471,50 +463,28 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	ProceduralRafterMesh->SetRelativeRotation(MeshComponent->GetRelativeRotation());
 	ProceduralRafterMesh->SetRelativeScale3D(FVector::OneVector);
 
-	// Diagnostic: check for negative scale or inverted handedness that would flip culling
-	const FVector CompScale = ProceduralRafterMesh->GetComponentScale();
-	if (CompScale.X < 0.0f || CompScale.Y < 0.0f || CompScale.Z < 0.0f)
-	{
-		UE_LOG(LogTemp, Error,
-			TEXT("RafterMesh ERROR: Negative component scale detected: %s. This can flip winding/backface culling."),
-			*CompScale.ToString());
-	}
-
-	const FTransform CompTransform = ProceduralRafterMesh->GetComponentTransform();
-	const FVector AxisX = CompTransform.GetUnitAxis(EAxis::X);
-	const FVector AxisY = CompTransform.GetUnitAxis(EAxis::Y);
-	const FVector AxisZ = CompTransform.GetUnitAxis(EAxis::Z);
-	const float Handedness = FVector::DotProduct(FVector::CrossProduct(AxisX, AxisY), AxisZ);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("RafterMesh Transform Handedness=%.3f Scale=%s"),
-		Handedness, *CompScale.ToString());
-
-	if (Handedness < 0.0f)
-	{
-		UE_LOG(LogTemp, Error,
-			TEXT("RafterMesh ERROR: Transform has inverted handedness. Do not use negative scale on procedural mesh parents."));
-	}
-
+	// Section 0 = front faces (with collision)
 	ProceduralRafterMesh->CreateMeshSection_LinearColor(
-		0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, true, true);
+		0, Front.Vertices, Front.Triangles, Front.Normals, Front.UV0,
+		Front.VertexColors, Front.Tangents, true, true);
 
-	// Try multiple material sources to find the wood texture material
+	// Section 1 = reversed back faces (no collision needed)
+	ProceduralRafterMesh->CreateMeshSection_LinearColor(
+		1, Back.Vertices, Back.Triangles, Back.Normals, Back.UV0,
+		Back.VertexColors, Back.Tangents, false, true);
+
+	// Determine wood material
 	UMaterialInterface* WoodMat = nullptr;
-
-	// First try the OriginalMeshMaterial saved at BeginPlay (the "real" material)
 	if (OriginalMeshMaterial)
 	{
 		WoodMat = OriginalMeshMaterial;
 		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Using OriginalMeshMaterial [%s]"), *WoodMat->GetName());
 	}
-	// Fallback: try the NailedMaterial (set in Blueprint for wood)
 	else if (NailedMaterial)
 	{
 		WoodMat = NailedMaterial;
 		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Using NailedMaterial [%s]"), *WoodMat->GetName());
 	}
-	// Last resort: current mesh material (may be preview/dynamic)
 	else
 	{
 		WoodMat = MeshComponent->GetMaterial(0);
@@ -524,14 +494,13 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 
 	if (WoodMat)
 	{
-		// Use the material directly — DMI wrapping was breaking the wood texture
+		// CRITICAL: Set the SAME material on BOTH sections
 		ProceduralRafterMesh->SetMaterial(0, WoodMat);
-		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Material set to [%s], class=[%s]"),
-			*WoodMat->GetName(), *WoodMat->GetClass()->GetName());
+		ProceduralRafterMesh->SetMaterial(1, WoodMat);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL — using default material"));
+		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL"));
 	}
 
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -544,6 +513,12 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		TEXT("PlumbCutRafter: Trim=%.2fcm Pitch=%.2fdeg Tan=%.4f TopEndX=%.2f BottomEndX=%.2f Difference=%.2fcm"),
 		TrimDistanceAlongSlopeCm, PitchAngleDegrees, TanPitch,
 		EndTopX, EndBottomX, EndBottomX - EndTopX);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("PlumbCutRafter: Built two-section mesh. FrontVerts=%d BackVerts=%d Mat0=%s Mat1=%s"),
+		Front.Vertices.Num(), Back.Vertices.Num(),
+		*GetNameSafe(ProceduralRafterMesh->GetMaterial(0)),
+		*GetNameSafe(ProceduralRafterMesh->GetMaterial(1)));
 }
 
 bool ARafter::ComputeCutStationFromFasciaPlane(
