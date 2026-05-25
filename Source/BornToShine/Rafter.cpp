@@ -287,15 +287,181 @@ void ARafter::TrimToFasciaFace(float FasciaFaceWorldZ, const FVector& FasciaLoca
 		GetSlopeLengthCm(), TrimDist, NewXScale);
 }
 
-void ARafter::ReplaceWithProceduralPlumbCutRafter(float TrimDistanceAlongSlopeCm, float PitchAngleDegrees, float RafterWidthCm, float RafterDepthCm)
+void ARafter::ReplaceWithProceduralPlumbCutRafter(
+	float TrimDistanceAlongSlopeCm,
+	float PitchAngleDegrees,
+	float RafterWidthCm,
+	float RafterDepthCm)
 {
-	UE_LOG(LogTemp, Warning, TEXT("ReplaceWithProceduralPlumbCutRafter: called (TrimDist=%.1f, Pitch=%.1f)"),
-		TrimDistanceAlongSlopeCm, PitchAngleDegrees);
+	if (!MeshComponent)
+	{
+		UE_LOG(LogTemp, Error, TEXT("PlumbCutRafter: MeshComponent is null."));
+		return;
+	}
+
+	TrimDistanceAlongSlopeCm = FMath::Max(TrimDistanceAlongSlopeCm, 1.0f);
+	RafterWidthCm = FMath::Max(RafterWidthCm, 0.1f);
+	RafterDepthCm = FMath::Max(RafterDepthCm, 0.1f);
+
+	const float PitchRad = FMath::DegreesToRadians(PitchAngleDegrees);
+	const float TanPitch = FMath::Tan(PitchRad);
+
+	const float HalfWidth = RafterWidthCm * 0.5f;
+	const float HalfDepth = RafterDepthCm * 0.5f;
+
+	const float ZTop = +HalfDepth;
+	const float ZBottom = -HalfDepth;
+
+	auto XOnPlumbCut = [TanPitch](float CutStationCm, float LocalZ)
+	{
+		return CutStationCm - LocalZ * TanPitch;
+	};
+
+	const float StartStation = 0.0f;
+	const float EndStation = TrimDistanceAlongSlopeCm;
+
+	const float StartTopX = XOnPlumbCut(StartStation, ZTop);
+	const float StartBottomX = XOnPlumbCut(StartStation, ZBottom);
+	const float EndTopX = XOnPlumbCut(EndStation, ZTop);
+	const float EndBottomX = XOnPlumbCut(EndStation, ZBottom);
+
+	const FVector SBL(StartBottomX, -HalfWidth, ZBottom);
+	const FVector SBR(StartBottomX, +HalfWidth, ZBottom);
+	const FVector STL(StartTopX,    -HalfWidth, ZTop);
+	const FVector STR(StartTopX,    +HalfWidth, ZTop);
+
+	const FVector EBL(EndBottomX, -HalfWidth, ZBottom);
+	const FVector EBR(EndBottomX, +HalfWidth, ZBottom);
+	const FVector ETL(EndTopX,    -HalfWidth, ZTop);
+	const FVector ETR(EndTopX,    +HalfWidth, ZTop);
+
+	TArray<FVector> Vertices;
+	TArray<int32> Triangles;
+	TArray<FVector> Normals;
+	TArray<FVector2D> UV0;
+	TArray<FLinearColor> VertexColors;
+	TArray<FProcMeshTangent> Tangents;
+
+	Vertices.Reserve(24);
+	Triangles.Reserve(36);
+	Normals.Reserve(24);
+	UV0.Reserve(24);
+	VertexColors.Reserve(24);
+	Tangents.Reserve(24);
+
+	const float UVTileCm = 30.48f;
+
+	auto AddQuad = [&](
+		FVector P0, FVector P1, FVector P2, FVector P3,
+		const FVector& DesiredNormal)
+	{
+		FVector N = DesiredNormal.GetSafeNormal();
+		if (N.IsNearlyZero()) N = FVector::UpVector;
+
+		const FVector CurrentNormal = FVector::CrossProduct(P1 - P0, P2 - P0).GetSafeNormal();
+		if (FVector::DotProduct(CurrentNormal, N) < 0.0f) Swap(P1, P3);
+
+		const int32 BaseIndex = Vertices.Num();
+		Vertices.Add(P0);
+		Vertices.Add(P1);
+		Vertices.Add(P2);
+		Vertices.Add(P3);
+
+		Triangles.Add(BaseIndex + 0);
+		Triangles.Add(BaseIndex + 1);
+		Triangles.Add(BaseIndex + 2);
+		Triangles.Add(BaseIndex + 0);
+		Triangles.Add(BaseIndex + 2);
+		Triangles.Add(BaseIndex + 3);
+
+		const float USize = FVector::Distance(P0, P1) / UVTileCm;
+		const float VSize = FVector::Distance(P0, P3) / UVTileCm;
+		UV0.Add(FVector2D(0.0f, 0.0f));
+		UV0.Add(FVector2D(USize, 0.0f));
+		UV0.Add(FVector2D(USize, VSize));
+		UV0.Add(FVector2D(0.0f, VSize));
+
+		for (int32 i = 0; i < 4; ++i)
+		{
+			Normals.Add(N);
+			VertexColors.Add(FLinearColor::White);
+		}
+
+		FVector TangentX = (P1 - P0).GetSafeNormal();
+		if (TangentX.IsNearlyZero()) TangentX = FVector::CrossProduct(FVector::UpVector, N).GetSafeNormal();
+		if (TangentX.IsNearlyZero()) TangentX = FVector::ForwardVector;
+
+		for (int32 i = 0; i < 4; ++i)
+		{
+			Tangents.Add(FProcMeshTangent(TangentX, false));
+		}
+	};
+
+	const FVector TopNormal(0.0f, 0.0f, +1.0f);
+	const FVector BottomNormal(0.0f, 0.0f, -1.0f);
+	const FVector LeftNormal(0.0f, -1.0f, 0.0f);
+	const FVector RightNormal(0.0f, +1.0f, 0.0f);
+	const FVector PlumbFaceNormalLocal(FMath::Cos(PitchRad), 0.0f, FMath::Sin(PitchRad));
+
+	AddQuad(STL, STR, ETR, ETL, TopNormal);
+	AddQuad(SBL, EBL, EBR, SBR, BottomNormal);
+	AddQuad(SBL, STL, ETL, EBL, LeftNormal);
+	AddQuad(SBR, EBR, ETR, STR, RightNormal);
+	AddQuad(SBL, SBR, STR, STL, -PlumbFaceNormalLocal);
+	AddQuad(EBL, ETL, ETR, EBR, PlumbFaceNormalLocal);
+
+	if (!ProceduralRafterMesh)
+	{
+		ProceduralRafterMesh = NewObject<UProceduralMeshComponent>(this, TEXT("ProceduralRafterMesh"));
+		ProceduralRafterMesh->CreationMethod = EComponentCreationMethod::Instance;
+		ProceduralRafterMesh->bUseAsyncCooking = true;
+		AddInstanceComponent(ProceduralRafterMesh);
+
+		USceneComponent* Parent = MeshComponent->GetAttachParent();
+		if (!Parent) Parent = RootComponent;
+		if (Parent)
+		{
+			ProceduralRafterMesh->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform);
+		}
+		ProceduralRafterMesh->RegisterComponent();
+	}
+
+	ProceduralRafterMesh->ClearAllMeshSections();
+	ProceduralRafterMesh->SetRelativeLocation(MeshComponent->GetRelativeLocation());
+	ProceduralRafterMesh->SetRelativeRotation(MeshComponent->GetRelativeRotation());
+	ProceduralRafterMesh->SetRelativeScale3D(FVector::OneVector);
+
+	ProceduralRafterMesh->CreateMeshSection_LinearColor(
+		0, Vertices, Triangles, Normals, UV0, VertexColors, Tangents, true, true);
+
+	UMaterialInterface* ExistingMaterial = MeshComponent->GetMaterial(0);
+	if (ExistingMaterial) ProceduralRafterMesh->SetMaterial(0, ExistingMaterial);
+
+	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	ProceduralRafterMesh->SetCollisionObjectType(ECC_WorldStatic);
+
+	MeshComponent->SetVisibility(false, false);
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("PlumbCutRafter: Trim=%.2fcm Pitch=%.2fdeg Tan=%.4f TopEndX=%.2f BottomEndX=%.2f Difference=%.2fcm"),
+		TrimDistanceAlongSlopeCm, PitchAngleDegrees, TanPitch,
+		EndTopX, EndBottomX, EndBottomX - EndTopX);
 }
 
-bool ARafter::ComputeCutStationFromFasciaPlane(const FVector& FasciaBackFaceWorldPoint, const FVector& FasciaBackFaceWorldNormal, float& OutCutStationCm) const
+bool ARafter::ComputeCutStationFromFasciaPlane(
+	const FVector& FasciaBackFaceWorldPoint,
+	const FVector& FasciaBackFaceWorldNormal,
+	float& OutCutStationCm) const
 {
-	OutCutStationCm = 0.0f;
-	UE_LOG(LogTemp, Warning, TEXT("ComputeCutStationFromFasciaPlane: called"));
-	return false;
+	if (!MeshComponent) return false;
+
+	const FTransform MeshWorld = MeshComponent->GetComponentTransform();
+	const FVector LocalPlanePoint = MeshWorld.InverseTransformPosition(FasciaBackFaceWorldPoint);
+	const FVector LocalPlaneNormal = MeshWorld.InverseTransformVectorNoScale(FasciaBackFaceWorldNormal).GetSafeNormal();
+
+	if (FMath::Abs(LocalPlaneNormal.X) < KINDA_SMALL_NUMBER) return false;
+
+	OutCutStationCm = FVector::DotProduct(LocalPlanePoint, LocalPlaneNormal) / LocalPlaneNormal.X;
+	return OutCutStationCm > 0.0f;
 }
