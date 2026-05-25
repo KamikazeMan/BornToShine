@@ -447,6 +447,15 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	AddQuadChecked(TEXT("Start"),  SBL, STL, STR, SBR, -PlumbFaceNormalLocal, FVector(0, +1, 0));
 	AddQuadChecked(TEXT("End"),    EBL, EBR, ETR, ETL, PlumbFaceNormalLocal, FVector(0, +1, 0));
 
+	// DIAGNOSTIC: Add reversed back-facing quads to make rafter fully double-sided.
+	// If this fixes the missing faces, the material is single-sided.
+	AddQuadChecked(TEXT("TopBack"),    STR, ETR, ETL, STL, FVector(0, 0, -1), FVector(-1, 0, 0));
+	AddQuadChecked(TEXT("BottomBack"), EBL, EBR, SBR, SBL, FVector(0, 0, +1), FVector(-1, 0, 0));
+	AddQuadChecked(TEXT("LeftBack"),   STL, ETL, EBL, SBL, FVector(0, +1, 0), FVector(-1, 0, 0));
+	AddQuadChecked(TEXT("RightBack"),  EBR, ETR, STR, SBR, FVector(0, -1, 0), FVector(-1, 0, 0));
+	AddQuadChecked(TEXT("StartBack"),  SBR, STR, STL, SBL, PlumbFaceNormalLocal, FVector(0, -1, 0));
+	AddQuadChecked(TEXT("EndBack"),    ETL, ETR, EBR, EBL, -PlumbFaceNormalLocal, FVector(0, -1, 0));
+
 	UE_LOG(LogTemp, Warning, TEXT("ProceduralRafterMesh: %d vertices, %d triangles, %d normals"),
 		Vertices.Num(), Triangles.Num() / 3, Normals.Num());
 
