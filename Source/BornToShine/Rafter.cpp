@@ -433,7 +433,7 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		AddQuadToBuffers(Buffers, SBL, EBL, ETL, STL, LeftNormal,        FVector(+1, 0, 0), UVTileCm, bReverse);
 		AddQuadToBuffers(Buffers, SBR, STR, ETR, EBR, RightNormal,       FVector(+1, 0, 0), UVTileCm, bReverse);
 		AddQuadToBuffers(Buffers, SBL, STL, STR, SBR, -PlumbNormalLocal, FVector(0, +1, 0), UVTileCm, bReverse);
-		AddQuadToBuffers(Buffers, EBL, EBR, ETR, ETL, +PlumbNormalLocal, FVector(0, +1, 0), UVTileCm, bReverse);
+		AddQuadToBuffers(Buffers, EBL, EBR, ETR, ETL, PlumbNormalLocal, FVector(0, +1, 0), UVTileCm, bReverse);
 	};
 
 	AddRafterQuads(Front, false);
