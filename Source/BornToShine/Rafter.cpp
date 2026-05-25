@@ -36,9 +36,10 @@ static void AddQuadToBuffers(
 {
 	const int32 Base = Buffers.Vertices.Num();
 
-	const FVector Normal = bReverseForBackSide
-		? -OutwardNormal.GetSafeNormal()
-		:  OutwardNormal.GetSafeNormal();
+	// Use the same outward normal for both front and back sections.
+	// Only the triangle winding differs. Inverting normals on back faces
+	// causes lighting to calculate incorrectly and the back side looks dark.
+	const FVector Normal = OutwardNormal.GetSafeNormal();
 
 	FVector TangentX = TangentHint;
 	TangentX = TangentX - Normal * FVector::DotProduct(TangentX, Normal);
@@ -492,24 +493,16 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 			WoodMat ? *WoodMat->GetName() : TEXT("NULL"));
 	}
 
-	// DIAGNOSTIC: Use the default world grid material to test if procedural mesh
-	// renders at all. If the rafters show gray/checkered grid pattern from all
-	// angles, the procedural mesh is fine and the Rafter1 material is the issue.
-	UMaterialInterface* DiagMat = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"));
-
-	if (DiagMat)
+	if (WoodMat)
 	{
-		ProceduralRafterMesh->SetMaterial(0, DiagMat);
-		ProceduralRafterMesh->SetMaterial(1, DiagMat);
-		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: DIAGNOSTIC using WorldGridMaterial on both sections"));
-	}
-	else if (WoodMat)
-	{
-		// Fallback to wood if test material can't load
+		// Same material on both sections
 		ProceduralRafterMesh->SetMaterial(0, WoodMat);
 		ProceduralRafterMesh->SetMaterial(1, WoodMat);
-		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Fallback to wood material"));
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Wood material set on both sections [%s]"), *WoodMat->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL"));
 	}
 
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
