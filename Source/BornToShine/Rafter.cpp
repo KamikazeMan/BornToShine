@@ -534,11 +534,6 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL — using default material"));
 	}
 
-	// Force two-sided rendering at the component level since editing the
-	// material asset causes UE5 to crash.
-	// bDisableBackFaceCulling is available on UMeshComponent in UE5
-	ProceduralRafterMesh->bDisableBackFaceCulling = true;
-
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	ProceduralRafterMesh->SetCollisionObjectType(ECC_WorldStatic);
 
