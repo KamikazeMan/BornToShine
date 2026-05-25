@@ -524,17 +524,14 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 
 	if (WoodMat)
 	{
-		// Create a Dynamic Material Instance so we can configure rendering options
-		// per-instance without modifying the source material asset.
-		UMaterialInstanceDynamic* MID = UMaterialInstanceDynamic::Create(WoodMat, this);
-		if (MID)
-		{
-			ProceduralRafterMesh->SetMaterial(0, MID);
-		}
-		else
-		{
-			ProceduralRafterMesh->SetMaterial(0, WoodMat);
-		}
+		// Use the material directly — DMI wrapping was breaking the wood texture
+		ProceduralRafterMesh->SetMaterial(0, WoodMat);
+		UE_LOG(LogTemp, Warning, TEXT("ProceduralRafter: Material set to [%s], class=[%s]"),
+			*WoodMat->GetName(), *WoodMat->GetClass()->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ProceduralRafter: WoodMat is NULL — using default material"));
 	}
 
 	ProceduralRafterMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
