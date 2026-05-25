@@ -247,7 +247,7 @@ bool AFasciaBoard::TryPlace()
 
 						// Shift the entire rafter down-slope to close the fascia gap at the eave
 						// and pull the rafter top down so it doesn't stick through the ridge board.
-						const float DownSlopeShiftCm = 6.0f; // Tune this value to taste
+						const float DownSlopeShiftCm = 1.5f; // Tune this value to taste
 						FVector RafterSlopeDir = Raft->GetActorRotation().RotateVector(FVector::ForwardVector);
 						FVector NewRafterLoc = Raft->GetActorLocation() + RafterSlopeDir * DownSlopeShiftCm;
 						Raft->SetActorLocation(NewRafterLoc);
