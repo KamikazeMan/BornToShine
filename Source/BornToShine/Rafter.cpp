@@ -359,7 +359,12 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 		if (N.IsNearlyZero()) N = FVector::UpVector;
 
 		const FVector CurrentNormal = FVector::CrossProduct(P1 - P0, P2 - P0).GetSafeNormal();
-		if (FVector::DotProduct(CurrentNormal, N) < 0.0f) Swap(P1, P3);
+		// If winding is backwards, reverse the vertex order entirely (P0,P3,P2,P1)
+		bool bReverseWinding = (FVector::DotProduct(CurrentNormal, N) < 0.0f);
+		if (bReverseWinding)
+		{
+			Swap(P1, P3);
+		}
 
 		const int32 BaseIndex = Vertices.Num();
 		Vertices.Add(P0);
@@ -409,6 +414,9 @@ void ARafter::ReplaceWithProceduralPlumbCutRafter(
 	AddQuad(SBR, EBR, ETR, STR, RightNormal);
 	AddQuad(SBL, SBR, STR, STL, -PlumbFaceNormalLocal);
 	AddQuad(EBL, ETL, ETR, EBR, PlumbFaceNormalLocal);
+
+	UE_LOG(LogTemp, Warning, TEXT("ProceduralRafterMesh: %d vertices, %d triangles, %d normals"),
+		Vertices.Num(), Triangles.Num() / 3, Normals.Num());
 
 	if (!ProceduralRafterMesh)
 	{
