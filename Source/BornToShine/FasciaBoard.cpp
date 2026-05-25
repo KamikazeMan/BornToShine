@@ -231,8 +231,9 @@ bool AFasciaBoard::TryPlace()
 							Raft->RafterDepth);
 
 						// Update the rafter's stored slope length so downstream systems
-						// (like roof sheathing trim) see the new trimmed length.
-						Raft->TrimmedSlopeLength = CutStation;
+						// Add the down-slope shift to TrimmedSlopeLength so plywood extends
+						// to the new effective rafter tail position
+						Raft->TrimmedSlopeLength = CutStation + 1.5f;
 
 						// Update the RafterTail socket position to match the new tail end
 						for (FConstructionSocket& Socket : Raft->GetSocketsMutable())
