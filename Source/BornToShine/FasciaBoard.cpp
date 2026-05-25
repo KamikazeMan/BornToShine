@@ -212,9 +212,13 @@ bool AFasciaBoard::TryPlace()
 				FVector BackFacePoint = FasciaLoc + BackFaceDir * FasciaHalfThickness;
 				FVector BackFaceNormal = -BackFaceDir; // Normal points outward (away from ridge)
 
-				// Compute the cut station along the rafter's local X axis
-				float CutStation = 0.0f;
-				if (Raft->ComputeCutStationFromFasciaPlane(BackFacePoint, BackFaceNormal, CutStation))
+				// Compute cut station by projecting the fascia back face point onto
+				// the rafter's forward direction. This matches what the plywood
+				// diagnostic uses (FasciaAlongSlope) and works correctly with rotation.
+				FVector RafterFwd = Raft->GetActorRotation().RotateVector(FVector::ForwardVector);
+				FVector ToBackFace = BackFacePoint - Raft->GetActorLocation();
+				float CutStation = FVector::DotProduct(ToBackFace, RafterFwd);
+
 				{
 					float CurrentSlope = Raft->GetSlopeLengthCm();
 					if (CutStation > 10.0f && CutStation < CurrentSlope + 50.0f)
