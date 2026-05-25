@@ -1650,22 +1650,31 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 					}
 
-					// Trim MaxSlopeLen to fascia board position if one exists
+					// Trim MaxSlopeLen to fascia board position if one exists.
+					// Sheathing should stop at the fascia board, not the rafter tail tip.
+					int32 FasciaCount = 0;
+					float OriginalMaxSlopeLen = MaxSlopeLen;
 					for (ABuildablePiece* P : NearbyPieces)
 					{
 						if (!P || P->GetPieceType() != EPieceType::FasciaBoard) continue;
+						FasciaCount++;
 						FVector FasciaLoc = P->GetActorLocation();
 						float FasciaAlongSlope = FVector::DotProduct(FasciaLoc - RafterLoc, RafterForward);
-						if (FasciaAlongSlope > 0.0f)
+						UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Found [%s] FasciaAlongSlope=%.1f MaxSlopeLen=%.1f"),
+							*P->GetName(), FasciaAlongSlope, MaxSlopeLen);
+						if (FasciaAlongSlope > 0.0f && FasciaAlongSlope < OriginalMaxSlopeLen)
 						{
-							float FasciaHalfHeight = 6.985f; // half of 13.97cm (2x6)
-							float TrimmedLen = FasciaAlongSlope + FasciaHalfHeight;
-							if (TrimmedLen < MaxSlopeLen)
+							const float FasciaHalfHeight = 6.985f; // half of 13.97cm (2x6)
+							float NewMax = FasciaAlongSlope + FasciaHalfHeight;
+							if (NewMax < MaxSlopeLen)
 							{
-								MaxSlopeLen = TrimmedLen;
+								MaxSlopeLen = NewMax;
+								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Trimmed MaxSlopeLen to %.1f"), MaxSlopeLen);
 							}
 						}
 					}
+					UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Searched %d nearby pieces, found %d fascia, final MaxSlopeLen=%.1f"),
+						NearbyPieces.Num(), FasciaCount, MaxSlopeLen);
 
 					// Roof edges flush with end rafters (add half rafter width so
 					// sheathing covers the outer face of end rafters)
