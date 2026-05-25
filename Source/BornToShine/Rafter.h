@@ -48,6 +48,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Construction|Dimensions")
 	float OverhangCm;
 
+	// When set > 0, overrides the computed slope length (used after fascia trims the tail)
+	UPROPERTY(VisibleAnywhere, Category = "Construction|Rafter")
+	float TrimmedSlopeLength = -1.0f;
+
 	// Set pitch and rebuild sockets + scale
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	void SetPitch(float NewPitchRatio, float NewRunCm);

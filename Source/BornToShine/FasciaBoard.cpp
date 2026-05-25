@@ -200,18 +200,16 @@ bool AFasciaBoard::TryPlace()
 				FVector ToFascia = FasciaLoc - RafterOrigin;
 				float TrimDist = FVector::DotProduct(ToFascia, RafterDir);
 
-				if (TrimDist > 10.0f) // Sanity: rafter must extend at least 10cm
+				if (TrimDist > 10.0f)
 				{
-					// Subtract so rafter ends at the fascia's back face (inside face).
-					// The dot product gives distance to fascia CENTER. The rafter should
-					// stop at the inside face = center minus half the fascia width.
-					const float FasciaHalfWidth = 1.905f / 2.0f; // half of 3/4"
-					TrimDist -= FasciaHalfWidth;
+					// FasciaThickness is 3.81cm (1.5"), so half-thickness is 1.905cm
+					const float FasciaHalfThickness = 3.81f / 2.0f;
+					// Rafter ends at fascia's interior face (toward the ridge)
+					TrimDist -= FasciaHalfThickness;
 
 					float CurrentSlope = Raft->GetSlopeLengthCm();
-					if (TrimDist < CurrentSlope) // Only trim if actually shorter
+					if (TrimDist < CurrentSlope && TrimDist > 10.0f)
 					{
-						// Re-scale rafter mesh X to trimmed length
 						UStaticMeshComponent* RaftMesh = Raft->GetMeshComponent();
 						if (RaftMesh && RaftMesh->GetStaticMesh())
 						{
@@ -222,11 +220,21 @@ bool AFasciaBoard::TryPlace()
 								float NewXScale = TrimDist / MeshDefaultLen;
 								FVector CurScale = RaftMesh->GetRelativeScale3D();
 								RaftMesh->SetRelativeScale3D(FVector(NewXScale, CurScale.Y, CurScale.Z));
-								TrimCount++;
 
-								UE_LOG(LogTemp, Log,
-									TEXT("Fascia: Trimmed rafter %s from %.1f to %.1f cm (XScale=%.3f)"),
-									*Raft->GetName(), CurrentSlope, TrimDist, NewXScale);
+								// CRITICAL: Update the rafter's stored slope length
+								// so GetSlopeLengthCm() returns the new trimmed value
+								Raft->TrimmedSlopeLength = TrimDist;
+
+								// Also update the RafterTail socket position
+								for (FConstructionSocket& Socket : Raft->GetSocketsMutable())
+								{
+									if (Socket.SocketName == FName("RafterTail"))
+										Socket.LocalPosition.X = TrimDist;
+								}
+
+								UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Rafter %s NewSlopeLen=%.1f (was %.1f)"),
+									*Raft->GetName(), TrimDist, CurrentSlope);
+								TrimCount++;
 							}
 						}
 					}

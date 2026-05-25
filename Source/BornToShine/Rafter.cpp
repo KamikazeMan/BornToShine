@@ -81,6 +81,9 @@ float ARafter::GetPitchAngleDegrees() const
 
 float ARafter::GetSlopeLengthCm() const
 {
+	// If fascia trimmed the rafter, return the trimmed length instead of computed
+	if (TrimmedSlopeLength > 0.0f) return TrimmedSlopeLength;
+
 	// Total slope length from ridge end to tail end
 	float RiseTotal = (PitchRatio / 12.0f) * RunDistanceCm;
 	float MainSlope = FMath::Sqrt(RunDistanceCm * RunDistanceCm + RiseTotal * RiseTotal);

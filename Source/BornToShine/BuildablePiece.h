@@ -33,6 +33,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	TArray<FConstructionSocket> GetAllSockets() const { return Sockets; }
 
+	// Get mutable reference to sockets array for direct modification
+	TArray<FConstructionSocket>& GetSocketsMutable() { return Sockets; }
+
 	// Get a specific socket by name (C++ only - returns pointer to socket or nullptr)
 	FConstructionSocket* GetSocketByName(FName SocketName);
 
