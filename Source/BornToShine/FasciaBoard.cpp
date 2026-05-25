@@ -191,53 +191,65 @@ bool AFasciaBoard::TryPlace()
 
 			if (Dist < 50.0f && AlongFascia < BoardLength / 2.0f + 20.0f)
 			{
-				// Get rafter direction and find where it intersects fascia plane
+				// Calculate the fascia back face plane (the face toward the ridge).
+				// Fascia thickness = 3.81cm (2x); back face is half-thickness behind center.
+				const float FasciaThickness = 3.81f;
+				const float FasciaHalfThickness = FasciaThickness * 0.5f;
+
+				// FasciaFwd here is the LENGTH direction of the fascia (along the eave).
+				// We need the THICKNESS direction (perpendicular to fascia face).
+				// The fascia's RIGHT vector points toward/away from the building.
+				FVector FasciaRight = GetActorRotation().RotateVector(FVector::RightVector);
+
+				// Determine which way is "toward the ridge" (back face direction).
+				// The rafter origin (ridge end) is on the ridge side.
 				FVector RafterOrigin = Raft->GetActorLocation();
-				FVector RafterDir = Raft->GetActorRotation().RotateVector(FVector::ForwardVector);
+				FVector ToRidgeFromFascia = RafterOrigin - FasciaLoc;
+				float DotRight = FVector::DotProduct(ToRidgeFromFascia, FasciaRight);
+				FVector BackFaceDir = (DotRight > 0.0f) ? FasciaRight : -FasciaRight;
 
-				// Fascia plane: perpendicular to rafter direction, at fascia location
-				// We want the rafter to end at the fascia's back face (inside face)
-				FVector ToFascia = FasciaLoc - RafterOrigin;
-				float TrimDist = FVector::DotProduct(ToFascia, RafterDir);
+				// Back face point and normal in world space
+				FVector BackFacePoint = FasciaLoc + BackFaceDir * FasciaHalfThickness;
+				FVector BackFaceNormal = -BackFaceDir; // Normal points outward (away from ridge)
 
-				if (TrimDist > 10.0f)
+				// Compute the cut station along the rafter's local X axis
+				float CutStation = 0.0f;
+				if (Raft->ComputeCutStationFromFasciaPlane(BackFacePoint, BackFaceNormal, CutStation))
 				{
-					// FasciaThickness is 3.81cm (1.5"), so half-thickness is 1.905cm
-					const float FasciaHalfThickness = 3.81f / 2.0f;
-					// Rafter ends at fascia's interior face (toward the ridge)
-					TrimDist -= FasciaHalfThickness;
-
 					float CurrentSlope = Raft->GetSlopeLengthCm();
-					if (TrimDist < CurrentSlope && TrimDist > 10.0f)
+					if (CutStation > 10.0f && CutStation < CurrentSlope + 50.0f)
 					{
-						UStaticMeshComponent* RaftMesh = Raft->GetMeshComponent();
-						if (RaftMesh && RaftMesh->GetStaticMesh())
+						// Trigger the procedural plumb cut
+						Raft->ReplaceWithProceduralPlumbCutRafter(
+							CutStation,
+							Raft->GetPitchAngleDegrees(),
+							Raft->RafterWidth,
+							Raft->RafterDepth);
+
+						// Update the rafter's stored slope length so downstream systems
+						// (like roof sheathing trim) see the new trimmed length.
+						Raft->TrimmedSlopeLength = CutStation;
+
+						// Update the RafterTail socket position to match the new tail end
+						for (FConstructionSocket& Socket : Raft->GetSocketsMutable())
 						{
-							FBoxSphereBounds RBounds = RaftMesh->GetStaticMesh()->GetBounds();
-							float MeshDefaultLen = RBounds.BoxExtent.X * 2.0f;
-							if (MeshDefaultLen > 1.0f)
-							{
-								float NewXScale = TrimDist / MeshDefaultLen;
-								FVector CurScale = RaftMesh->GetRelativeScale3D();
-								RaftMesh->SetRelativeScale3D(FVector(NewXScale, CurScale.Y, CurScale.Z));
-
-								// CRITICAL: Update the rafter's stored slope length
-								// so GetSlopeLengthCm() returns the new trimmed value
-								Raft->TrimmedSlopeLength = TrimDist;
-
-								// Also update the RafterTail socket position
-								for (FConstructionSocket& Socket : Raft->GetSocketsMutable())
-								{
-									if (Socket.SocketName == FName("RafterTail"))
-										Socket.LocalPosition.X = TrimDist;
-								}
-
-								UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Rafter %s NewSlopeLen=%.1f (was %.1f)"),
-									*Raft->GetName(), TrimDist, CurrentSlope);
-								TrimCount++;
-							}
+							if (Socket.SocketName == FName("RafterTail"))
+								Socket.LocalPosition.X = CutStation;
 						}
+
+						UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Rafter %s CutStation=%.1f (was %.1f slope)"),
+							*Raft->GetName(), CutStation, CurrentSlope);
+						TrimCount++;
 					}
+					else
+					{
+						UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Rafter %s CutStation=%.1f out of range (slope=%.1f)"),
+							*Raft->GetName(), CutStation, CurrentSlope);
+					}
+				}
+				else
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Failed to compute cut station for %s"), *Raft->GetName());
 				}
 			}
 		}
