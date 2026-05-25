@@ -1650,6 +1650,23 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 					}
 
+					// Trim MaxSlopeLen to fascia board position if one exists
+					for (ABuildablePiece* P : NearbyPieces)
+					{
+						if (!P || P->GetPieceType() != EPieceType::FasciaBoard) continue;
+						FVector FasciaLoc = P->GetActorLocation();
+						float FasciaAlongSlope = FVector::DotProduct(FasciaLoc - RafterLoc, RafterForward);
+						if (FasciaAlongSlope > 0.0f)
+						{
+							float FasciaHalfHeight = 6.985f; // half of 13.97cm (2x6)
+							float TrimmedLen = FasciaAlongSlope + FasciaHalfHeight;
+							if (TrimmedLen < MaxSlopeLen)
+							{
+								MaxSlopeLen = TrimmedLen;
+							}
+						}
+					}
+
 					// Roof edges flush with end rafters (add half rafter width so
 					// sheathing covers the outer face of end rafters)
 					const float RafterHalfWidth = 1.905f; // half of 3.81cm (2x4 width)
