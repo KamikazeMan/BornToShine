@@ -251,10 +251,6 @@ bool AFasciaBoard::TryPlace()
 							*Raft->GetName(), CutStation, CurrentSlope);
 					}
 				}
-				else
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Fascia trim: Failed to compute cut station for %s"), *Raft->GetName());
-				}
 			}
 		}
 
