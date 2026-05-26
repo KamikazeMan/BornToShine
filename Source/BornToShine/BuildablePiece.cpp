@@ -1764,6 +1764,25 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						MutableSheet->RoofRafterOrigin = RafterLoc;
 					}
 
+					if (MutableSheet)
+					{
+						float RafterSlopeLen = -1.0f;
+						float RafterTrimmedLen = -1.0f;
+						ARafter* TargetRafter = Cast<ARafter>(TargetPiece);
+						if (TargetRafter)
+						{
+							RafterSlopeLen = TargetRafter->GetSlopeLengthCm();
+							RafterTrimmedLen = TargetRafter->TrimmedSlopeLength;
+						}
+						UE_LOG(LogTemp, Warning, TEXT("PLYWOOD STORED: TargetRafter=%s RafterLoc=(%.1f,%.1f,%.1f) RoofSlopeMax=%.1f RafterGetSlopeLen=%.1f RafterTrimmedSlopeLen=%.1f SnappedAlongSlope=%.1f"),
+							TargetPiece ? *TargetPiece->GetName() : TEXT("null"),
+							RafterLoc.X, RafterLoc.Y, RafterLoc.Z,
+							MaxSlopeLen,
+							RafterSlopeLen,
+							RafterTrimmedLen,
+							SnappedAlongSlope);
+					}
+
 					// No clamping — TryPlace() will trim sheets that extend past roof edges
 
 					// Apply final position
