@@ -1618,10 +1618,14 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 								const float SheetHalfThick = 1.27f / 2.0f;
 								CandidateLocation += Grid.RoofNormal * (RafterHalfDepth + SheetHalfThick);
 
-								// Store cell data on the sheet for TryPlace to consume
+								// Store cell identity AND legacy bounds on the sheet
 								ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
 								if (MutableSheet)
 								{
+									MutableSheet->RoofGridId = Grid.GridId;
+									MutableSheet->RoofGridVersion = Grid.Version;
+									MutableSheet->RoofColumnIndex = Cell.Column;
+									MutableSheet->RoofRowIndex = Cell.Row;
 									MutableSheet->RoofRidgeStart = Cell.RidgeMin;
 									MutableSheet->RoofRidgeEnd = Cell.RidgeMax;
 									MutableSheet->RoofSlopeMax = Cell.SlopeMax;

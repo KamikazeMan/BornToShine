@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "BuildablePiece.h"
 #include "ConstructionTypes.h"
+#include "Misc/Guid.h"
 #include "RoofSheathing.generated.h"
 
 UCLASS()
@@ -29,6 +30,19 @@ public:
 	FVector RoofRidgeDir = FVector::ZeroVector;
 	FVector RoofSlopeDir = FVector::ZeroVector;
 	FVector RoofRafterOrigin = FVector::ZeroVector;
+
+	// Grid cell identity (Phase 5: cell-based placement)
+	UPROPERTY()
+	FGuid RoofGridId;
+
+	UPROPERTY()
+	int32 RoofGridVersion = 0;
+
+	UPROPERTY()
+	int32 RoofColumnIndex = INDEX_NONE;
+
+	UPROPERTY()
+	int32 RoofRowIndex = INDEX_NONE;
 
 	virtual void ScalePiece(float ScaleDelta) override;
 	virtual bool TryPlace() override;

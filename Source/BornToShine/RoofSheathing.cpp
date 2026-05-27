@@ -73,97 +73,43 @@ bool ARoofSheathing::TryPlace()
 	if (!Super::TryPlace()) return false;
 	if (!MeshComponent || !MeshComponent->GetStaticMesh()) return true;
 
-	// Roof boundaries were set by the snap system in DetectSnapCandidates
+	// Roof boundaries were set by the snap system (Phase 4) using the cached grid
+	// RoofRidgeStart/End = cell ridge bounds (NOT roof bounds)
+	// RoofSlopeMax = cell slope max (NOT roof slope max)
+	// RoofRafterOrigin = grid origin (NOT rafter location)
 	if (RoofRidgeDir.IsNearlyZero() || RoofSlopeDir.IsNearlyZero()) return true;
 
 	FBoxSphereBounds Bounds = MeshComponent->GetStaticMesh()->GetBounds();
-	float UnscaledX = Bounds.BoxExtent.X * 2.0f; // along ridge
-	float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // along slope
-	float SheetHalfX = UnscaledX / 2.0f;
-	float SheetHalfY = UnscaledY / 2.0f;
+	const float UnscaledX = Bounds.BoxExtent.X * 2.0f; // 243.84 (full sheet ridge size)
+	const float UnscaledY = Bounds.BoxExtent.Y * 2.0f; // 121.92 (full sheet slope size)
 
+	// Cell dimensions from stored cell bounds
+	const float CellWidth = RoofRidgeEnd - RoofRidgeStart;
+	// Cell slope range: need to recover SlopeMin. The actor was placed at cell center,
+	// and cell SlopeMax is stored as RoofSlopeMax. We compute cell SlopeMin by projecting
+	// actor location.
 	FVector ActorLoc = GetActorLocation();
+	float SheetAlongSlope = FVector::DotProduct(ActorLoc - RoofRafterOrigin, RoofSlopeDir);
+	float CellSlopeMin = (2.0f * SheetAlongSlope) - RoofSlopeMax;
+	float CellHeight = RoofSlopeMax - CellSlopeMin;
 
-	// Sheet center position in roof coordinate system
-	FVector ToSheet = ActorLoc - RoofRafterOrigin;
-	float SheetAlongRidge = FVector::DotProduct(ToSheet, RoofRidgeDir);
-	float SheetAlongSlope = FVector::DotProduct(ToSheet, RoofSlopeDir);
-
-	// Sheet edges in roof coordinates (absolute positions)
-	float SheetRidgeLeft = SheetAlongRidge - SheetHalfX;
-	float SheetRidgeRight = SheetAlongRidge + SheetHalfX;
-	float SheetSlopeBottom = SheetAlongSlope - SheetHalfY; // toward ridge board
-	float SheetSlopeTop = SheetAlongSlope + SheetHalfY;    // toward fascia
-
-	// Trim to roof boundaries
-	float TrimLeft = SheetRidgeLeft;
-	float TrimRight = SheetRidgeRight;
-	float TrimBottom = SheetSlopeBottom;
-	float TrimTop = SheetSlopeTop;
-
-	bool bNeedsTrim = false;
-
-	// Ridge direction trim
-	if (TrimLeft < RoofRidgeStart)
+	if (CellWidth < 5.0f || CellHeight < 5.0f)
 	{
-		TrimLeft = RoofRidgeStart;
-		bNeedsTrim = true;
-	}
-	if (TrimRight > RoofRidgeEnd)
-	{
-		TrimRight = RoofRidgeEnd;
-		bNeedsTrim = true;
-	}
-
-	// Slope direction trim
-	if (TrimBottom < 0.0f)
-	{
-		TrimBottom = 0.0f;
-		bNeedsTrim = true;
-	}
-	if (TrimTop > RoofSlopeMax)
-	{
-		TrimTop = RoofSlopeMax;
-		bNeedsTrim = true;
-	}
-
-	if (!bNeedsTrim) return true;
-
-	float NewWidth = TrimRight - TrimLeft;
-	float NewHeight = TrimTop - TrimBottom;
-
-	if (NewWidth < 5.0f || NewHeight < 5.0f)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: Trimmed too small (%.1f x %.1f) — skipping"), NewWidth, NewHeight);
+		UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: Cell too small (%.1f x %.1f) — skipping"), CellWidth, CellHeight);
 		return true;
 	}
 
-	// Scale mesh
-	float ScaleX = NewWidth / UnscaledX;
-	float ScaleY = NewHeight / UnscaledY;
+	// Scale mesh to fit the cell
+	float ScaleX = CellWidth / UnscaledX;
+	float ScaleY = CellHeight / UnscaledY;
 	FVector CurScale = MeshComponent->GetRelativeScale3D();
 	MeshComponent->SetRelativeScale3D(FVector(ScaleX, ScaleY, CurScale.Z));
 
-	// Offset mesh center to the center of the trimmed region.
-	// The offset is in LOCAL sheet space (X=ridge, Y=slope).
-	// TrimLeft/TrimRight are in absolute roof coords. Convert to relative to sheet center.
-	float TrimCenterRidge = ((TrimLeft + TrimRight) / 2.0f) - SheetAlongRidge;
-	// Sign flipped: mesh local Y axis points opposite to slope direction
-	float TrimCenterSlope = -(((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope);
-	MeshComponent->SetRelativeLocation(FVector(TrimCenterRidge, TrimCenterSlope, 0.0f));
+	// Actor is at cell center, so mesh local offset is zero
+	MeshComponent->SetRelativeLocation(FVector::ZeroVector);
 
-	// Diagnostic: log final world-space position of mesh edges
-	FVector MeshWorldCenter = MeshComponent->GetComponentLocation();
-	FVector MeshSlopeDir = RoofSlopeDir;
-	FVector RafterOriginWorld = RoofRafterOrigin;
-	float MeshCenterAlongSlope = FVector::DotProduct(MeshWorldCenter - RafterOriginWorld, MeshSlopeDir);
-	float MeshBottomEdgeAlongSlope = MeshCenterAlongSlope + (NewHeight / 2.0f);
-	UE_LOG(LogTemp, Warning, TEXT("TRIM RESULT: MeshCenterAlongSlope=%.1f MeshBottomEdgeAlongSlope=%.1f RoofSlopeMax=%.1f"),
-		MeshCenterAlongSlope, MeshBottomEdgeAlongSlope, RoofSlopeMax);
-
-	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed %.1fx%.1f -> %.1fx%.1f (scale=%.3f,%.3f offset=%.1f,%.1f) Ridge=[%.1f,%.1f] Slope=[%.1f,%.1f]"),
-		UnscaledX, UnscaledY, NewWidth, NewHeight, ScaleX, ScaleY, TrimCenterRidge, TrimCenterSlope,
-		TrimLeft, TrimRight, TrimBottom, TrimTop);
+	UE_LOG(LogTemp, Warning, TEXT("CELL PLACE: Col=%d Row=%d CellW=%.1f CellH=%.1f Scale=(%.3f,%.3f)"),
+		RoofColumnIndex, RoofRowIndex, CellWidth, CellHeight, ScaleX, ScaleY);
 
 	return true;
 }
