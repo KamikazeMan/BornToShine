@@ -1719,17 +1719,20 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
 
 					// Row-derived slope positioning (ChatGPT's fix):
-					// Compute the row interval first (RowStart to RowEnd clamped at MaxSlopeLen),
-					// then derive the actor center from the trimmed interval — not the other way around.
-					// This produces correct results even when the last row is shorter than a full sheet.
+					// Compute the row interval first, then derive the actor center.
 					const float SlopeGridSize = 121.92f; // 4ft
+
+					// Extend Row 0 up-slope by ridge board half-thickness so sheets
+					// meet at the ridge centerline, not at the rafter origin
+					const float RidgeBoardHalfThickness = 1.905f;
+
 					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
 					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
 					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
 
-					// Compute the actual row interval first
-					float RowStart = SlopeIdx * SlopeGridSize;
-					float RowEnd = FMath::Min(RowStart + SlopeGridSize, MaxSlopeLen);
+					// For Row 0, extend the top edge into the ridge area
+					float RowStart = (SlopeIdx == 0) ? -RidgeBoardHalfThickness : SlopeIdx * SlopeGridSize;
+					float RowEnd = FMath::Min(RowStart + SlopeGridSize + ((SlopeIdx == 0) ? RidgeBoardHalfThickness : 0.0f), MaxSlopeLen);
 
 					// Actor center is the midpoint of the trimmed row interval
 					float SnappedAlongSlope = (RowStart + RowEnd) * 0.5f;
