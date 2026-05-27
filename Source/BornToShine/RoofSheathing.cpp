@@ -148,7 +148,8 @@ bool ARoofSheathing::TryPlace()
 	// The offset is in LOCAL sheet space (X=ridge, Y=slope).
 	// TrimLeft/TrimRight are in absolute roof coords. Convert to relative to sheet center.
 	float TrimCenterRidge = ((TrimLeft + TrimRight) / 2.0f) - SheetAlongRidge;
-	float TrimCenterSlope = ((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope;
+	// Sign flipped: mesh local Y axis points opposite to slope direction
+	float TrimCenterSlope = -(((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope);
 	MeshComponent->SetRelativeLocation(FVector(TrimCenterRidge, TrimCenterSlope, 0.0f));
 
 	// Diagnostic: log final world-space position of mesh edges
