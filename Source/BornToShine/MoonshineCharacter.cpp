@@ -67,6 +67,8 @@ AMoonshineCharacter::AMoonshineCharacter()
 	GetCharacterMovement()->JumpZVelocity = 600.0f;
 	GetCharacterMovement()->AirControl = 0.3f;
 
+	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+
 	// Don't rotate character with controller (camera is independent)
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -188,6 +190,10 @@ void AMoonshineCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInput
 			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Completed, this, &AMoonshineCharacter::OnZoomStop);
 		}
 	}
+
+	// Debug keys (raw bindings alongside Enhanced Input)
+	PlayerInputComponent->BindKey(EKeys::Backslash, IE_Pressed, this, &AMoonshineCharacter::DebugGrantStillParts);
+	PlayerInputComponent->BindKey(EKeys::P, IE_Pressed, this, &AMoonshineCharacter::DebugDumpInventory);
 }
 
 void AMoonshineCharacter::Move(const FInputActionValue& Value)
@@ -504,4 +510,14 @@ void AMoonshineCharacter::OnToggleBoardType()
 	{
 		PC->OnDeletePressed();
 	}
+}
+
+void AMoonshineCharacter::DebugGrantStillParts()
+{
+	if (Inventory) Inventory->DebugGrantStillParts();
+}
+
+void AMoonshineCharacter::DebugDumpInventory()
+{
+	if (Inventory) Inventory->DebugLogInventory();
 }
