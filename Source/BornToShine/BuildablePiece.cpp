@@ -1696,12 +1696,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 
 				float ZAmount = 1.737422f;
 
-				// Right side (InwardDir.Y > 0, fascia at negative Y) needs to drop ~2cm relative to left
-				// Left fascia sits correctly with full Z+=1.737; right fascia needs reduction
-				if (InwardDir.Y > 0.0f)
-				{
-					ZAmount -= 2.0f;
-				}
+				ZAmount -= 2.0f;  // Both sides drop equally to align with plywood top
 
 				CandidateLocation.Z += ZAmount;
 
