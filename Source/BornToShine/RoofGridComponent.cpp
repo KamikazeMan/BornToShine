@@ -185,6 +185,71 @@ bool URoofGridComponent::QuantizeRoofPointToCell(
 	const FVector& WorldPoint,
 	FRoofGridCell& OutCell) const
 {
-	// Phase 2 will implement this
-	return false;
+	if (!Grid.IsValid())
+	{
+		return false;
+	}
+
+	// Project the world point into grid-local coordinates
+	const FVector ToPoint = WorldPoint - Grid.Origin;
+	const float RidgeCoord = FVector::DotProduct(ToPoint, Grid.RidgeDir);
+	const float SlopeCoord = FVector::DotProduct(ToPoint, Grid.SlopeDir);
+
+	// Allow a small tolerance at the edges
+	const float Tolerance = 0.5f;
+
+	if (RidgeCoord < Grid.RidgeStart - Tolerance || RidgeCoord > Grid.RidgeEnd + Tolerance)
+	{
+		return false;
+	}
+	if (SlopeCoord < Grid.SlopeStart - Tolerance || SlopeCoord > Grid.SlopeEnd + Tolerance)
+	{
+		return false;
+	}
+
+	// Find which column the ridge coord falls into
+	int32 Column = INDEX_NONE;
+	for (int32 i = 0; i < Grid.RidgeEdges.Num() - 1; ++i)
+	{
+		if (RidgeCoord >= Grid.RidgeEdges[i] - Tolerance && RidgeCoord <= Grid.RidgeEdges[i + 1] + Tolerance)
+		{
+			Column = i;
+			break;
+		}
+	}
+
+	// Find which row the slope coord falls into
+	int32 Row = INDEX_NONE;
+	for (int32 i = 0; i < Grid.SlopeEdges.Num() - 1; ++i)
+	{
+		if (SlopeCoord >= Grid.SlopeEdges[i] - Tolerance && SlopeCoord <= Grid.SlopeEdges[i + 1] + Tolerance)
+		{
+			Row = i;
+			break;
+		}
+	}
+
+	if (Column == INDEX_NONE || Row == INDEX_NONE)
+	{
+		return false;
+	}
+
+	// Populate the cell
+	OutCell.Column = Column;
+	OutCell.Row = Row;
+	OutCell.RidgeMin = Grid.RidgeEdges[Column];
+	OutCell.RidgeMax = Grid.RidgeEdges[Column + 1];
+	OutCell.SlopeMin = Grid.SlopeEdges[Row];
+	OutCell.SlopeMax = Grid.SlopeEdges[Row + 1];
+
+	// Compute world-space center of the cell
+	const float CenterRidge = (OutCell.RidgeMin + OutCell.RidgeMax) * 0.5f;
+	const float CenterSlope = (OutCell.SlopeMin + OutCell.SlopeMax) * 0.5f;
+
+	OutCell.CenterWorld =
+		Grid.Origin
+		+ Grid.RidgeDir * CenterRidge
+		+ Grid.SlopeDir * CenterSlope;
+
+	return true;
 }
