@@ -33,12 +33,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	int32 GetItemCount(FName ItemID) const;
 
-	// Look up a data row by ItemID. Returns nullptr if not found.
+	// Look up a data row by ItemID. Returns true if found.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
-	FItemDataRow* GetItemData(FName ItemID) const;
+	bool GetItemData(FName ItemID, FItemDataRow& OutData) const;
+
+	// C++ only: raw pointer lookup (returns nullptr if not found)
+	FItemDataRow* GetItemDataRaw(FName ItemID) const;
 
 	// Get all items currently in inventory (for UI later).
-	UFUNCTION(BlueprintCallable, Category="Inventory")
 	const TArray<FInventoryItem>& GetItems() const { return Items; }
 
 	// Debug: dump inventory to log.

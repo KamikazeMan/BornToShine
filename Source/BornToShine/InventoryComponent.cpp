@@ -9,7 +9,7 @@ int32 UInventoryComponent::AddItem(FName ItemID, int32 Quantity)
 {
 	if (Quantity <= 0 || ItemID == NAME_None) return 0;
 
-	FItemDataRow* Data = GetItemData(ItemID);
+	FItemDataRow* Data = GetItemDataRaw(ItemID);
 	int32 MaxStack = Data ? Data->MaxStack : 99;
 
 	// Find existing stack
@@ -67,7 +67,18 @@ int32 UInventoryComponent::GetItemCount(FName ItemID) const
 	return 0;
 }
 
-FItemDataRow* UInventoryComponent::GetItemData(FName ItemID) const
+bool UInventoryComponent::GetItemData(FName ItemID, FItemDataRow& OutData) const
+{
+	FItemDataRow* Row = GetItemDataRaw(ItemID);
+	if (Row)
+	{
+		OutData = *Row;
+		return true;
+	}
+	return false;
+}
+
+FItemDataRow* UInventoryComponent::GetItemDataRaw(FName ItemID) const
 {
 	if (!ItemDataTable) return nullptr;
 	return ItemDataTable->FindRow<FItemDataRow>(ItemID, TEXT("InventoryComponent::GetItemData"));
