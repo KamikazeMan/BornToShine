@@ -57,30 +57,38 @@ void URoofGridComponent::RebuildRoofSideGrid(
 
 	// Filter rafters to only this side based on pitch sign
 	// Left side rafters have one pitch sign, right side the opposite
+	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: Examining %d total rafters"),
+		(int32)Side, Rafters.Num());
+
+	float DesiredSign = (Side == ERoofSide::Left) ? -1.0f : 1.0f;
+	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: DesiredPitchSign=%.1f"),
+		(int32)Side, DesiredSign);
+
 	TArray<ABuildablePiece*> SideRafters;
-	float ReferencePitchSign = 0.0f;
 	for (ABuildablePiece* P : Rafters)
 	{
 		if (!P) continue;
 		float Pitch = P->GetActorRotation().Pitch;
-		if (FMath::IsNearlyZero(Pitch)) continue;
-
-		if (ReferencePitchSign == 0.0f)
+		if (FMath::IsNearlyZero(Pitch))
 		{
-			// First valid rafter — pick its pitch sign based on which side we want
-			// Left = negative pitch (slopes down to left), Right = positive pitch
-			float DesiredSign = (Side == ERoofSide::Left) ? -1.0f : 1.0f;
-			if (FMath::Sign(Pitch) == DesiredSign)
-			{
-				ReferencePitchSign = FMath::Sign(Pitch);
-				SideRafters.Add(P);
-			}
+			UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Pitch=%.2f (skipped — near zero)"),
+				*P->GetName(), Pitch);
+			continue;
 		}
-		else if (FMath::Sign(Pitch) == ReferencePitchSign)
+
+		float PitchSign = FMath::Sign(Pitch);
+		bool bMatchesSide = (PitchSign == DesiredSign);
+		UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Pitch=%.2f Sign=%.1f Matches=%s"),
+			*P->GetName(), Pitch, PitchSign, bMatchesSide ? TEXT("YES") : TEXT("no"));
+
+		if (bMatchesSide)
 		{
 			SideRafters.Add(P);
 		}
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: Found %d matching rafters"),
+		(int32)Side, SideRafters.Num());
 
 	if (SideRafters.Num() == 0)
 	{
