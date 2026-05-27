@@ -3,6 +3,7 @@
 #include "FasciaBoard.h"
 #include "ConstructionPhaseManager.h"
 #include "Rafter.h"
+#include "RidgeBoard.h"
 #include "Components/StaticMeshComponent.h"
 
 AFasciaBoard::AFasciaBoard()
@@ -266,6 +267,17 @@ bool AFasciaBoard::TryPlace()
 		}
 
 		UE_LOG(LogTemp, Warning, TEXT("Fascia: Trimmed %d rafter tails"), TrimCount);
+	}
+
+	// Rebuild roof grids since fascia changed the eave trim
+	if (AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> RidgeBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RidgeBoard);
+		for (ABuildablePiece* RB : RidgeBoards)
+		{
+			ARidgeBoard* Ridge = Cast<ARidgeBoard>(RB);
+			if (Ridge) Ridge->RebuildRoofGrids();
+		}
 	}
 
 	return true;

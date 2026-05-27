@@ -2,6 +2,10 @@
 
 #include "RidgeBoard.h"
 #include "Components/StaticMeshComponent.h"
+#include "RoofGridComponent.h"
+#include "ConstructionPhaseManager.h"
+#include "Rafter.h"
+#include "FasciaBoard.h"
 
 ARidgeBoard::ARidgeBoard()
 {
@@ -25,6 +29,8 @@ ARidgeBoard::ARidgeBoard()
 
 	bAutoNailOnPlace = false;
 	CurrentScale = FVector(1.0f, 1.0f, 1.0f);
+
+	RoofGrid = CreateDefaultSubobject<URoofGridComponent>(TEXT("RoofGrid"));
 }
 
 void ARidgeBoard::BeginPlay()
@@ -285,4 +291,31 @@ void ARidgeBoard::AdjustSocketsToMeshBounds()
 	UE_LOG(LogTemp, Log,
 		TEXT("RidgeBoard: AdjustSockets - MeshZ=[%.2f, %.2f] height=%.2fcm center=%.2f"),
 		MeshBottomZ, MeshTopZ, ActualHeight, MeshCenterZ);
+}
+
+void ARidgeBoard::RebuildRoofGrids()
+{
+	if (!RoofGrid) return;
+	if (!AConstructionPhaseManager::Instance) return;
+
+	TArray<ABuildablePiece*> AllRafters = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::Rafter);
+	TArray<ABuildablePiece*> AllFascia = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::FasciaBoard);
+
+	// Find left and right fascia by checking which side they're on
+	ABuildablePiece* LeftFascia = nullptr;
+	ABuildablePiece* RightFascia = nullptr;
+	FVector RidgeForward = GetActorRotation().RotateVector(FVector::ForwardVector);
+	FVector RidgeRight = GetActorRotation().RotateVector(FVector::RightVector);
+
+	for (ABuildablePiece* F : AllFascia)
+	{
+		if (!F) continue;
+		FVector ToFascia = F->GetActorLocation() - GetActorLocation();
+		float DotRight = FVector::DotProduct(ToFascia, RidgeRight);
+		if (DotRight < 0.0f && !LeftFascia) LeftFascia = F;
+		else if (DotRight > 0.0f && !RightFascia) RightFascia = F;
+	}
+
+	RoofGrid->RebuildRoofSideGrid(ERoofSide::Left, AllRafters, this, LeftFascia);
+	RoofGrid->RebuildRoofSideGrid(ERoofSide::Right, AllRafters, this, RightFascia);
 }

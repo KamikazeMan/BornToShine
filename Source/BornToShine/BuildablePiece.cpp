@@ -1573,7 +1573,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				}
 			}
 
-			// ── Roof sheathing → rafter top face ──
+			// ── Roof sheathing → rafter top face (Phase 4: grid-based) ──
 			if (Socket.SocketType == EConstructionSocketType::RoofSheathing_Face &&
 				TgtSocketType == EConstructionSocketType::Rafter_Top_Face &&
 				TargetPiece)
@@ -1581,274 +1581,75 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				const ARoofSheathing* RoofSheet = Cast<const ARoofSheathing>(this);
 				if (RoofSheet)
 				{
-					// Get rafter orientation
-					FRotator RafterRot = TargetPiece->GetActorRotation();
-					float RafterPitch = RafterRot.Pitch;
-
-					// The sheet lays on the rafter with:
-					// - Sheet X (8ft/243.84cm) along the RIDGE direction (perpendicular to rafter slope)
-					// - Sheet Y (4ft/121.92cm) along the SLOPE direction (same as rafter run)
-					// - Sheet Z (thickness) perpendicular to roof surface (normal to slope)
-
-					// Use the rafter's actual transform vectors instead of
-					// reconstructing from Euler components (which produces crooked results).
-					FVector RafterForward = RafterRot.RotateVector(FVector::ForwardVector);
-					FVector RafterUp = RafterRot.RotateVector(FVector::UpVector);
-
-					// Roof normal = rafter's local up vector (perpendicular to slope)
-					FVector RoofNormal = RafterUp;
-
-					// Ridge direction = perpendicular to rafter slope, lying in the roof plane
-					FVector RidgeDirVec = FVector::CrossProduct(RoofNormal, RafterForward).GetSafeNormal();
-
-					CandidateRotation = FRotationMatrix::MakeFromXZ(RidgeDirVec, RoofNormal).Rotator();
-					float RidgeYaw = CandidateRotation.Yaw;
-
-					// Offset sheet so it sits ON TOP of the rafter (not centered on it)
-					// Rafter depth = 13.97cm (2x6). Sheet sits on the top face.
-					const float RafterHalfDepth = 13.97f / 2.0f; // 6.985cm
-					const float SheetHalfThick = 1.27f / 2.0f;    // 0.635cm
-
-					CandidateLocation += RoofNormal * (RafterHalfDepth + SheetHalfThick);
-
-					// === GRID SNAP: RIDGE DIRECTION (along ridge, 8ft sheets) ===
-					FVector RidgeDir = RidgeDirVec;
-					FVector RafterLoc = TargetPiece->GetActorLocation();
-
-					// Find end rafter positions along ridge to determine roof width
-					float MinRidgeProj = 0.0f;
-					float MaxRidgeProj = 0.0f;
-					bool bFirstRafter = true;
-					float MaxSlopeLen = 0.0f;
-
-					for (ABuildablePiece* P : NearbyPieces)
+					// Find the ridge board to access the cached roof grid
+					ARidgeBoard* RidgeBoardActor = nullptr;
+					if (AConstructionPhaseManager::Instance)
 					{
-						if (!P || P->GetPieceType() != EPieceType::Rafter) continue;
-						float PPitch = P->GetActorRotation().Pitch;
-						if (FMath::Sign(PPitch) != FMath::Sign(RafterRot.Pitch)) continue;
-
-						float Proj = FVector::DotProduct(P->GetActorLocation() - RafterLoc, RidgeDir);
-						if (bFirstRafter)
+						TArray<ABuildablePiece*> RidgeBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RidgeBoard);
+						if (RidgeBoards.Num() > 0)
 						{
-							MinRidgeProj = Proj;
-							MaxRidgeProj = Proj;
-							bFirstRafter = false;
-						}
-						else
-						{
-							MinRidgeProj = FMath::Min(MinRidgeProj, Proj);
-							MaxRidgeProj = FMath::Max(MaxRidgeProj, Proj);
-						}
-
-						ARafter* R = Cast<ARafter>(P);
-						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
-					}
-
-					// Find the leftmost rafter on this side to use as stable grid origin
-					ABuildablePiece* LeftmostRafter = nullptr;
-					float LeftmostProj = FLT_MAX;
-					for (ABuildablePiece* P : NearbyPieces)
-					{
-						if (!P || P->GetPieceType() != EPieceType::Rafter) continue;
-						float PPitch = P->GetActorRotation().Pitch;
-						if (FMath::Sign(PPitch) != FMath::Sign(RafterRot.Pitch)) continue;
-
-						float Proj = FVector::DotProduct(P->GetActorLocation() - RafterLoc, RidgeDir);
-						if (Proj < LeftmostProj)
-						{
-							LeftmostProj = Proj;
-							LeftmostRafter = P;
+							RidgeBoardActor = Cast<ARidgeBoard>(RidgeBoards[0]);
 						}
 					}
 
-					// Re-base ridge measurements relative to the leftmost rafter so all
-					// snap positions use a stable reference regardless of which rafter
-					// is currently targeted.
-					FVector StableRafterOrigin = LeftmostRafter ? LeftmostRafter->GetActorLocation() : RafterLoc;
-					float RebaseOffset = FVector::DotProduct(StableRafterOrigin - RafterLoc, RidgeDir);
-
-					// Use stable reference (leftmost rafter) so grid doesn't shift with target rafter
-					float AlongRidge = FVector::DotProduct(GetActorLocation() - StableRafterOrigin, RidgeDir);
-
-					// Trim MaxSlopeLen to fascia board position if one exists.
-					// Sheathing should stop at the fascia board, not the rafter tail tip.
-					int32 FasciaCount = 0;
-					float OriginalMaxSlopeLen = MaxSlopeLen;
-					for (ABuildablePiece* P : NearbyPieces)
+					if (RidgeBoardActor && RidgeBoardActor->RoofGrid)
 					{
-						if (!P || P->GetPieceType() != EPieceType::FasciaBoard) continue;
-						FasciaCount++;
-						FVector FasciaLoc = P->GetActorLocation();
-						float FasciaAlongSlope = FVector::DotProduct(FasciaLoc - RafterLoc, RafterForward);
-						UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Found [%s] FasciaAlongSlope=%.1f MaxSlopeLen=%.1f"),
-							*P->GetName(), FasciaAlongSlope, MaxSlopeLen);
-						if (FasciaAlongSlope > 0.0f && FasciaAlongSlope < OriginalMaxSlopeLen)
+						// Determine which side of the roof the target rafter is on
+						float RafterPitch = TargetPiece->GetActorRotation().Pitch;
+						ERoofSide Side = (FMath::Sign(RafterPitch) < 0.0f) ? ERoofSide::Left : ERoofSide::Right;
+
+						const FRoofSideGrid& Grid = RidgeBoardActor->RoofGrid->GetGridForSide(Side);
+
+						if (Grid.IsValid())
 						{
-							// Use half-thickness (1.905cm = half of 3.81cm 2x lumber thickness),
-							// NOT half-height. Subtract additional offset so plywood ends flush
-							// with the fascia outer face (currently extends ~5cm past).
-							const float FasciaHalfThickness = 1.905f;
-							const float OverhangCorrection = 5.0f; // cm, pull plywood inward 2"
-							float NewMax = FasciaAlongSlope + FasciaHalfThickness - OverhangCorrection;
-							if (NewMax < MaxSlopeLen && NewMax > 0.0f)
+							// Project the player's aim point into the grid
+							FRoofGridCell Cell;
+							if (RidgeBoardActor->RoofGrid->QuantizeRoofPointToCell(Grid, GetActorLocation(), Cell))
 							{
-								MaxSlopeLen = NewMax;
-								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Trimmed MaxSlopeLen to %.1f (was %.1f, fascia center=%.1f)"),
-									MaxSlopeLen, OriginalMaxSlopeLen, FasciaAlongSlope);
+								// SUCCESS — set candidate to cell center
+								CandidateLocation = Cell.CenterWorld;
+
+								// Build candidate rotation from grid axes
+								FMatrix Basis(Grid.RidgeDir, Grid.SlopeDir, Grid.RoofNormal, FVector::ZeroVector);
+								CandidateRotation = Basis.Rotator();
+
+								// Offset sheet up so it sits ON TOP of the rafter
+								const float RafterHalfDepth = 13.97f / 2.0f;
+								const float SheetHalfThick = 1.27f / 2.0f;
+								CandidateLocation += Grid.RoofNormal * (RafterHalfDepth + SheetHalfThick);
+
+								// Store cell data on the sheet for TryPlace to consume
+								ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
+								if (MutableSheet)
+								{
+									MutableSheet->RoofRidgeStart = Cell.RidgeMin;
+									MutableSheet->RoofRidgeEnd = Cell.RidgeMax;
+									MutableSheet->RoofSlopeMax = Cell.SlopeMax;
+									MutableSheet->RoofRidgeDir = Grid.RidgeDir;
+									MutableSheet->RoofSlopeDir = Grid.SlopeDir;
+									MutableSheet->RoofRafterOrigin = Grid.Origin;
+								}
+
+								UE_LOG(LogTemp, Warning, TEXT("GRID SNAP: Side=%d Col=%d Row=%d Ridge=[%.1f,%.1f] Slope=[%.1f,%.1f] Center=%s"),
+									(int32)Side, Cell.Column, Cell.Row,
+									Cell.RidgeMin, Cell.RidgeMax,
+									Cell.SlopeMin, Cell.SlopeMax,
+									*Cell.CenterWorld.ToString());
 							}
 							else
 							{
-								UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: NewMax=%.1f skipped (MaxSlopeLen=%.1f)"),
-									NewMax, MaxSlopeLen);
+								UE_LOG(LogTemp, Warning, TEXT("GRID SNAP: Failed to quantize point %s into grid (side %d)"),
+									*GetActorLocation().ToString(), (int32)Side);
 							}
-						}
-					}
-					UE_LOG(LogTemp, Warning, TEXT("FASCIA DIAG: Searched %d nearby pieces, found %d fascia, final MaxSlopeLen=%.1f"),
-						NearbyPieces.Num(), FasciaCount, MaxSlopeLen);
-
-					// Roof edges flush with end rafters (add half rafter width so
-					// sheathing covers the outer face of end rafters)
-					const float RafterHalfWidth = 1.905f; // half of 3.81cm (2x4 width)
-					// Rebase from RafterLoc-relative to StableRafterOrigin-relative
-					float RidgeStart = (MinRidgeProj - RebaseOffset) - RafterHalfWidth;
-					float RidgeEnd = (MaxRidgeProj - RebaseOffset) + RafterHalfWidth;
-					float RidgeSpan = RidgeEnd - RidgeStart;
-
-					// === SLOPE DIRECTION (fascia to ridge, 4ft sheets) ===
-					FVector SlopeDir = RafterForward;
-					float AlongSlope = FVector::DotProduct(CandidateLocation - RafterLoc, SlopeDir);
-
-					// Row-derived slope positioning (ChatGPT's fix):
-					// Compute the row interval first, then derive the actor center.
-					const float SlopeGridSize = 121.92f; // 4ft
-
-					// Extend Row 0 up-slope by ridge board half-thickness so sheets
-					// meet at the ridge centerline, not at the rafter origin
-					const float RidgeBoardHalfThickness = 1.905f;
-
-					int32 MaxSlopeIdx = FMath::Max(0, FMath::CeilToInt(MaxSlopeLen / SlopeGridSize) - 1);
-					int32 SlopeIdx = FMath::RoundToInt(AlongSlope / SlopeGridSize);
-					SlopeIdx = FMath::Clamp(SlopeIdx, 0, MaxSlopeIdx);
-
-					// For Row 0, extend the top edge into the ridge area
-					float RowStart = (SlopeIdx == 0) ? -RidgeBoardHalfThickness : SlopeIdx * SlopeGridSize;
-					float RowEnd = FMath::Min(RowStart + SlopeGridSize + ((SlopeIdx == 0) ? RidgeBoardHalfThickness : 0.0f), MaxSlopeLen);
-
-					// Actor center is the midpoint of the trimmed row interval
-					float SnappedAlongSlope = (RowStart + RowEnd) * 0.5f;
-
-					// Clamp so sheet doesn't extend past slope length
-					// No clamping — TryPlace() will trim sheets that extend past roof edges
-
-					float StaggerOffset = 0.0f; // No stagger — clean grid on small buildings
-
-					// === RIDGE GRID: tile 8ft sheets from RidgeStart ===
-					const float RidgeGridSize = 243.84f; // 8ft per sheet
-					float SheetHalfLen = RoofSheet->SheetLength / 2.0f;
-
-					// How many sheets needed to cover the ridge span
-					int32 MaxRidgeIdx = FMath::Max(0, FMath::CeilToInt(RidgeSpan / RidgeGridSize) - 1);
-
-					// Sheets start from RidgeStart + stagger offset
-					float EffectiveStart = RidgeStart + StaggerOffset;
-					float RelAlongRidge = AlongRidge - EffectiveStart;
-					int32 RidgeIdx = FMath::RoundToInt((RelAlongRidge - SheetHalfLen) / RidgeGridSize);
-					RidgeIdx = FMath::Clamp(RidgeIdx, 0, MaxRidgeIdx);
-
-					// Sheet center position along ridge
-					float SnappedAlongRidge;
-					if (RidgeIdx == MaxRidgeIdx)
-					{
-						float ColStart = EffectiveStart + (RidgeIdx * RidgeGridSize);
-						float ColEnd = RidgeEnd;
-						float Remaining = ColEnd - ColStart;
-						if (Remaining < RidgeGridSize && Remaining > 1.0f)
-						{
-							// Last sheet: center on remaining space
-							SnappedAlongRidge = (ColStart + ColEnd) / 2.0f;
 						}
 						else
 						{
-							SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
+							UE_LOG(LogTemp, Warning, TEXT("GRID SNAP: Grid for side %d is not valid (not yet rebuilt?)"), (int32)Side);
 						}
 					}
 					else
 					{
-						// Normal sheet: center at grid position
-						SnappedAlongRidge = EffectiveStart + (RidgeIdx * RidgeGridSize) + SheetHalfLen;
-					}
-
-					// Store roof boundaries on the sheet for TryPlace() trimming
-					ARoofSheathing* MutableSheet = const_cast<ARoofSheathing*>(RoofSheet);
-					if (MutableSheet)
-					{
-						MutableSheet->RoofRidgeStart = RidgeStart;
-						MutableSheet->RoofRidgeEnd = RidgeEnd;
-						MutableSheet->RoofSlopeMax = MaxSlopeLen;
-						MutableSheet->RoofRidgeDir = RidgeDir;
-						MutableSheet->RoofSlopeDir = SlopeDir;
-						MutableSheet->RoofRafterOrigin = StableRafterOrigin;
-					}
-
-					if (MutableSheet)
-					{
-						float RafterSlopeLen = -1.0f;
-						float RafterTrimmedLen = -1.0f;
-						ARafter* TargetRafter = Cast<ARafter>(TargetPiece);
-						if (TargetRafter)
-						{
-							RafterSlopeLen = TargetRafter->GetSlopeLengthCm();
-							RafterTrimmedLen = TargetRafter->TrimmedSlopeLength;
-						}
-						UE_LOG(LogTemp, Warning, TEXT("PLYWOOD STORED: TargetRafter=%s RafterLoc=(%.1f,%.1f,%.1f) RoofSlopeMax=%.1f RafterGetSlopeLen=%.1f RafterTrimmedSlopeLen=%.1f SnappedAlongSlope=%.1f"),
-							TargetPiece ? *TargetPiece->GetName() : TEXT("null"),
-							RafterLoc.X, RafterLoc.Y, RafterLoc.Z,
-							MaxSlopeLen,
-							RafterSlopeLen,
-							RafterTrimmedLen,
-							SnappedAlongSlope);
-					}
-
-					// No clamping — TryPlace() will trim sheets that extend past roof edges
-
-					// Apply final position
-					CandidateLocation += RidgeDir * (SnappedAlongRidge - AlongRidge);
-					CandidateLocation += SlopeDir * (SnappedAlongSlope - AlongSlope);
-
-					// Skip if a roof sheathing sheet already exists at this grid position
-					if (AConstructionPhaseManager::Instance)
-					{
-						TArray<ABuildablePiece*> ExistingSheets =
-							AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RoofSheathing);
-						bool bSlotOccupied = false;
-						for (ABuildablePiece* Existing : ExistingSheets)
-						{
-							if (Existing && Existing != this)
-							{
-								float DistSq = FVector::DistSquared(Existing->GetActorLocation(), CandidateLocation);
-								if (DistSq < 900.0f) // 30cm tolerance
-								{
-									bSlotOccupied = true;
-									break;
-								}
-							}
-						}
-						if (bSlotOccupied)
-						{
-							// Try next rafter — this grid slot is taken
-							continue;
-						}
-					}
-
-					{
-						static float LastRoofLog = 0.0f;
-						float Now = GetWorld()->GetTimeSeconds();
-						if (Now - LastRoofLog > 2.0f)
-						{
-							UE_LOG(LogTemp, Warning, TEXT("RoofSheathing: RidgeSpan=%.1f SlopeLen=%.1f RidgeIdx=%d/%d SlopeIdx=%d/%d"),
-								RidgeSpan, MaxSlopeLen, RidgeIdx, MaxRidgeIdx, SlopeIdx, MaxSlopeIdx);
-							LastRoofLog = Now;
-						}
+						UE_LOG(LogTemp, Warning, TEXT("GRID SNAP: No RidgeBoard found or no RoofGrid component"));
 					}
 				}
 			}
@@ -2459,6 +2260,17 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
 			*FinalLocation.ToString(), *FinalRotation.ToString(),
 			*Candidate.TargetSocketName.ToString());
+
+		// Rebuild roof grids since framing changed
+		if (AConstructionPhaseManager::Instance)
+		{
+			TArray<ABuildablePiece*> RidgeBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RidgeBoard);
+			for (ABuildablePiece* RB : RidgeBoards)
+			{
+				ARidgeBoard* Ridge = Cast<ARidgeBoard>(RB);
+				if (Ridge) Ridge->RebuildRoofGrids();
+			}
+		}
 	}
 
 	SetActorRotation(FinalRotation);

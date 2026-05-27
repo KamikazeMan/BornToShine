@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BuildablePiece.h"
 #include "ConstructionTypes.h"
+#include "RoofGridComponent.h"
 #include "RidgeBoard.generated.h"
 
 /**
@@ -54,6 +55,12 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Construction")
 	FString GetLengthDisplayString() const;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Roof Grid")
+	URoofGridComponent* RoofGrid;
+
+	// Called when roof framing changes (rafters placed, fascia placed, etc.)
+	void RebuildRoofGrids();
 
 	// Override scale to disable scroll wheel scaling
 	virtual void ScalePiece(float ScaleDelta) override;
