@@ -55,31 +55,38 @@ void URoofGridComponent::RebuildRoofSideGrid(
 	FVector RidgeForward = RidgeRot.RotateVector(FVector::ForwardVector);
 	Grid.RidgeDir = RidgeForward.GetSafeNormal();
 
-	// Filter rafters to only this side based on pitch sign
-	// Left side rafters have one pitch sign, right side the opposite
-	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: Examining %d total rafters"),
-		(int32)Side, Rafters.Num());
+	// Filter rafters by which side of the ridge they slope toward.
+	// Use rafter forward vector dotted with ridge right (not pitch sign,
+	// since both sides can have the same pitch sign with different yaw).
+	FVector RidgeRight = RidgeBoard->GetActorRightVector();
+	RidgeRight.Z = 0.0f;
+	RidgeRight.Normalize();
 
-	float DesiredSign = (Side == ERoofSide::Left) ? -1.0f : 1.0f;
-	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: DesiredPitchSign=%.1f"),
-		(int32)Side, DesiredSign);
+	float DesiredSideSign = (Side == ERoofSide::Left) ? -1.0f : 1.0f;
+
+	UE_LOG(LogTemp, Warning, TEXT("RebuildRoofSideGrid Side=%d: Examining %d total rafters, DesiredSideSign=%.1f RidgeRight=%s"),
+		(int32)Side, Rafters.Num(), DesiredSideSign, *RidgeRight.ToString());
 
 	TArray<ABuildablePiece*> SideRafters;
 	for (ABuildablePiece* P : Rafters)
 	{
 		if (!P) continue;
-		float Pitch = P->GetActorRotation().Pitch;
-		if (FMath::IsNearlyZero(Pitch))
+
+		FVector RafterFwd = P->GetActorForwardVector();
+		RafterFwd.Z = 0.0f;
+		if (!RafterFwd.Normalize())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Pitch=%.2f (skipped — near zero)"),
-				*P->GetName(), Pitch);
+			UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Forward is vertical (skipped)"), *P->GetName());
 			continue;
 		}
 
-		float PitchSign = FMath::Sign(Pitch);
-		bool bMatchesSide = (PitchSign == DesiredSign);
-		UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Pitch=%.2f Sign=%.1f Matches=%s"),
-			*P->GetName(), Pitch, PitchSign, bMatchesSide ? TEXT("YES") : TEXT("no"));
+		float SideDot = FVector::DotProduct(RafterFwd, RidgeRight);
+		float SideSign = FMath::Sign(SideDot);
+		bool bMatchesSide = (SideSign == DesiredSideSign);
+
+		UE_LOG(LogTemp, Warning, TEXT("  Rafter %s: Yaw=%.1f Fwd=%s SideDot=%.3f Sign=%.1f Matches=%s"),
+			*P->GetName(), P->GetActorRotation().Yaw, *RafterFwd.ToString(),
+			SideDot, SideSign, bMatchesSide ? TEXT("YES") : TEXT("no"));
 
 		if (bMatchesSide)
 		{

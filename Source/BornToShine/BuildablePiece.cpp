@@ -1595,8 +1595,15 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					if (RidgeBoardActor && RidgeBoardActor->RoofGrid)
 					{
 						// Determine which side of the roof the target rafter is on
-						float RafterPitch = TargetPiece->GetActorRotation().Pitch;
-						ERoofSide Side = (FMath::Sign(RafterPitch) < 0.0f) ? ERoofSide::Left : ERoofSide::Right;
+						// Use forward vector dotted with ridge right (not pitch sign)
+						FVector RidgeRight = RidgeBoardActor->GetActorRightVector();
+						RidgeRight.Z = 0.0f;
+						RidgeRight.Normalize();
+						FVector RafterFwd = TargetPiece->GetActorForwardVector();
+						RafterFwd.Z = 0.0f;
+						RafterFwd.Normalize();
+						float SideDot = FVector::DotProduct(RafterFwd, RidgeRight);
+						ERoofSide Side = (SideDot < 0.0f) ? ERoofSide::Left : ERoofSide::Right;
 
 						const FRoofSideGrid& Grid = RidgeBoardActor->RoofGrid->GetGridForSide(Side);
 
