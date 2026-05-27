@@ -1693,11 +1693,21 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 				{
 					CandidateLocation += InwardDir * 2.754373f; // PIE-tested inward toward ridge
 				}
-				CandidateLocation.Z += 1.737422f; // PIE-tested Z correction (upward)
 
-				UE_LOG(LogTemp, Log,
-					TEXT("Fascia snap correction: Inward=2.754cm toward ridge, Z+=1.737cm, FinalPos=(%.1f,%.1f,%.1f)"),
-					CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
+				float ZAmount = 1.737422f;
+
+				// Right side (InwardDir.Y > 0, fascia at negative Y) needs to drop ~2cm relative to left
+				// Left fascia sits correctly with full Z+=1.737; right fascia needs reduction
+				if (InwardDir.Y > 0.0f)
+				{
+					ZAmount -= 2.0f;
+				}
+
+				CandidateLocation.Z += ZAmount;
+
+				UE_LOG(LogTemp, Warning,
+					TEXT("Fascia snap correction: InwardDir.Y=%.3f Inward=2.754cm Z+=%.3f FinalPos=(%.1f,%.1f,%.1f)"),
+					InwardDir.Y, ZAmount, CandidateLocation.X, CandidateLocation.Y, CandidateLocation.Z);
 			}
 
 			// Ridge post flush alignment: offset inward so outer face aligns
