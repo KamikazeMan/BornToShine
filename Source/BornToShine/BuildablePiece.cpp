@@ -1609,9 +1609,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 								// SUCCESS — set candidate to cell center
 								CandidateLocation = Cell.CenterWorld;
 
-								// Build candidate rotation from grid axes
-								FMatrix Basis(Grid.RidgeDir, Grid.SlopeDir, Grid.RoofNormal, FVector::ZeroVector);
-								CandidateRotation = Basis.Rotator();
+								// Build candidate rotation: X=ridge direction, Z=roof normal
+								// This matches the original snap code's approach
+								CandidateRotation = FRotationMatrix::MakeFromXZ(Grid.RidgeDir, Grid.RoofNormal).Rotator();
 
 								// Offset sheet up so it sits ON TOP of the rafter
 								const float RafterHalfDepth = 13.97f / 2.0f;
