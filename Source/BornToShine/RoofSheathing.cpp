@@ -151,6 +151,15 @@ bool ARoofSheathing::TryPlace()
 	float TrimCenterSlope = ((TrimBottom + TrimTop) / 2.0f) - SheetAlongSlope;
 	MeshComponent->SetRelativeLocation(FVector(TrimCenterRidge, TrimCenterSlope, 0.0f));
 
+	// Diagnostic: log final world-space position of mesh edges
+	FVector MeshWorldCenter = MeshComponent->GetComponentLocation();
+	FVector MeshSlopeDir = RoofSlopeDir;
+	FVector RafterOriginWorld = RoofRafterOrigin;
+	float MeshCenterAlongSlope = FVector::DotProduct(MeshWorldCenter - RafterOriginWorld, MeshSlopeDir);
+	float MeshBottomEdgeAlongSlope = MeshCenterAlongSlope + (NewHeight / 2.0f);
+	UE_LOG(LogTemp, Warning, TEXT("TRIM RESULT: MeshCenterAlongSlope=%.1f MeshBottomEdgeAlongSlope=%.1f RoofSlopeMax=%.1f"),
+		MeshCenterAlongSlope, MeshBottomEdgeAlongSlope, RoofSlopeMax);
+
 	UE_LOG(LogTemp, Log, TEXT("RoofSheathing: Trimmed %.1fx%.1f -> %.1fx%.1f (scale=%.3f,%.3f offset=%.1f,%.1f) Ridge=[%.1f,%.1f] Slope=[%.1f,%.1f]"),
 		UnscaledX, UnscaledY, NewWidth, NewHeight, ScaleX, ScaleY, TrimCenterRidge, TrimCenterSlope,
 		TrimLeft, TrimRight, TrimBottom, TrimTop);
