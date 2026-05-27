@@ -2,6 +2,8 @@
 
 #include "Rafter.h"
 #include "Components/StaticMeshComponent.h"
+#include "RidgeBoard.h"
+#include "ConstructionPhaseManager.h"
 
 struct FRafterProcBuffers
 {
@@ -538,4 +540,22 @@ bool ARafter::ComputeCutStationFromFasciaPlane(
 
 	OutCutStationCm = FVector::DotProduct(LocalPlanePoint, LocalPlaneNormal) / LocalPlaneNormal.X;
 	return OutCutStationCm > 0.0f;
+}
+
+bool ARafter::TryPlace()
+{
+	bool bResult = Super::TryPlace();
+
+	// Rebuild roof grids since framing changed
+	if (AConstructionPhaseManager::Instance)
+	{
+		TArray<ABuildablePiece*> RidgeBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RidgeBoard);
+		for (ABuildablePiece* RB : RidgeBoards)
+		{
+			ARidgeBoard* Ridge = Cast<ARidgeBoard>(RB);
+			if (Ridge) Ridge->RebuildRoofGrids();
+		}
+	}
+
+	return bResult;
 }

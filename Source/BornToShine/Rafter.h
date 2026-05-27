@@ -72,6 +72,8 @@ public:
 	// Override scale to disable scroll wheel
 	virtual void ScalePiece(float ScaleDelta) override;
 
+	virtual bool TryPlace() override;
+
 	// Get tail end position in world space (for fascia board attachment)
 	FVector GetTailEndWorldPosition() const;
 

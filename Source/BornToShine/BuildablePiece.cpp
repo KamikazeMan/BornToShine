@@ -2264,17 +2264,6 @@ void ABuildablePiece::ApplySnap(const FSnapCandidate& Candidate)
 		UE_LOG(LogTemp, Log, TEXT("Rafter ApplySnap: Pos=%s Rot=%s (Socket=%s)"),
 			*FinalLocation.ToString(), *FinalRotation.ToString(),
 			*Candidate.TargetSocketName.ToString());
-
-		// Rebuild roof grids since framing changed
-		if (AConstructionPhaseManager::Instance)
-		{
-			TArray<ABuildablePiece*> RidgeBoards = AConstructionPhaseManager::Instance->GetPiecesOfType(EPieceType::RidgeBoard);
-			for (ABuildablePiece* RB : RidgeBoards)
-			{
-				ARidgeBoard* Ridge = Cast<ARidgeBoard>(RB);
-				if (Ridge) Ridge->RebuildRoofGrids();
-			}
-		}
 	}
 
 	SetActorRotation(FinalRotation);
