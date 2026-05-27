@@ -1665,9 +1665,11 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						if (FasciaAlongSlope > 0.0f && FasciaAlongSlope < OriginalMaxSlopeLen)
 						{
 							// Use half-thickness (1.905cm = half of 3.81cm 2x lumber thickness),
-							// NOT half-height. The fascia's thickness direction aligns with the rafter slope.
+							// NOT half-height. Subtract additional offset so plywood ends flush
+							// with the fascia outer face (currently extends ~5cm past).
 							const float FasciaHalfThickness = 1.905f;
-							float NewMax = FasciaAlongSlope + FasciaHalfThickness;
+							const float OverhangCorrection = 5.0f; // cm, pull plywood inward 2"
+							float NewMax = FasciaAlongSlope + FasciaHalfThickness - OverhangCorrection;
 							if (NewMax < MaxSlopeLen && NewMax > 0.0f)
 							{
 								MaxSlopeLen = NewMax;
