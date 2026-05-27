@@ -1615,12 +1615,6 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					FVector RidgeDir = RidgeDirVec;
 					FVector RafterLoc = TargetPiece->GetActorLocation();
 
-					// Use player's aimed position (pre-snap actor location) for column selection
-					// so aiming along the ridge picks different columns.
-					// CandidateLocation is derived from the rafter socket which has the same
-					// ridge-direction position for all rafters on the same side.
-					float AlongRidge = FVector::DotProduct(GetActorLocation() - RafterLoc, RidgeDir);
-
 					// Find end rafter positions along ridge to determine roof width
 					float MinRidgeProj = 0.0f;
 					float MaxRidgeProj = 0.0f;
@@ -1649,6 +1643,32 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						ARafter* R = Cast<ARafter>(P);
 						if (R) MaxSlopeLen = FMath::Max(MaxSlopeLen, R->GetSlopeLengthCm());
 					}
+
+					// Find the leftmost rafter on this side to use as stable grid origin
+					ABuildablePiece* LeftmostRafter = nullptr;
+					float LeftmostProj = FLT_MAX;
+					for (ABuildablePiece* P : NearbyPieces)
+					{
+						if (!P || P->GetPieceType() != EPieceType::Rafter) continue;
+						float PPitch = P->GetActorRotation().Pitch;
+						if (FMath::Sign(PPitch) != FMath::Sign(RafterRot.Pitch)) continue;
+
+						float Proj = FVector::DotProduct(P->GetActorLocation() - RafterLoc, RidgeDir);
+						if (Proj < LeftmostProj)
+						{
+							LeftmostProj = Proj;
+							LeftmostRafter = P;
+						}
+					}
+
+					// Re-base ridge measurements relative to the leftmost rafter so all
+					// snap positions use a stable reference regardless of which rafter
+					// is currently targeted.
+					FVector StableRafterOrigin = LeftmostRafter ? LeftmostRafter->GetActorLocation() : RafterLoc;
+					float RebaseOffset = FVector::DotProduct(StableRafterOrigin - RafterLoc, RidgeDir);
+
+					// Use stable reference (leftmost rafter) so grid doesn't shift with target rafter
+					float AlongRidge = FVector::DotProduct(GetActorLocation() - StableRafterOrigin, RidgeDir);
 
 					// Trim MaxSlopeLen to fascia board position if one exists.
 					// Sheathing should stop at the fascia board, not the rafter tail tip.
@@ -1689,8 +1709,9 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 					// Roof edges flush with end rafters (add half rafter width so
 					// sheathing covers the outer face of end rafters)
 					const float RafterHalfWidth = 1.905f; // half of 3.81cm (2x4 width)
-					float RidgeStart = MinRidgeProj - RafterHalfWidth;
-					float RidgeEnd = MaxRidgeProj + RafterHalfWidth;
+					// Rebase from RafterLoc-relative to StableRafterOrigin-relative
+					float RidgeStart = (MinRidgeProj - RebaseOffset) - RafterHalfWidth;
+					float RidgeEnd = (MaxRidgeProj - RebaseOffset) + RafterHalfWidth;
 					float RidgeSpan = RidgeEnd - RidgeStart;
 
 					// === SLOPE DIRECTION (fascia to ridge, 4ft sheets) ===
@@ -1763,7 +1784,7 @@ TArray<FSnapCandidate> ABuildablePiece::DetectSnapCandidates() const
 						MutableSheet->RoofSlopeMax = MaxSlopeLen;
 						MutableSheet->RoofRidgeDir = RidgeDir;
 						MutableSheet->RoofSlopeDir = SlopeDir;
-						MutableSheet->RoofRafterOrigin = RafterLoc;
+						MutableSheet->RoofRafterOrigin = StableRafterOrigin;
 					}
 
 					if (MutableSheet)
