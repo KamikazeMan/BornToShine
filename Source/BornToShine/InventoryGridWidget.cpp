@@ -29,7 +29,7 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	UOverlay* MainOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MainOverlay"));
 
 	BackgroundImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("BackgroundImage"));
-	BackgroundImage->SetBrushColor(FLinearColor(0.08f, 0.06f, 0.04f, 0.95f));
+	BackgroundImage->SetColorAndOpacity(FLinearColor(0.08f, 0.06f, 0.04f, 0.95f));
 	UOverlaySlot* BgSlot = MainOverlay->AddChildToOverlay(BackgroundImage);
 	BgSlot->SetHorizontalAlignment(HAlign_Fill);
 	BgSlot->SetVerticalAlignment(VAlign_Fill);
@@ -75,12 +75,12 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	int32 TotalSlots = NumColumns * NumRows;
 	for (int32 i = 0; i < TotalSlots; i++)
 	{
-		UInventorySlotWidget* Slot = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass(), *FString::Printf(TEXT("Slot_%d"), i));
-		Slot->SlotIndex = i;
-		Slot->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
+		UInventorySlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass(), *FString::Printf(TEXT("Slot_%d"), i));
+		SlotWidget->SlotIndex = i;
+		SlotWidget->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
 
-		SlotGrid->AddChildToUniformGrid(Slot, i / NumColumns, i % NumColumns);
-		SlotWidgets.Add(Slot);
+		SlotGrid->AddChildToUniformGrid(SlotWidget, i / NumColumns, i % NumColumns);
+		SlotWidgets.Add(SlotWidget);
 	}
 
 	WidgetTree->RootWidget = RootCanvas;

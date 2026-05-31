@@ -21,7 +21,7 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("SlotOverlay"));
 
 	ColorRect = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("ColorRect"));
-	ColorRect->SetBrushColor(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
+	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
 	UOverlaySlot* IconSlot = Overlay->AddChildToOverlay(ColorRect);
 	IconSlot->SetHorizontalAlignment(HAlign_Fill);
 	IconSlot->SetVerticalAlignment(VAlign_Fill);
@@ -97,7 +97,7 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 	FItemDataRow* Data = InInventoryRef->GetItemDataRaw(InItemID);
 	if (Data)
 	{
-		ColorRect->SetBrushColor(GetCategoryColor(Data->Category));
+		ColorRect->SetColorAndOpacity(GetCategoryColor(Data->Category));
 		NameText->SetText(Data->DisplayName);
 
 		FString TooltipStr = FString::Printf(TEXT("%s\nCategory: %s\nID: %s"),
@@ -106,7 +106,7 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 	}
 	else
 	{
-		ColorRect->SetBrushColor(GetCategoryColor(TEXT("General")));
+		ColorRect->SetColorAndOpacity(GetCategoryColor(TEXT("General")));
 		NameText->SetText(FText::FromName(InItemID));
 		SetToolTipText(FText::FromName(InItemID));
 	}
@@ -124,7 +124,7 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 void UInventorySlotWidget::ClearSlot()
 {
 	CurrentItemID = NAME_None;
-	ColorRect->SetBrushColor(FLinearColor(0.15f, 0.12f, 0.09f, 0.4f));
+	ColorRect->SetColorAndOpacity(FLinearColor(0.15f, 0.12f, 0.09f, 0.4f));
 	NameText->SetText(FText::FromString(TEXT("")));
 	QuantityText->SetText(FText::FromString(TEXT("")));
 	SetToolTipText(FText::FromString(TEXT("")));
