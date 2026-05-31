@@ -478,9 +478,14 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 	}
 	else
 	{
-		InventoryWidgetInstance = CreateWidget<UUserWidget>(PC, InventoryWidgetClass);
+		InventoryWidgetInstance = CreateWidget<UInventoryGridWidget>(PC, InventoryWidgetClass);
 		if (InventoryWidgetInstance)
 		{
+			if (InventoryBackgroundTexture)
+			{
+				InventoryWidgetInstance->BackgroundTexture = InventoryBackgroundTexture;
+			}
+			InventoryWidgetInstance->SetInventoryComponent(Inventory);
 			InventoryWidgetInstance->AddToViewport();
 			PC->bShowMouseCursor = true;
 			FInputModeGameAndUI InputMode;

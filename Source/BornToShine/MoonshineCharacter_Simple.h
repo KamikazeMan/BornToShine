@@ -6,7 +6,7 @@
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
 #include "InventoryComponent.h"
-#include "Blueprint/UserWidget.h"
+#include "InventoryGridWidget.h"
 #include "MoonshineCharacter_Simple.generated.h"
 
 /**
@@ -28,10 +28,13 @@ public:
 	UInventoryComponent* Inventory;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Inventory")
-	TSubclassOf<UUserWidget> InventoryWidgetClass;
+	TSubclassOf<UInventoryGridWidget> InventoryWidgetClass;
 
 	UPROPERTY()
-	UUserWidget* InventoryWidgetInstance;
+	UInventoryGridWidget* InventoryWidgetInstance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	UTexture2D* InventoryBackgroundTexture;
 
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
