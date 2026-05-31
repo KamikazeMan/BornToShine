@@ -29,6 +29,10 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	UOverlay* MainOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MainOverlay"));
 
 	BackgroundImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("BackgroundImage"));
+	FSlateBrush WhiteBrush;
+	WhiteBrush.TintColor = FSlateColor(FLinearColor::White);
+	WhiteBrush.DrawAs = ESlateBrushDrawType::Image;
+	BackgroundImage->SetBrush(WhiteBrush);
 	BackgroundImage->SetColorAndOpacity(FLinearColor(0.08f, 0.06f, 0.04f, 0.95f));
 	UOverlaySlot* BgSlot = MainOverlay->AddChildToOverlay(BackgroundImage);
 	BgSlot->SetHorizontalAlignment(HAlign_Fill);

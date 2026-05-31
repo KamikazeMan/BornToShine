@@ -21,6 +21,10 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("SlotOverlay"));
 
 	ColorRect = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("ColorRect"));
+	FSlateBrush WhiteBrush;
+	WhiteBrush.TintColor = FSlateColor(FLinearColor::White);
+	WhiteBrush.DrawAs = ESlateBrushDrawType::Image;
+	ColorRect->SetBrush(WhiteBrush);
 	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
 	UOverlaySlot* IconSlot = Overlay->AddChildToOverlay(ColorRect);
 	IconSlot->SetHorizontalAlignment(HAlign_Fill);

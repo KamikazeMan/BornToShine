@@ -200,10 +200,14 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnZoomStart);
 			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Completed, this, &AMoonshineCharacter_Simple::OnZoomStop);
 		}
+
+		if (ToggleInventoryAction)
+		{
+			EnhancedInputComponent->BindAction(ToggleInventoryAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::HandleToggleInventoryAction);
+		}
 	}
 
-	// Debug and inventory keys (raw bindings alongside Enhanced Input)
-	PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshineCharacter_Simple::ToggleInventoryUI);
+	// Debug keys (raw bindings alongside Enhanced Input)
 	PlayerInputComponent->BindKey(EKeys::Backslash, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugGrantStillParts);
 	PlayerInputComponent->BindKey(EKeys::P, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugDumpInventory);
 }
@@ -455,6 +459,11 @@ void AMoonshineCharacter_Simple::OnToggleBoardType()
 	{
 		PC->OnDeletePressed();
 	}
+}
+
+void AMoonshineCharacter_Simple::HandleToggleInventoryAction(const FInputActionValue& Value)
+{
+	ToggleInventoryUI();
 }
 
 void AMoonshineCharacter_Simple::ToggleInventoryUI()

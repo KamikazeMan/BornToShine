@@ -76,6 +76,7 @@ protected:
 	void OnToggleBoardType(); // Toggle between outside and inside board for rim boards
 	void OnZoomStart();  // Hold RMB to zoom in
 	void OnZoomStop();   // Release RMB to zoom out
+	void HandleToggleInventoryAction(const FInputActionValue& Value);
 
 	// Enhanced Input Actions
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -128,6 +129,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* ZoomAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
+	class UInputAction* ToggleInventoryAction;
 
 	// Camera components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
