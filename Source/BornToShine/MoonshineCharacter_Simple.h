@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
+#include "InventoryComponent.h"
+#include "Blueprint/UserWidget.h"
 #include "MoonshineCharacter_Simple.generated.h"
 
 /**
@@ -21,6 +23,24 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Inventory")
+	UInventoryComponent* Inventory;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Inventory")
+	TSubclassOf<UUserWidget> InventoryWidgetClass;
+
+	UPROPERTY()
+	UUserWidget* InventoryWidgetInstance;
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void ToggleInventoryUI();
+
+	UFUNCTION()
+	void DebugGrantStillParts();
+
+	UFUNCTION()
+	void DebugDumpInventory();
 
 	// Toggle between first and third person view
 	UFUNCTION(BlueprintCallable, Category = "Camera")

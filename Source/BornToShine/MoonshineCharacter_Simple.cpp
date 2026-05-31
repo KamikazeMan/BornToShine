@@ -54,6 +54,9 @@ AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 	GetCharacterMovement()->JumpZVelocity = 600.0f;
 	GetCharacterMovement()->AirControl = 0.3f;
 
+	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+	InventoryWidgetInstance = nullptr;
+
 	// Don't rotate character with controller (camera is independent)
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -198,6 +201,11 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(ZoomAction, ETriggerEvent::Completed, this, &AMoonshineCharacter_Simple::OnZoomStop);
 		}
 	}
+
+	// Debug and inventory keys (raw bindings alongside Enhanced Input)
+	PlayerInputComponent->BindKey(EKeys::Tab, IE_Pressed, this, &AMoonshineCharacter_Simple::ToggleInventoryUI);
+	PlayerInputComponent->BindKey(EKeys::Backslash, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugGrantStillParts);
+	PlayerInputComponent->BindKey(EKeys::P, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugDumpInventory);
 }
 
 void AMoonshineCharacter_Simple::Move(const FInputActionValue& Value)
@@ -447,4 +455,49 @@ void AMoonshineCharacter_Simple::OnToggleBoardType()
 	{
 		PC->OnDeletePressed();
 	}
+}
+
+void AMoonshineCharacter_Simple::ToggleInventoryUI()
+{
+	if (!InventoryWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("InventoryWidgetClass not set on player BP!"));
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport())
+	{
+		InventoryWidgetInstance->RemoveFromParent();
+		InventoryWidgetInstance = nullptr;
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
+	else
+	{
+		InventoryWidgetInstance = CreateWidget<UUserWidget>(PC, InventoryWidgetClass);
+		if (InventoryWidgetInstance)
+		{
+			InventoryWidgetInstance->AddToViewport();
+			PC->bShowMouseCursor = true;
+			FInputModeGameAndUI InputMode;
+			InputMode.SetWidgetToFocus(InventoryWidgetInstance->TakeWidget());
+			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+			InputMode.SetHideCursorDuringCapture(false);
+			PC->SetInputMode(InputMode);
+		}
+	}
+}
+
+void AMoonshineCharacter_Simple::DebugGrantStillParts()
+{
+	if (Inventory) Inventory->DebugGrantStillParts();
+}
+
+void AMoonshineCharacter_Simple::DebugDumpInventory()
+{
+	if (Inventory) Inventory->DebugLogInventory();
 }

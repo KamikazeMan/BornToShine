@@ -21,6 +21,7 @@ int32 UInventoryComponent::AddItem(FName ItemID, int32 Quantity)
 			int32 ToAdd = FMath::Min(Quantity, SpaceLeft);
 			Item.Quantity += ToAdd;
 			UE_LOG(LogTemp, Log, TEXT("Inventory: +%d %s (now %d)"), ToAdd, *ItemID.ToString(), Item.Quantity);
+			OnInventoryChanged.Broadcast();
 			return ToAdd;
 		}
 	}
@@ -29,6 +30,7 @@ int32 UInventoryComponent::AddItem(FName ItemID, int32 Quantity)
 	int32 ToAdd = FMath::Min(Quantity, MaxStack);
 	Items.Add(FInventoryItem(ItemID, ToAdd));
 	UE_LOG(LogTemp, Log, TEXT("Inventory: +%d %s (new stack)"), ToAdd, *ItemID.ToString());
+	OnInventoryChanged.Broadcast();
 	return ToAdd;
 }
 
@@ -47,6 +49,7 @@ bool UInventoryComponent::RemoveItem(FName ItemID, int32 Quantity)
 			{
 				Items.RemoveAt(i);
 			}
+			OnInventoryChanged.Broadcast();
 			return true;
 		}
 	}

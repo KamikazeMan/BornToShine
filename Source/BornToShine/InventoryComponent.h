@@ -5,6 +5,8 @@
 #include "InventoryItemTypes.h"
 #include "InventoryComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnInventoryChanged);
+
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class BORNTOSHINE_API UInventoryComponent : public UActorComponent
 {
@@ -12,6 +14,9 @@ class BORNTOSHINE_API UInventoryComponent : public UActorComponent
 
 public:
 	UInventoryComponent();
+
+	UPROPERTY(BlueprintAssignable, Category="Inventory")
+	FOnInventoryChanged OnInventoryChanged;
 
 	// Data table assigned in Blueprint defaults — define all items (still parts, ingredients, etc.) here
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
