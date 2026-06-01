@@ -34,7 +34,7 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	NameText->SetText(FText::FromString(TEXT("")));
 	NameText->SetJustification(ETextJustify::Center);
 	FSlateFontInfo NameFont = NameText->GetFont();
-	NameFont.Size = 10;
+	NameFont.Size = 14;
 	NameText->SetFont(NameFont);
 	NameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.95f, 0.8f, 1.0f)));
 	UOverlaySlot* NameSlot = Overlay->AddChildToOverlay(NameText);
@@ -45,7 +45,7 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	QuantityText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("QuantityText"));
 	QuantityText->SetText(FText::FromString(TEXT("")));
 	FSlateFontInfo QtyFont = QuantityText->GetFont();
-	QtyFont.Size = 12;
+	QtyFont.Size = 18;
 	QtyFont.OutlineSettings.OutlineSize = 1;
 	QuantityText->SetFont(QtyFont);
 	QuantityText->SetColorAndOpacity(FSlateColor(FLinearColor::White));

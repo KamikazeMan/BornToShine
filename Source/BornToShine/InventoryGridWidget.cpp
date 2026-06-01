@@ -18,15 +18,10 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 {
 	UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
 
-	USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("GridSizeBox"));
-	SizeBox->SetWidthOverride(700.0f);
-	SizeBox->SetHeightOverride(500.0f);
-	UCanvasPanelSlot* SizeSlot = RootCanvas->AddChildToCanvas(SizeBox);
-	SizeSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
-	SizeSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-	SizeSlot->SetAutoSize(true);
-
 	UOverlay* MainOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MainOverlay"));
+	UCanvasPanelSlot* OverlayCanvasSlot = RootCanvas->AddChildToCanvas(MainOverlay);
+	OverlayCanvasSlot->SetAnchors(FAnchors(0.05f, 0.05f, 0.95f, 0.95f));
+	OverlayCanvasSlot->SetOffsets(FMargin(0.0f, 0.0f, 0.0f, 0.0f));
 
 	BackgroundImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("BackgroundImage"));
 	FSlateBrush WhiteBrush;
@@ -43,24 +38,24 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
 	TitleText->SetText(FText::FromString(TEXT("SUPPLIES")));
 	FSlateFontInfo TitleFont = TitleText->GetFont();
-	TitleFont.Size = 22;
+	TitleFont.Size = 48;
 	TitleText->SetFont(TitleFont);
 	TitleText->SetColorAndOpacity(FSlateColor(FLinearColor(0.95f, 0.8f, 0.2f, 1.0f)));
 	TitleText->SetJustification(ETextJustify::Center);
 	UVerticalBoxSlot* TitleSlot = VBox->AddChildToVerticalBox(TitleText);
-	TitleSlot->SetPadding(FMargin(0.0f, 12.0f, 0.0f, 8.0f));
+	TitleSlot->SetPadding(FMargin(0.0f, 30.0f, 0.0f, 20.0f));
 	TitleSlot->SetHorizontalAlignment(HAlign_Center);
 
 	SlotGrid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass(), TEXT("SlotGrid"));
-	SlotGrid->SetSlotPadding(FMargin(4.0f));
-	SlotGrid->SetMinDesiredSlotWidth(100.0f);
-	SlotGrid->SetMinDesiredSlotHeight(110.0f);
+	SlotGrid->SetSlotPadding(FMargin(10.0f));
+	SlotGrid->SetMinDesiredSlotWidth(140.0f);
+	SlotGrid->SetMinDesiredSlotHeight(140.0f);
 	UVerticalBoxSlot* GridSlot = VBox->AddChildToVerticalBox(SlotGrid);
 	GridSlot->SetPadding(FMargin(16.0f, 4.0f, 16.0f, 4.0f));
 	GridSlot->SetHorizontalAlignment(HAlign_Center);
 
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("StatusText"));
-	StatusText->SetText(FText::FromString(TEXT("Press Tab to close")));
+	StatusText->SetText(FText::FromString(TEXT("Press I to close")));
 	FSlateFontInfo StatusFont = StatusText->GetFont();
 	StatusFont.Size = 11;
 	StatusText->SetFont(StatusFont);
@@ -73,8 +68,6 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	UOverlaySlot* VBoxSlot = MainOverlay->AddChildToOverlay(VBox);
 	VBoxSlot->SetHorizontalAlignment(HAlign_Fill);
 	VBoxSlot->SetVerticalAlignment(VAlign_Fill);
-
-	SizeBox->SetContent(MainOverlay);
 
 	int32 TotalSlots = NumColumns * NumRows;
 	for (int32 i = 0; i < TotalSlots; i++)
@@ -151,7 +144,7 @@ void UInventoryGridWidget::RefreshGrid()
 		}
 	}
 
-	StatusText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d items  |  Tab to close"), Items.Num(), TotalSlots)));
+	StatusText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d items  |  I to close"), Items.Num(), TotalSlots)));
 }
 
 void UInventoryGridWidget::HandleSlotClicked(int32 SlotIndex)
