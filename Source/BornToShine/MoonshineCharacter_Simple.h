@@ -71,6 +71,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float FloorSpawnZOffset = 7.62f;
 
+	// Grid cell size for snapping floor-placed stands (CinderBlockStand ghost).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float StandGridSizeCm = 100.0f;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 
@@ -93,6 +97,7 @@ protected:
 
 	// --- Still ghost preview state ---
 	bool bIsPlacingStillGhost = false;       // true while previewing a snap-able still part (e.g. Pot)
+	bool bGhostFloorGridMode = false;        // true: floor-grid placement (stand); false: mount-snap (vessel)
 	FName GhostPartID;                        // which part the ghost represents
 	bool bGhostSnapValid = false;             // is the ghost currently within snap range of its mount?
 	FTransform GhostSnapTransform;            // the snapped world transform when valid

@@ -534,8 +534,9 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 
 void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 {
-	// The Pot uses the ghost-preview snapping flow (snaps onto the cinder block stand).
-	if (ItemID == FName(TEXT("Pot")))
+	// The Pot uses the ghost-preview mount-snap flow (snaps onto the cinder block stand).
+	// The CinderBlockStand uses the ghost-preview floor-grid flow.
+	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("CinderBlockStand")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -675,6 +676,7 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 
 	GhostPartID = PartID;
 	bIsPlacingStillGhost = true;
+	bGhostFloorGridMode = (PartID == FName(TEXT("CinderBlockStand")));
 	bGhostSnapValid = false;
 
 	// Close the inventory UI if open, keep the cursor so the player can aim and click.
@@ -728,35 +730,61 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 		}
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("Still ghost: previewing %s — aim at its stand and click to place"), *PartID.ToString());
+	UE_LOG(LogTemp, Warning, TEXT("Still ghost: previewing %s (%s) — aim and click to place"),
+		*PartID.ToString(), bGhostFloorGridMode ? TEXT("floor-grid") : TEXT("mount-snap"));
 }
 
 void AMoonshineCharacter_Simple::UpdateStillGhost()
 {
 	if (!IsValid(GhostStillPart)) return;
 
-	// Camera-forward trace for where the player is aiming.
-	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
-	const FVector TraceStart = ActiveCamera ? ActiveCamera->GetComponentLocation() : GetActorLocation();
-	const FVector TraceDir = ActiveCamera ? ActiveCamera->GetForwardVector() : GetActorForwardVector();
-	const FVector TraceEnd = TraceStart + TraceDir * 2000.0f;
+	// Aim from the player's VIEWPOINT so the ghost follows mouse look every frame (not just body
+	// movement). GetPlayerViewPoint reflects the current control rotation.
+	FVector CamLoc = GetActorLocation();
+	FRotator CamRot = GetActorRotation();
+	if (AController* C = GetController())
+	{
+		C->GetPlayerViewPoint(CamLoc, CamRot);
+	}
+	const FVector CamFwd = CamRot.Vector();
+	const FVector TraceStart = CamLoc;
+	const FVector TraceEnd = CamLoc + CamFwd * 2000.0f;
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
 	// CRITICAL: the ghost must not block the trace, or the impact point is always on the ghost
-	// right in front of the camera, collapsing "nearest stand" to whichever stand is closest to
-	// the camera every frame.
+	// right in front of the camera.
 	if (GhostStillPart) Params.AddIgnoredActor(GhostStillPart);
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
 	const FVector AimPoint = bHit ? Hit.ImpactPoint : TraceEnd;
 
-	UE_LOG(LogTemp, Warning, TEXT("Ghost aim point: %s (bHit=%d, hitActor=%s)"), *AimPoint.ToString(), bHit ? 1 : 0, bHit && Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"));
-
 	bGhostSnapValid = false;
 
-	// The Pot has exactly ONE valid mount: the LEFT (pot) stand. It will NOT snap to the
-	// middle or right stands — those are reserved for the Thumper and Barrel respectively.
+	if (bGhostFloorGridMode)
+	{
+		// Floor-grid placement (CinderBlockStand): snap aim X/Y to the nearest grid cell.
+		const float GridSize = FMath::Max(StandGridSizeCm, 1.0f);
+		FVector GridLoc;
+		GridLoc.X = FMath::RoundToFloat(AimPoint.X / GridSize) * GridSize;
+		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
+		GridLoc.Z = AimPoint.Z + FloorSpawnZOffset;
+
+		// Orient the row of stands to the player: control yaw rounded to the nearest 90 degrees.
+		const float SnappedYaw = FMath::RoundToFloat(CamRot.Yaw / 90.0f) * 90.0f;
+		const FRotator GridRot(0.0f, SnappedYaw, 0.0f);
+
+		GhostSnapTransform = FTransform(GridRot, GridLoc);
+		GhostStillPart->SetActorLocationAndRotation(GridLoc, GridRot);
+		bGhostSnapValid = true; // floor is always a valid target
+
+		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), SnappedYaw);
+		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		return;
+	}
+
+	// Mount-snap placement (Pot): exactly ONE valid mount — the LEFT (pot) stand. It will NOT snap
+	// to the middle or right stands — those are reserved for the Thumper and Barrel respectively.
 	AStillPartActor* Stand = FindPlacedStand();
 	if (Stand)
 	{
@@ -798,7 +826,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 
 	if (!bGhostSnapValid)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s must be placed on its stand."), *GhostPartID.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s has no valid placement here."), *GhostPartID.ToString());
 		return;
 	}
 
@@ -841,6 +869,7 @@ void AMoonshineCharacter_Simple::CancelStillGhost()
 	GhostStillPart = nullptr;
 	GhostDynamicMaterial = nullptr;
 	bIsPlacingStillGhost = false;
+	bGhostFloorGridMode = false;
 	bGhostSnapValid = false;
 	GhostPartID = NAME_None;
 
