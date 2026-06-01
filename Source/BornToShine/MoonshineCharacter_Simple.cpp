@@ -12,6 +12,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "StillPartActor.h"
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 {
@@ -558,29 +559,54 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 	{
 		FItemDataRow RowData;
 		const bool bHasData = Inventory ? Inventory->GetItemData(PendingPlacementItemID, RowData) : false;
+		UStaticMesh* PartMesh = bHasData ? RowData.Mesh : nullptr;
+		if (!PartMesh)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — spawning empty actor(s)"), *PendingPlacementItemID.ToString());
+		}
 
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		AStaticMeshActor* SpawnedActor = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
 
-		if (SpawnedActor)
+		if (PendingPlacementItemID == FName(TEXT("CinderBlockStand")))
 		{
-			SpawnedActor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
-			if (bHasData && RowData.Mesh)
+			// The cinder block stand placement drops the full 3-stand row (pot / thumper / barrel).
+			const float StandSpacingCm = 150.0f;
+			const FVector RowDir = GetActorRightVector();
+			const TCHAR* StandLabels[3] = { TEXT("PotStand"), TEXT("ThumperStand"), TEXT("BarrelStand") };
+
+			for (int32 StandIdx = 0; StandIdx < 3; ++StandIdx)
 			{
-				SpawnedActor->GetStaticMeshComponent()->SetStaticMesh(RowData.Mesh);
-			}
-			else
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — spawned empty actor"), *PendingPlacementItemID.ToString());
+				const FVector SpawnLoc = Hit.Location + RowDir * (StandSpacingCm * StandIdx);
+				AStillPartActor* Stand = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), SpawnLoc, FRotator::ZeroRotator, SpawnParams);
+				if (Stand)
+				{
+					Stand->InitFromItemData(PendingPlacementItemID, PartMesh);
+					UE_LOG(LogTemp, Log, TEXT("Placed %s (%s) at %s"), StandLabels[StandIdx], *PendingPlacementItemID.ToString(), *SpawnLoc.ToString());
+				}
 			}
 
+			// Placing the set consumes a single inventory item.
 			if (Inventory)
 			{
 				Inventory->RemoveItem(PendingPlacementItemID, 1);
 			}
+		}
+		else
+		{
+			// All other still parts spawn a single actor for now.
+			AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
+			if (Part)
+			{
+				Part->InitFromItemData(PendingPlacementItemID, PartMesh);
 
-			UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
+				if (Inventory)
+				{
+					Inventory->RemoveItem(PendingPlacementItemID, 1);
+				}
+
+				UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
+			}
 		}
 	}
 	else
