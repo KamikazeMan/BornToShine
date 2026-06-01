@@ -548,10 +548,13 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 
 void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 {
-	// Vessels (Pot/ThumperBody/WormBarrel) use the ghost-preview mount-snap flow onto the stand.
-	// The CinderBlockStand itself uses the ghost-preview floor-grid flow.
+	// Ghost-preview flows:
+	//   CinderBlockStand            -> floor-grid
+	//   Pot/ThumperBody/WormBarrel  -> stand-snap (onto the stand)
+	//   Cap/ThumperCap              -> vessel-snap (onto the placed vessel)
 	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("ThumperBody")) ||
-		ItemID == FName(TEXT("WormBarrel")) || ItemID == FName(TEXT("CinderBlockStand")))
+		ItemID == FName(TEXT("WormBarrel")) || ItemID == FName(TEXT("CinderBlockStand")) ||
+		ItemID == FName(TEXT("Cap")) || ItemID == FName(TEXT("ThumperCap")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -664,9 +667,14 @@ namespace
 AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
 {
 	// The CinderBlockStand is a single mesh containing all 3 stands, so there's just one actor.
+	return FindPlacedPart(FName(TEXT("CinderBlockStand")));
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::FindPlacedPart(FName PartID) const
+{
 	for (AStillPartActor* Part : PlacedStillParts)
 	{
-		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		if (IsValid(Part) && Part->PartID == PartID)
 		{
 			return Part;
 		}
@@ -795,6 +803,52 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), StillGhostYaw);
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		return;
+	}
+
+	// Cap placement: a cap snaps onto its placed vessel and REQUIRES that vessel to exist first
+	// (Cap -> Pot, ThumperCap -> ThumperBody). If the vessel isn't placed, the cap is invalid.
+	const bool bIsCap = (GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")));
+	if (bIsCap)
+	{
+		const bool bIsThumperCap = (GhostPartID == FName(TEXT("ThumperCap")));
+		const FName RequiredVessel = bIsThumperCap ? FName(TEXT("ThumperBody")) : FName(TEXT("Pot"));
+		const FVector CapOffset = bIsThumperCap ? ThumperCapMountOffset : CapMountOffset;
+		const TCHAR* CapName = bIsThumperCap ? TEXT("ThumperCap") : TEXT("Cap");
+
+		AStillPartActor* Vessel = FindPlacedPart(RequiredVessel);
+		if (!Vessel)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s requires %s to be placed first"), CapName, *RequiredVessel.ToString());
+		}
+		else
+		{
+			// TransformPosition respects the vessel's rotation so the cap inherits its yaw.
+			const FVector MountWorld = Vessel->GetActorTransform().TransformPosition(CapOffset);
+			const float Dist = FVector::Dist(AimPoint, MountWorld);
+			const bool bValid = Dist <= StillSnapRadiusCm;
+
+			UE_LOG(LogTemp, Warning, TEXT("%s snap: vessel=%s mount=%s aim=%s dist=%.1f valid=%d"),
+				CapName, *Vessel->GetName(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
+
+			if (bValid)
+			{
+				const FRotator SnapRot(0.0f, Vessel->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
+				GhostSnapTransform = FTransform(SnapRot, MountWorld);
+				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
+				bGhostSnapValid = true;
+			}
+		}
+
+		if (bGhostSnapValid)
+		{
+			SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		}
+		else
+		{
+			GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+			SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f)); // red = invalid
+		}
 		return;
 	}
 

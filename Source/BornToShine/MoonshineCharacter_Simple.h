@@ -73,6 +73,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float BarrelZAdjust = 13.5f;
 
+	// Local offset from a vessel's origin to where its cap mounts (caps snap onto the placed vessel).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FVector CapMountOffset = FVector(0.0f, 0.0f, 109.2f);        // Pot origin -> Cap mount
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FVector ThumperCapMountOffset = FVector(0.0f, 0.0f, 78.13f); // ThumperBody origin -> ThumperCap mount
+
 	// Raises floor-placed still parts so a center-pivot mesh sits ON the floor instead of half-buried.
 	// 7.62cm = half the 6-inch stand height (starting guess).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
@@ -129,6 +136,9 @@ protected:
 
 	// Finds the single placed CinderBlockStand actor (nullptr if none).
 	class AStillPartActor* FindPlacedStand() const;
+
+	// Finds the first placed still part with the given PartID (nullptr if none).
+	class AStillPartActor* FindPlacedPart(FName PartID) const;
 
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
