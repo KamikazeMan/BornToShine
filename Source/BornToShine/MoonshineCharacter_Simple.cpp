@@ -13,6 +13,9 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "StillPartActor.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/Material.h"
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 {
@@ -108,6 +111,12 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 			FirstPersonCamera->SetFieldOfView(NewFOV);
 			ThirdPersonCamera->SetFieldOfView(NewFOV);
 		}
+	}
+
+	// Drive the still-part ghost preview while it's active.
+	if (bIsPlacingStillGhost)
+	{
+		UpdateStillGhost();
 	}
 }
 
@@ -305,6 +314,13 @@ void AMoonshineCharacter_Simple::OnToggleBuildMode()
 
 void AMoonshineCharacter_Simple::OnPlacePiece()
 {
+	// If we're previewing a snap-able still part, the place button confirms the ghost.
+	if (bIsPlacingStillGhost)
+	{
+		ConfirmStillGhostPlacement();
+		return;
+	}
+
 	// If we're placing an inventory item, the place button confirms that instead of normal building.
 	if (bIsPlacingItem)
 	{
@@ -518,6 +534,13 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 
 void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 {
+	// The Pot uses the ghost-preview snapping flow (snaps onto the cinder block stand).
+	if (ItemID == FName(TEXT("Pot")))
+	{
+		BeginStillGhostPlacement(ItemID);
+		return;
+	}
+
 	PendingPlacementItemID = ItemID;
 	bIsPlacingItem = true;
 
@@ -574,6 +597,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 		if (Part)
 		{
 			Part->InitFromItemData(PendingPlacementItemID, PartMesh);
+			PlacedStillParts.Add(Part);
 
 			if (Inventory)
 			{
@@ -590,6 +614,215 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 
 	bIsPlacingItem = false;
 	PendingPlacementItemID = NAME_None;
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Still part ghost-preview snapping (Step 2: Pot onto the cinder block stand)
+// ---------------------------------------------------------------------------
+
+namespace
+{
+	// Pot-stand mount point in the CinderBlockStand actor's LOCAL space (cm).
+	// (Thumper X=47.73,Y=-0.44 and Barrel X=96.51,Y=-0.44 will be added in a later step.)
+	static const FVector PotStandLocalMount(-0.18f, 0.18f, 15.24f);
+
+	// How close the player's aim must be to the mount point (world cm) to snap.
+	static constexpr float StillSnapRadiusCm = 100.0f;
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
+{
+	// Most recent stand wins (search back to front).
+	for (int32 i = PlacedStillParts.Num() - 1; i >= 0; --i)
+	{
+		AStillPartActor* Part = PlacedStillParts[i];
+		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		{
+			return Part;
+		}
+	}
+	return nullptr;
+}
+
+void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
+{
+	if (!GhostDynamicMaterial) return;
+	// Match the framing ghost: try all known color parameter names + opacity.
+	GhostDynamicMaterial->SetVectorParameterValue(FName("BaseColor"), Color);
+	GhostDynamicMaterial->SetVectorParameterValue(FName("Base Color"), Color);
+	GhostDynamicMaterial->SetVectorParameterValue(FName("Color"), Color);
+	GhostDynamicMaterial->SetScalarParameterValue(FName("Opacity"), Color.A);
+}
+
+void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
+{
+	// Tear down any prior ghost first.
+	CancelStillGhost();
+
+	GhostPartID = PartID;
+	bIsPlacingStillGhost = true;
+	bGhostSnapValid = false;
+
+	// Close the inventory UI if open, keep the cursor so the player can aim and click.
+	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport())
+	{
+		InventoryWidgetInstance->RemoveFromParent();
+		InventoryWidgetInstance = nullptr;
+	}
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(InputMode);
+	}
+
+	// Look up the part's mesh from the data table.
+	UStaticMesh* PartMesh = nullptr;
+	if (Inventory)
+	{
+		FItemDataRow RowData;
+		if (Inventory->GetItemData(PartID, RowData))
+		{
+			PartMesh = RowData.Mesh;
+		}
+	}
+
+	// Spawn the ghost actor (no collision blocking, translucent material).
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	GhostStillPart = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), GetActorLocation(), FRotator::ZeroRotator, SpawnParams);
+	if (GhostStillPart)
+	{
+		GhostStillPart->InitFromItemData(PartID, PartMesh);
+		if (UStaticMeshComponent* GhostMesh = GhostStillPart->MeshComponent)
+		{
+			GhostMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+			UMaterialInterface* Base = GhostPreviewMaterial ? GhostPreviewMaterial : UMaterial::GetDefaultMaterial(MD_Surface);
+			GhostDynamicMaterial = UMaterialInstanceDynamic::Create(Base, this);
+			if (GhostDynamicMaterial)
+			{
+				const int32 NumMats = GhostMesh->GetNumMaterials();
+				for (int32 m = 0; m < NumMats; ++m)
+				{
+					GhostMesh->SetMaterial(m, GhostDynamicMaterial);
+				}
+				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Still ghost: previewing %s — aim at its stand and click to place"), *PartID.ToString());
+}
+
+void AMoonshineCharacter_Simple::UpdateStillGhost()
+{
+	if (!IsValid(GhostStillPart)) return;
+
+	// Camera-forward trace for where the player is aiming.
+	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
+	const FVector TraceStart = ActiveCamera ? ActiveCamera->GetComponentLocation() : GetActorLocation();
+	const FVector TraceDir = ActiveCamera ? ActiveCamera->GetForwardVector() : GetActorForwardVector();
+	const FVector TraceEnd = TraceStart + TraceDir * 10000.0f;
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	Params.AddIgnoredActor(GhostStillPart);
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
+	const FVector AimPoint = bHit ? Hit.Location : TraceEnd;
+
+	bGhostSnapValid = false;
+
+	AStillPartActor* Stand = FindPlacedStand();
+	if (Stand)
+	{
+		// Mount point in world space, plus the tunable Z fine-tune.
+		FVector MountWorld = Stand->GetActorTransform().TransformPosition(PotStandLocalMount);
+		MountWorld.Z += PotZAdjust;
+
+		if (FVector::Dist(AimPoint, MountWorld) <= StillSnapRadiusCm)
+		{
+			// Keep the ghost upright, matching the stand's yaw only.
+			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
+			GhostSnapTransform = FTransform(SnapRot, MountWorld);
+			GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
+			bGhostSnapValid = true;
+		}
+	}
+
+	if (bGhostSnapValid)
+	{
+		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+	}
+	else
+	{
+		// Free-follow the aim point, invalid tint.
+		GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+		SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f)); // red = invalid
+	}
+}
+
+void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
+{
+	if (!bIsPlacingStillGhost) return;
+
+	if (!bGhostSnapValid)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s must be placed on its stand."), *GhostPartID.ToString());
+		return;
+	}
+
+	// Look up the real mesh again for the placed (non-ghost) actor.
+	UStaticMesh* PartMesh = nullptr;
+	if (Inventory)
+	{
+		FItemDataRow RowData;
+		if (Inventory->GetItemData(GhostPartID, RowData))
+		{
+			PartMesh = RowData.Mesh;
+		}
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	AStillPartActor* Placed = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), GhostSnapTransform.GetLocation(), GhostSnapTransform.Rotator(), SpawnParams);
+	if (Placed)
+	{
+		Placed->InitFromItemData(GhostPartID, PartMesh);
+		PlacedStillParts.Add(Placed);
+
+		if (Inventory)
+		{
+			Inventory->RemoveItem(GhostPartID, 1);
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s — PotZAdjust=%.2f"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString(), PotZAdjust);
+	}
+
+	CancelStillGhost();
+}
+
+void AMoonshineCharacter_Simple::CancelStillGhost()
+{
+	if (IsValid(GhostStillPart))
+	{
+		GhostStillPart->Destroy();
+	}
+	GhostStillPart = nullptr;
+	GhostDynamicMaterial = nullptr;
+	bIsPlacingStillGhost = false;
+	bGhostSnapValid = false;
+	GhostPartID = NAME_None;
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{

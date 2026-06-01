@@ -9,6 +9,10 @@
 #include "InventoryGridWidget.h"
 #include "MoonshineCharacter_Simple.generated.h"
 
+class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class AStillPartActor;
+
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
  * Much cleaner architecture - character handles movement, component handles building
@@ -48,6 +52,20 @@ public:
 	UFUNCTION()
 	void ConfirmItemPlacement();   // called on world click while placing
 
+	// --- Still part assembly (ghost-preview snapping) ---
+
+	// All still parts placed in the world (used to find the stand for snapping).
+	UPROPERTY()
+	TArray<class AStillPartActor*> PlacedStillParts;
+
+	// Optional translucent material for the ghost preview; falls back to engine default if unset.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Still")
+	UMaterialInterface* GhostPreviewMaterial;
+
+	// Z fine-tune added to the Pot snap so its pivot rests on the stand top (dial without recompiling logic).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Still")
+	float PotZAdjust = 0.0f;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 
@@ -67,6 +85,30 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	// --- Still ghost preview state ---
+	bool bIsPlacingStillGhost = false;       // true while previewing a snap-able still part (e.g. Pot)
+	FName GhostPartID;                        // which part the ghost represents
+	bool bGhostSnapValid = false;             // is the ghost currently within snap range of its mount?
+	FTransform GhostSnapTransform;            // the snapped world transform when valid
+
+	UPROPERTY()
+	class AStillPartActor* GhostStillPart = nullptr;     // the live ghost actor
+
+	UPROPERTY()
+	UMaterialInstanceDynamic* GhostDynamicMaterial = nullptr;
+
+	// Begin/Update/Confirm/Cancel for the still ghost preview flow.
+	void BeginStillGhostPlacement(FName PartID);
+	void UpdateStillGhost();                  // called each Tick while previewing
+	void ConfirmStillGhostPlacement();        // called on click while previewing
+	void CancelStillGhost();                  // tears down the ghost actor
+
+	// Finds the most recently placed CinderBlockStand in PlacedStillParts (nullptr if none).
+	class AStillPartActor* FindPlacedStand() const;
+
+	// Tint helper for the ghost (green = valid snap, red = invalid).
+	void SetGhostColor(const FLinearColor& Color);
 
 	// Input callbacks - Movement
 	void Move(const FInputActionValue& Value);
