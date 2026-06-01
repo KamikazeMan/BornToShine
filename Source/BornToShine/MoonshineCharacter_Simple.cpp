@@ -679,7 +679,9 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 	bGhostFloorGridMode = (PartID == FName(TEXT("CinderBlockStand")));
 	bGhostSnapValid = false;
 
-	// Close the inventory UI if open, keep the cursor so the player can aim and click.
+	// Close the inventory UI if open. Use GameOnly + hidden cursor so mouse-look drives the camera
+	// (the player aims the ghost with the crosshair). GameAndUI + visible cursor would capture the
+	// mouse for UI and freeze camera look.
 	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport())
 	{
 		InventoryWidgetInstance->RemoveFromParent();
@@ -687,10 +689,8 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 	}
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
-		PC->bShowMouseCursor = true;
-		FInputModeGameAndUI InputMode;
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		InputMode.SetHideCursorDuringCapture(false);
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
 	}
 
