@@ -653,12 +653,15 @@ AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand(const FVector& AimP
 
 		const FVector MountWorld = Part->GetActorTransform().TransformPosition(PotStandLocalMount);
 		const float DistSq = FVector::DistSquared(AimPoint, MountWorld);
+		UE_LOG(LogTemp, Warning, TEXT("  Stand %s mount=%s dist=%.1f"), *Part->GetName(), *MountWorld.ToString(), FMath::Sqrt(DistSq));
 		if (DistSq < NearestDistSq)
 		{
 			NearestDistSq = DistSq;
 			Nearest = Part;
 		}
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("  -> nearest stand: %s"), Nearest ? *Nearest->GetName() : TEXT("none"));
 	return Nearest;
 }
 
@@ -743,14 +746,19 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
 	const FVector TraceStart = ActiveCamera ? ActiveCamera->GetComponentLocation() : GetActorLocation();
 	const FVector TraceDir = ActiveCamera ? ActiveCamera->GetForwardVector() : GetActorForwardVector();
-	const FVector TraceEnd = TraceStart + TraceDir * 10000.0f;
+	const FVector TraceEnd = TraceStart + TraceDir * 2000.0f;
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
-	Params.AddIgnoredActor(GhostStillPart);
+	// CRITICAL: the ghost must not block the trace, or the impact point is always on the ghost
+	// right in front of the camera, collapsing "nearest stand" to whichever stand is closest to
+	// the camera every frame.
+	if (GhostStillPart) Params.AddIgnoredActor(GhostStillPart);
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
-	const FVector AimPoint = bHit ? Hit.Location : TraceEnd;
+	const FVector AimPoint = bHit ? Hit.ImpactPoint : TraceEnd;
+
+	UE_LOG(LogTemp, Warning, TEXT("Ghost aim point: %s (bHit=%d, hitActor=%s)"), *AimPoint.ToString(), bHit ? 1 : 0, bHit && Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("none"));
 
 	bGhostSnapValid = false;
 
