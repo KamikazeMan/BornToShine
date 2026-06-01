@@ -632,37 +632,27 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 
 namespace
 {
-	// Pot mount point on the cinder block stand: center of the square (0,0), top of blocks (Z=49).
-	// (blocks span local Z=6..49). PotZAdjust is added on top of this for fine-tuning.
-	static const FVector PotStandLocalMount(0.0f, 0.0f, 49.0f);
+	// Local-space mount points on the single 3-stand cinder block mesh (cm).
+	// Top surface Z=49 (blocks span Z=6..49). All at Y=0.18. PotZAdjust is added on top of the Z.
+	static const FVector PotMountLocal(-0.18f, 0.18f, 49.0f);    // left stand
+	static const FVector ThumperMountLocal(47.73f, 0.18f, 49.0f); // middle stand
+	static const FVector BarrelMountLocal(96.51f, 0.18f, 49.0f);  // right stand
 
 	// How close the player's aim must be to the mount point (world cm) to snap.
 	static constexpr float StillSnapRadiusCm = 100.0f;
 }
 
-AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand(const FVector& AimPoint) const
+AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
 {
-	// Find the placed CinderBlockStand whose mount point is nearest the aim point, so the player
-	// snaps to whichever stand they're looking at (left/center/right) rather than a fixed one.
-	AStillPartActor* Nearest = nullptr;
-	float NearestDistSq = TNumericLimits<float>::Max();
-
+	// The CinderBlockStand is a single mesh containing all 3 stands, so there's just one actor.
 	for (AStillPartActor* Part : PlacedStillParts)
 	{
-		if (!IsValid(Part) || Part->PartID != FName(TEXT("CinderBlockStand"))) continue;
-
-		const FVector MountWorld = Part->GetActorTransform().TransformPosition(PotStandLocalMount);
-		const float DistSq = FVector::DistSquared(AimPoint, MountWorld);
-		UE_LOG(LogTemp, Warning, TEXT("  Stand %s mount=%s dist=%.1f"), *Part->GetName(), *MountWorld.ToString(), FMath::Sqrt(DistSq));
-		if (DistSq < NearestDistSq)
+		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
 		{
-			NearestDistSq = DistSq;
-			Nearest = Part;
+			return Part;
 		}
 	}
-
-	UE_LOG(LogTemp, Warning, TEXT("  -> nearest stand: %s"), Nearest ? *Nearest->GetName() : TEXT("none"));
-	return Nearest;
+	return nullptr;
 }
 
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
@@ -762,16 +752,37 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 	bGhostSnapValid = false;
 
-	// Snap to whichever placed stand the player is aiming nearest to.
-	AStillPartActor* Stand = FindPlacedStand(AimPoint);
+	// The stand is a single mesh with 3 stands; pick whichever of its 3 mount points the player
+	// is aiming nearest to (pot can go on any of the three for now — sequencing comes later).
+	AStillPartActor* Stand = FindPlacedStand();
 	if (Stand)
 	{
-		// Mount point in world space, plus the tunable Z fine-tune.
-		FVector MountWorld = Stand->GetActorTransform().TransformPosition(PotStandLocalMount);
-		MountWorld.Z += PotZAdjust;
+		const FTransform StandXform = Stand->GetActorTransform();
+		const FVector PotMountWorld     = StandXform.TransformPosition(PotMountLocal);
+		const FVector ThumperMountWorld = StandXform.TransformPosition(ThumperMountLocal);
+		const FVector BarrelMountWorld  = StandXform.TransformPosition(BarrelMountLocal);
 
-		if (FVector::Dist(AimPoint, MountWorld) <= StillSnapRadiusCm)
+		const float PotDist     = FVector::Dist(AimPoint, PotMountWorld);
+		const float ThumperDist = FVector::Dist(AimPoint, ThumperMountWorld);
+		const float BarrelDist  = FVector::Dist(AimPoint, BarrelMountWorld);
+
+		FVector ChosenMount = PotMountWorld;
+		float ChosenDist = PotDist;
+		const TCHAR* ChosenName = TEXT("Pot");
+		if (ThumperDist < ChosenDist) { ChosenMount = ThumperMountWorld; ChosenDist = ThumperDist; ChosenName = TEXT("Thumper"); }
+		if (BarrelDist < ChosenDist)  { ChosenMount = BarrelMountWorld;  ChosenDist = BarrelDist;  ChosenName = TEXT("Barrel"); }
+
+		UE_LOG(LogTemp, Warning, TEXT("Mounts: Pot=%s(%.1f) Thumper=%s(%.1f) Barrel=%s(%.1f) -> chose %s(%.1f)"),
+			*PotMountWorld.ToString(), PotDist,
+			*ThumperMountWorld.ToString(), ThumperDist,
+			*BarrelMountWorld.ToString(), BarrelDist,
+			ChosenName, ChosenDist);
+
+		if (ChosenDist <= StillSnapRadiusCm)
 		{
+			FVector MountWorld = ChosenMount;
+			MountWorld.Z += PotZAdjust;
+
 			// Keep the ghost upright, matching the stand's yaw only.
 			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
 			GhostSnapTransform = FTransform(SnapRot, MountWorld);

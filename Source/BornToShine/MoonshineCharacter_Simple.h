@@ -109,8 +109,8 @@ protected:
 	void ConfirmStillGhostPlacement();        // called on click while previewing
 	void CancelStillGhost();                  // tears down the ghost actor
 
-	// Finds the placed CinderBlockStand whose mount point is nearest AimPoint (nullptr if none).
-	class AStillPartActor* FindPlacedStand(const FVector& AimPoint) const;
+	// Finds the single placed CinderBlockStand actor (nullptr if none).
+	class AStillPartActor* FindPlacedStand() const;
 
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
