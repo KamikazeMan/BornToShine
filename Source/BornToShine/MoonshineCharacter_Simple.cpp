@@ -356,6 +356,13 @@ void AMoonshineCharacter_Simple::OnRotate(const FInputActionValue& Value)
 
 void AMoonshineCharacter_Simple::OnRotateLeft()
 {
+	// While previewing a still ghost, Q rotates the ghost instead of a framing piece.
+	if (bIsPlacingStillGhost)
+	{
+		RotateStillGhost(-GhostRotationStepDeg);
+		return;
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("OnRotateLeft called"));
 	if (BuildingComponent)
 	{
@@ -369,6 +376,13 @@ void AMoonshineCharacter_Simple::OnRotateLeft()
 
 void AMoonshineCharacter_Simple::OnRotateRight()
 {
+	// While previewing a still ghost, E rotates the ghost instead of a framing piece.
+	if (bIsPlacingStillGhost)
+	{
+		RotateStillGhost(GhostRotationStepDeg);
+		return;
+	}
+
 	UE_LOG(LogTemp, Log, TEXT("OnRotateRight called"));
 	if (BuildingComponent)
 	{
@@ -678,6 +692,7 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 	bIsPlacingStillGhost = true;
 	bGhostFloorGridMode = (PartID == FName(TEXT("CinderBlockStand")));
 	bGhostSnapValid = false;
+	StillGhostYaw = 0.0f;
 
 	// Close the inventory UI if open. Use GameOnly + hidden cursor so mouse-look drives the camera
 	// (the player aims the ghost with the crosshair). GameAndUI + visible cursor would capture the
@@ -770,15 +785,14 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
 		GridLoc.Z = AimPoint.Z + FloorSpawnZOffset;
 
-		// Orient the row of stands to the player: control yaw rounded to the nearest 90 degrees.
-		const float SnappedYaw = FMath::RoundToFloat(CamRot.Yaw / 90.0f) * 90.0f;
-		const FRotator GridRot(0.0f, SnappedYaw, 0.0f);
+		// Orientation is player-controlled via Q/E (StillGhostYaw); no auto-rotation.
+		const FRotator GridRot(0.0f, StillGhostYaw, 0.0f);
 
 		GhostSnapTransform = FTransform(GridRot, GridLoc);
 		GhostStillPart->SetActorLocationAndRotation(GridLoc, GridRot);
 		bGhostSnapValid = true; // floor is always a valid target
 
-		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), SnappedYaw);
+		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), StillGhostYaw);
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
 		return;
 	}
@@ -799,8 +813,8 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 		if (bValid)
 		{
-			// Keep the ghost upright, matching the stand's yaw only.
-			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
+			// Upright, matching the stand's yaw plus any player Q/E adjustment.
+			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
 			GhostSnapTransform = FTransform(SnapRot, PotMountWorld);
 			GhostStillPart->SetActorLocationAndRotation(PotMountWorld, SnapRot);
 			bGhostSnapValid = true;
@@ -872,6 +886,7 @@ void AMoonshineCharacter_Simple::CancelStillGhost()
 	bGhostFloorGridMode = false;
 	bGhostSnapValid = false;
 	GhostPartID = NAME_None;
+	StillGhostYaw = 0.0f;
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{
@@ -879,6 +894,15 @@ void AMoonshineCharacter_Simple::CancelStillGhost()
 		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
 	}
+}
+
+void AMoonshineCharacter_Simple::RotateStillGhost(float DeltaYawDeg)
+{
+	if (!bIsPlacingStillGhost) return;
+
+	StillGhostYaw = FMath::UnwindDegrees(StillGhostYaw + DeltaYawDeg);
+	UE_LOG(LogTemp, Log, TEXT("Still ghost yaw -> %.0f"), StillGhostYaw);
+	// The applied rotation is recomputed each tick in UpdateStillGhost using StillGhostYaw.
 }
 
 void AMoonshineCharacter_Simple::DebugGrantStillParts()

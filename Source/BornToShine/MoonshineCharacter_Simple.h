@@ -75,6 +75,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandGridSizeCm = 100.0f;
 
+	// Yaw step (degrees) for manual Q/E rotation of a still ghost.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float GhostRotationStepDeg = 45.0f;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 
@@ -101,6 +105,7 @@ protected:
 	FName GhostPartID;                        // which part the ghost represents
 	bool bGhostSnapValid = false;             // is the ghost currently within snap range of its mount?
 	FTransform GhostSnapTransform;            // the snapped world transform when valid
+	float StillGhostYaw = 0.0f;               // player-controlled yaw (deg) applied to the still ghost
 
 	UPROPERTY()
 	class AStillPartActor* GhostStillPart = nullptr;     // the live ghost actor
@@ -113,6 +118,7 @@ protected:
 	void UpdateStillGhost();                  // called each Tick while previewing
 	void ConfirmStillGhostPlacement();        // called on click while previewing
 	void CancelStillGhost();                  // tears down the ghost actor
+	void RotateStillGhost(float DeltaYawDeg); // manual Q/E yaw rotation of the still ghost
 
 	// Finds the single placed CinderBlockStand actor (nullptr if none).
 	class AStillPartActor* FindPlacedStand() const;
