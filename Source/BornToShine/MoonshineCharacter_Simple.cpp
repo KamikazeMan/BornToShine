@@ -633,12 +633,13 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 namespace
 {
 	// Local-space mount points on the single 3-stand cinder block mesh (cm).
-	// Top surface Z=49 (blocks span Z=6..49). All at Y=0.18. PotZAdjust is added on top of the Z.
+	// The mesh pivot is at the MIDDLE stand, so offsets are measured from the middle.
+	// Top surface Z=49 (blocks span Z=6..49). PotZAdjust is added on top of the Z.
 	// Each vessel has exactly ONE valid stand so the still assembles correctly:
 	//   Pot snaps ONLY to PotMountLocal, Thumper ONLY to ThumperMountLocal, Barrel ONLY to BarrelMountLocal.
-	static const FVector PotMountLocal(-0.18f, 0.18f, 49.0f);     // LEFT stand   -> Pot
-	static const FVector ThumperMountLocal(47.73f, 0.18f, 49.0f); // MIDDLE stand -> Thumper Body (next step)
-	static const FVector BarrelMountLocal(96.51f, 0.18f, 49.0f);  // RIGHT stand  -> Worm Barrel  (next step)
+	static const FVector PotMountLocal(-121.69f, 0.47f, 49.0f);   // LEFT stand   -> Pot
+	static const FVector ThumperMountLocal(0.0f, -1.11f, 49.0f);  // MIDDLE stand -> Thumper Body (next step)
+	static const FVector BarrelMountLocal(123.90f, -1.11f, 49.0f); // RIGHT stand  -> Worm Barrel  (next step)
 
 	// How close the player's aim must be to the mount point (world cm) to snap.
 	static constexpr float StillSnapRadiusCm = 100.0f;
