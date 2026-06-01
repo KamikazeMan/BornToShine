@@ -632,26 +632,34 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 
 namespace
 {
-	// Pot-stand mount point in the CinderBlockStand actor's LOCAL space (cm).
-	// (Thumper X=47.73,Y=-0.44 and Barrel X=96.51,Y=-0.44 will be added in a later step.)
-	static const FVector PotStandLocalMount(-0.18f, 0.18f, 15.24f);
+	// Pot mount point on the cinder block stand: center of the square (0,0), top of blocks (Z=49).
+	// (blocks span local Z=6..49). PotZAdjust is added on top of this for fine-tuning.
+	static const FVector PotStandLocalMount(0.0f, 0.0f, 49.0f);
 
 	// How close the player's aim must be to the mount point (world cm) to snap.
 	static constexpr float StillSnapRadiusCm = 100.0f;
 }
 
-AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
+AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand(const FVector& AimPoint) const
 {
-	// Most recent stand wins (search back to front).
-	for (int32 i = PlacedStillParts.Num() - 1; i >= 0; --i)
+	// Find the placed CinderBlockStand whose mount point is nearest the aim point, so the player
+	// snaps to whichever stand they're looking at (left/center/right) rather than a fixed one.
+	AStillPartActor* Nearest = nullptr;
+	float NearestDistSq = TNumericLimits<float>::Max();
+
+	for (AStillPartActor* Part : PlacedStillParts)
 	{
-		AStillPartActor* Part = PlacedStillParts[i];
-		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		if (!IsValid(Part) || Part->PartID != FName(TEXT("CinderBlockStand"))) continue;
+
+		const FVector MountWorld = Part->GetActorTransform().TransformPosition(PotStandLocalMount);
+		const float DistSq = FVector::DistSquared(AimPoint, MountWorld);
+		if (DistSq < NearestDistSq)
 		{
-			return Part;
+			NearestDistSq = DistSq;
+			Nearest = Part;
 		}
 	}
-	return nullptr;
+	return Nearest;
 }
 
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
@@ -746,7 +754,8 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 	bGhostSnapValid = false;
 
-	AStillPartActor* Stand = FindPlacedStand();
+	// Snap to whichever placed stand the player is aiming nearest to.
+	AStillPartActor* Stand = FindPlacedStand(AimPoint);
 	if (Stand)
 	{
 		// Mount point in world space, plus the tunable Z fine-tune.
@@ -766,6 +775,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	if (bGhostSnapValid)
 	{
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		UE_LOG(LogTemp, VeryVerbose, TEXT("Pot ghost snapped Z=%.2f (mount 49.0 + PotZAdjust=%.2f)"), GhostSnapTransform.GetLocation().Z, PotZAdjust);
 	}
 	else
 	{
