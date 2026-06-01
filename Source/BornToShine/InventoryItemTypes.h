@@ -39,6 +39,10 @@ struct FItemDataRow : public FTableRowBase
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSubclassOf<ABuildablePiece> PlaceableClass;
 
+	// Static mesh spawned when this item is placed from the inventory (assigned per-row in the data table)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UStaticMesh* Mesh = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 MaxStack = 99;
 

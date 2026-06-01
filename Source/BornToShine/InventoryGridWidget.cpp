@@ -1,6 +1,7 @@
 #include "InventoryGridWidget.h"
 #include "InventorySlotWidget.h"
 #include "InventoryComponent.h"
+#include "MoonshineCharacter_Simple.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/SizeBox.h"
@@ -156,23 +157,22 @@ void UInventoryGridWidget::RefreshGrid()
 
 void UInventoryGridWidget::HandleSlotClicked(int32 SlotIndex)
 {
-	if (SelectedSlotIndex >= 0 && SelectedSlotIndex < SlotWidgets.Num())
-	{
-		SlotWidgets[SelectedSlotIndex]->SetSelected(false);
-	}
+	if (!InventoryRef) return;
 
-	if (SlotIndex >= 0 && SlotIndex < SlotWidgets.Num())
-	{
-		SlotWidgets[SlotIndex]->SetSelected(true);
-		SelectedSlotIndex = SlotIndex;
+	const TArray<FInventoryItem>& Items = InventoryRef->GetItems();
 
-		if (InventoryRef)
+	// Ignore clicks on empty slots
+	if (SlotIndex < 0 || SlotIndex >= Items.Num()) return;
+
+	const FName ItemID = Items[SlotIndex].ItemID;
+	if (ItemID == NAME_None) return;
+
+	// Hand off to the player character to enter placement mode (this also closes the inventory).
+	if (APawn* Pawn = GetOwningPlayerPawn())
+	{
+		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
 		{
-			const TArray<FInventoryItem>& Items = InventoryRef->GetItems();
-			if (SlotIndex < Items.Num())
-			{
-				UE_LOG(LogTemp, Log, TEXT("Inventory: Selected slot %d — %s x%d"), SlotIndex, *Items[SlotIndex].ItemID.ToString(), Items[SlotIndex].Quantity);
-			}
+			Character->BeginItemPlacement(ItemID);
 		}
 	}
 }

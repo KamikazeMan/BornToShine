@@ -10,6 +10,8 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 {
@@ -302,6 +304,13 @@ void AMoonshineCharacter_Simple::OnToggleBuildMode()
 
 void AMoonshineCharacter_Simple::OnPlacePiece()
 {
+	// If we're placing an inventory item, the place button confirms that instead of normal building.
+	if (bIsPlacingItem)
+	{
+		ConfirmItemPlacement();
+		return;
+	}
+
 	if (BuildingComponent)
 	{
 		BuildingComponent->PlaceCurrentPiece();
@@ -503,6 +512,90 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 			InputMode.SetHideCursorDuringCapture(false);
 			PC->SetInputMode(InputMode);
 		}
+	}
+}
+
+void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
+{
+	PendingPlacementItemID = ItemID;
+	bIsPlacingItem = true;
+
+	// Close the inventory UI if open, but keep the cursor so the player can click the floor.
+	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport())
+	{
+		InventoryWidgetInstance->RemoveFromParent();
+		InventoryWidgetInstance = nullptr;
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = true;
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		PC->SetInputMode(InputMode);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Placement mode: %s — click the floor to place"), *ItemID.ToString());
+}
+
+void AMoonshineCharacter_Simple::ConfirmItemPlacement()
+{
+	if (!bIsPlacingItem) return;
+
+	// Trace from the active camera forward to find the floor.
+	UCameraComponent* ActiveCamera = bIsFirstPerson ? FirstPersonCamera : ThirdPersonCamera;
+	const FVector TraceStart = ActiveCamera ? ActiveCamera->GetComponentLocation() : GetActorLocation();
+	const FVector TraceDir = ActiveCamera ? ActiveCamera->GetForwardVector() : GetActorForwardVector();
+	const FVector TraceEnd = TraceStart + TraceDir * 10000.0f;
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
+
+	if (bHit)
+	{
+		FItemDataRow RowData;
+		const bool bHasData = Inventory ? Inventory->GetItemData(PendingPlacementItemID, RowData) : false;
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* SpawnedActor = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
+
+		if (SpawnedActor)
+		{
+			SpawnedActor->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+			if (bHasData && RowData.Mesh)
+			{
+				SpawnedActor->GetStaticMeshComponent()->SetStaticMesh(RowData.Mesh);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — spawned empty actor"), *PendingPlacementItemID.ToString());
+			}
+
+			if (Inventory)
+			{
+				Inventory->RemoveItem(PendingPlacementItemID, 1);
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Placement: trace hit nothing — aim at the floor and click again"));
+	}
+
+	bIsPlacingItem = false;
+	PendingPlacementItemID = NAME_None;
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
 	}
 }
 

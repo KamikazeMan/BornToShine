@@ -137,14 +137,8 @@ void UInventorySlotWidget::ClearSlot()
 void UInventorySlotWidget::SetSelected(bool bSelected)
 {
 	bIsSelected = bSelected;
-	if (bSelected)
-	{
-		SelectionBorder->SetBrushColor(FLinearColor(0.95f, 0.75f, 0.1f, 0.9f));
-	}
-	else
-	{
-		SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
-	}
+	// Yellow selection highlight removed — slots always keep the normal translucent border.
+	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
 }
 
 void UInventorySlotWidget::HandleClicked()

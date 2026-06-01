@@ -36,6 +36,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	UTexture2D* InventoryBackgroundTexture;
 
+	UPROPERTY()
+	bool bIsPlacingItem = false;
+
+	UPROPERTY()
+	FName PendingPlacementItemID;
+
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void BeginItemPlacement(FName ItemID);
+
+	UFUNCTION()
+	void ConfirmItemPlacement();   // called on world click while placing
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 
