@@ -25,7 +25,7 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	WhiteBrush.TintColor = FSlateColor(FLinearColor::White);
 	WhiteBrush.DrawAs = ESlateBrushDrawType::Image;
 	ColorRect->SetBrush(WhiteBrush);
-	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 1.0f));
+	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 0.4f));
 	UOverlaySlot* IconSlot = Overlay->AddChildToOverlay(ColorRect);
 	IconSlot->SetHorizontalAlignment(HAlign_Fill);
 	IconSlot->SetVerticalAlignment(VAlign_Fill);
@@ -81,11 +81,11 @@ void UInventorySlotWidget::NativeConstruct()
 
 FLinearColor UInventorySlotWidget::GetCategoryColor(const FString& Category) const
 {
-	if (Category == TEXT("StillPart")) return FLinearColor(0.7f, 0.4f, 0.1f, 1.0f);
-	if (Category == TEXT("Ingredient")) return FLinearColor(0.4f, 0.7f, 0.2f, 1.0f);
-	if (Category == TEXT("Tool")) return FLinearColor(0.3f, 0.3f, 0.4f, 1.0f);
-	if (Category == TEXT("Jar")) return FLinearColor(0.9f, 0.85f, 0.6f, 1.0f);
-	return FLinearColor(0.4f, 0.4f, 0.4f, 1.0f);
+	if (Category == TEXT("StillPart")) return FLinearColor(0.7f, 0.4f, 0.1f, 0.4f);
+	if (Category == TEXT("Ingredient")) return FLinearColor(0.4f, 0.7f, 0.2f, 0.4f);
+	if (Category == TEXT("Tool")) return FLinearColor(0.3f, 0.3f, 0.4f, 0.4f);
+	if (Category == TEXT("Jar")) return FLinearColor(0.9f, 0.85f, 0.6f, 0.4f);
+	return FLinearColor(0.4f, 0.4f, 0.4f, 0.4f);
 }
 
 void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInventoryComponent* InInventoryRef)
