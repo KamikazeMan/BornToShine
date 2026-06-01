@@ -9,6 +9,7 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/UniformGridPanel.h"
+#include "Components/UniformGridSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Blueprint/WidgetTree.h"
@@ -47,12 +48,11 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	TitleSlot->SetHorizontalAlignment(HAlign_Center);
 
 	SlotGrid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass(), TEXT("SlotGrid"));
-	SlotGrid->SetSlotPadding(FMargin(10.0f));
-	SlotGrid->SetMinDesiredSlotWidth(140.0f);
-	SlotGrid->SetMinDesiredSlotHeight(140.0f);
+	SlotGrid->SetSlotPadding(FMargin(0.0f));
 	UVerticalBoxSlot* GridSlot = VBox->AddChildToVerticalBox(SlotGrid);
 	GridSlot->SetPadding(FMargin(16.0f, 4.0f, 16.0f, 4.0f));
 	GridSlot->SetHorizontalAlignment(HAlign_Center);
+	GridSlot->SetVerticalAlignment(VAlign_Center);
 
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("StatusText"));
 	StatusText->SetText(FText::FromString(TEXT("Press I to close")));
@@ -76,7 +76,14 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		SlotWidget->SlotIndex = i;
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
 
-		SlotGrid->AddChildToUniformGrid(SlotWidget, i / NumColumns, i % NumColumns);
+		USizeBox* SlotSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("SlotSizeBox_%d"), i));
+		SlotSizeBox->SetWidthOverride(200.0f);
+		SlotSizeBox->SetHeightOverride(200.0f);
+		SlotSizeBox->AddChild(SlotWidget);
+
+		UUniformGridSlot* GridCellSlot = SlotGrid->AddChildToUniformGrid(SlotSizeBox, i / NumColumns, i % NumColumns);
+		GridCellSlot->SetHorizontalAlignment(HAlign_Center);
+		GridCellSlot->SetVerticalAlignment(VAlign_Center);
 		SlotWidgets.Add(SlotWidget);
 	}
 
