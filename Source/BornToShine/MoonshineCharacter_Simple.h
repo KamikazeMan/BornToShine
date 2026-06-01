@@ -66,6 +66,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Still")
 	float PotZAdjust = 0.0f;
 
+	// Raises floor-placed still parts so a center-pivot mesh sits ON the floor instead of half-buried.
+	// 7.62cm = half the 6-inch stand height (starting guess).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float FloorSpawnZOffset = 7.62f;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 

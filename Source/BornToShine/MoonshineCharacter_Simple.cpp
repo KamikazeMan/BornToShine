@@ -592,8 +592,11 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 		// Every still part (including CinderBlockStand, whose mesh already models all 3 stands)
-		// spawns as a single AStillPartActor at the floor hit point.
-		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
+		// spawns as a single AStillPartActor at the floor hit point. Raise it by FloorSpawnZOffset
+		// so a center-pivot mesh sits on the floor instead of half-buried.
+		FVector SpawnLocation = Hit.Location;
+		SpawnLocation.Z += FloorSpawnZOffset;
+		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
 		if (Part)
 		{
 			Part->InitFromItemData(PendingPlacementItemID, PartMesh);
@@ -604,7 +607,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 				Inventory->RemoveItem(PendingPlacementItemID, 1);
 			}
 
-			UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
+			UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
 		}
 	}
 	else
