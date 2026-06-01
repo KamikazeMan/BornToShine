@@ -66,6 +66,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Still")
 	float PotZAdjust = 0.0f;
 
+	// Per-vessel Z fine-tune (Thumper/Barrel are separate meshes with possibly different pivots).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float ThumperZAdjust = 13.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float BarrelZAdjust = 13.5f;
+
 	// Raises floor-placed still parts so a center-pivot mesh sits ON the floor instead of half-buried.
 	// 7.62cm = half the 6-inch stand height (starting guess).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")

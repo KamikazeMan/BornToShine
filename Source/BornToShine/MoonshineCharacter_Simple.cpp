@@ -548,9 +548,10 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 
 void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 {
-	// The Pot uses the ghost-preview mount-snap flow (snaps onto the cinder block stand).
-	// The CinderBlockStand uses the ghost-preview floor-grid flow.
-	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("CinderBlockStand")))
+	// Vessels (Pot/ThumperBody/WormBarrel) use the ghost-preview mount-snap flow onto the stand.
+	// The CinderBlockStand itself uses the ghost-preview floor-grid flow.
+	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("ThumperBody")) ||
+		ItemID == FName(TEXT("WormBarrel")) || ItemID == FName(TEXT("CinderBlockStand")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -653,8 +654,8 @@ namespace
 	// Each vessel has exactly ONE valid stand so the still assembles correctly:
 	//   Pot snaps ONLY to PotMountLocal, Thumper ONLY to ThumperMountLocal, Barrel ONLY to BarrelMountLocal.
 	static const FVector PotMountLocal(-121.69f, 0.47f, 49.0f);   // LEFT stand   -> Pot
-	static const FVector ThumperMountLocal(0.0f, -1.11f, 49.0f);  // MIDDLE stand -> Thumper Body (next step)
-	static const FVector BarrelMountLocal(123.90f, -1.11f, 49.0f); // RIGHT stand  -> Worm Barrel  (next step)
+	static const FVector ThumperMountLocal(0.0f, -1.11f, 49.0f);  // MIDDLE stand -> Thumper Body
+	static const FVector BarrelMountLocal(122.60f, 0.0f, 49.0f);  // RIGHT stand  -> Worm Barrel
 
 	// How close the player's aim must be to the mount point (world cm) to snap.
 	static constexpr float StillSnapRadiusCm = 100.0f;
@@ -797,26 +798,39 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		return;
 	}
 
-	// Mount-snap placement (Pot): exactly ONE valid mount — the LEFT (pot) stand. It will NOT snap
-	// to the middle or right stands — those are reserved for the Thumper and Barrel respectively.
+	// Mount-snap placement: each vessel has exactly ONE valid stand (Pot=left, Thumper=middle,
+	// Barrel=right). Pick this vessel's mount + Z-adjust from the part ID.
+	FVector MountLocal = PotMountLocal;
+	float ZAdjust = PotZAdjust;
+	const TCHAR* VesselName = TEXT("Pot");
+	if (GhostPartID == FName(TEXT("ThumperBody")))
+	{
+		MountLocal = ThumperMountLocal; ZAdjust = ThumperZAdjust; VesselName = TEXT("Thumper");
+	}
+	else if (GhostPartID == FName(TEXT("WormBarrel")))
+	{
+		MountLocal = BarrelMountLocal; ZAdjust = BarrelZAdjust; VesselName = TEXT("Barrel");
+	}
+
 	AStillPartActor* Stand = FindPlacedStand();
 	if (Stand)
 	{
-		FVector PotMountWorld = Stand->GetActorTransform().TransformPosition(PotMountLocal);
-		PotMountWorld.Z += PotZAdjust;
+		// TransformPosition respects the stand's rotation, so a rotated stand places vessels correctly.
+		FVector MountWorld = Stand->GetActorTransform().TransformPosition(MountLocal);
+		MountWorld.Z += ZAdjust;
 
-		const float Dist = FVector::Dist(AimPoint, PotMountWorld);
+		const float Dist = FVector::Dist(AimPoint, MountWorld);
 		const bool bValid = Dist <= StillSnapRadiusCm;
 
-		UE_LOG(LogTemp, Warning, TEXT("Pot snap: mount=%s aim=%s dist=%.1f radius=%.1f valid=%d"),
-			*PotMountWorld.ToString(), *AimPoint.ToString(), Dist, StillSnapRadiusCm, bValid ? 1 : 0);
+		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s aim=%s dist=%.1f radius=%.1f valid=%d"),
+			VesselName, *MountWorld.ToString(), *AimPoint.ToString(), Dist, StillSnapRadiusCm, bValid ? 1 : 0);
 
 		if (bValid)
 		{
 			// Upright, matching the stand's yaw plus any player Q/E adjustment.
 			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
-			GhostSnapTransform = FTransform(SnapRot, PotMountWorld);
-			GhostStillPart->SetActorLocationAndRotation(PotMountWorld, SnapRot);
+			GhostSnapTransform = FTransform(SnapRot, MountWorld);
+			GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
 			bGhostSnapValid = true;
 		}
 	}
@@ -824,7 +838,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	if (bGhostSnapValid)
 	{
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
-		UE_LOG(LogTemp, VeryVerbose, TEXT("Pot ghost snapped Z=%.2f (mount 49.0 + PotZAdjust=%.2f)"), GhostSnapTransform.GetLocation().Z, PotZAdjust);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("%s ghost snapped Z=%.2f (ZAdjust=%.2f)"), VesselName, GhostSnapTransform.GetLocation().Z, ZAdjust);
 	}
 	else
 	{
@@ -868,7 +882,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 			Inventory->RemoveItem(GhostPartID, 1);
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s — PotZAdjust=%.2f"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString(), PotZAdjust);
+		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
 	}
 
 	CancelStillGhost();
