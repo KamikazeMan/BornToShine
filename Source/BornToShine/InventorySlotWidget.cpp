@@ -15,7 +15,7 @@
 TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 {
 	SelectionBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SelectionBorder"));
-	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.85f));
+	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
 	SelectionBorder->SetPadding(FMargin(3.0f));
 
 	UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("SlotOverlay"));
@@ -25,7 +25,7 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	WhiteBrush.TintColor = FSlateColor(FLinearColor::White);
 	WhiteBrush.DrawAs = ESlateBrushDrawType::Image;
 	ColorRect->SetBrush(WhiteBrush);
-	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 0.4f));
+	ColorRect->SetColorAndOpacity(FLinearColor(0.3f, 0.3f, 0.3f, 0.1f));
 	UOverlaySlot* IconSlot = Overlay->AddChildToOverlay(ColorRect);
 	IconSlot->SetHorizontalAlignment(HAlign_Fill);
 	IconSlot->SetVerticalAlignment(VAlign_Fill);
@@ -128,7 +128,7 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 void UInventorySlotWidget::ClearSlot()
 {
 	CurrentItemID = NAME_None;
-	ColorRect->SetColorAndOpacity(FLinearColor(0.15f, 0.12f, 0.09f, 0.4f));
+	ColorRect->SetColorAndOpacity(FLinearColor(0.15f, 0.12f, 0.09f, 0.1f));
 	NameText->SetText(FText::FromString(TEXT("")));
 	QuantityText->SetText(FText::FromString(TEXT("")));
 	SetToolTipText(FText::FromString(TEXT("")));
@@ -143,7 +143,7 @@ void UInventorySlotWidget::SetSelected(bool bSelected)
 	}
 	else
 	{
-		SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.85f));
+		SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
 	}
 }
 
