@@ -634,9 +634,11 @@ namespace
 {
 	// Local-space mount points on the single 3-stand cinder block mesh (cm).
 	// Top surface Z=49 (blocks span Z=6..49). All at Y=0.18. PotZAdjust is added on top of the Z.
-	static const FVector PotMountLocal(-0.18f, 0.18f, 49.0f);    // left stand
-	static const FVector ThumperMountLocal(47.73f, 0.18f, 49.0f); // middle stand
-	static const FVector BarrelMountLocal(96.51f, 0.18f, 49.0f);  // right stand
+	// Each vessel has exactly ONE valid stand so the still assembles correctly:
+	//   Pot snaps ONLY to PotMountLocal, Thumper ONLY to ThumperMountLocal, Barrel ONLY to BarrelMountLocal.
+	static const FVector PotMountLocal(-0.18f, 0.18f, 49.0f);     // LEFT stand   -> Pot
+	static const FVector ThumperMountLocal(47.73f, 0.18f, 49.0f); // MIDDLE stand -> Thumper Body (next step)
+	static const FVector BarrelMountLocal(96.51f, 0.18f, 49.0f);  // RIGHT stand  -> Worm Barrel  (next step)
 
 	// How close the player's aim must be to the mount point (world cm) to snap.
 	static constexpr float StillSnapRadiusCm = 100.0f;
@@ -752,41 +754,26 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 	bGhostSnapValid = false;
 
-	// The stand is a single mesh with 3 stands; pick whichever of its 3 mount points the player
-	// is aiming nearest to (pot can go on any of the three for now — sequencing comes later).
+	// The Pot has exactly ONE valid mount: the LEFT (pot) stand. It will NOT snap to the
+	// middle or right stands — those are reserved for the Thumper and Barrel respectively.
 	AStillPartActor* Stand = FindPlacedStand();
 	if (Stand)
 	{
-		const FTransform StandXform = Stand->GetActorTransform();
-		const FVector PotMountWorld     = StandXform.TransformPosition(PotMountLocal);
-		const FVector ThumperMountWorld = StandXform.TransformPosition(ThumperMountLocal);
-		const FVector BarrelMountWorld  = StandXform.TransformPosition(BarrelMountLocal);
+		FVector PotMountWorld = Stand->GetActorTransform().TransformPosition(PotMountLocal);
+		PotMountWorld.Z += PotZAdjust;
 
-		const float PotDist     = FVector::Dist(AimPoint, PotMountWorld);
-		const float ThumperDist = FVector::Dist(AimPoint, ThumperMountWorld);
-		const float BarrelDist  = FVector::Dist(AimPoint, BarrelMountWorld);
+		const float Dist = FVector::Dist(AimPoint, PotMountWorld);
+		const bool bValid = Dist <= StillSnapRadiusCm;
 
-		FVector ChosenMount = PotMountWorld;
-		float ChosenDist = PotDist;
-		const TCHAR* ChosenName = TEXT("Pot");
-		if (ThumperDist < ChosenDist) { ChosenMount = ThumperMountWorld; ChosenDist = ThumperDist; ChosenName = TEXT("Thumper"); }
-		if (BarrelDist < ChosenDist)  { ChosenMount = BarrelMountWorld;  ChosenDist = BarrelDist;  ChosenName = TEXT("Barrel"); }
+		UE_LOG(LogTemp, Warning, TEXT("Pot snap: mount=%s aim=%s dist=%.1f radius=%.1f valid=%d"),
+			*PotMountWorld.ToString(), *AimPoint.ToString(), Dist, StillSnapRadiusCm, bValid ? 1 : 0);
 
-		UE_LOG(LogTemp, Warning, TEXT("Mounts: Pot=%s(%.1f) Thumper=%s(%.1f) Barrel=%s(%.1f) -> chose %s(%.1f)"),
-			*PotMountWorld.ToString(), PotDist,
-			*ThumperMountWorld.ToString(), ThumperDist,
-			*BarrelMountWorld.ToString(), BarrelDist,
-			ChosenName, ChosenDist);
-
-		if (ChosenDist <= StillSnapRadiusCm)
+		if (bValid)
 		{
-			FVector MountWorld = ChosenMount;
-			MountWorld.Z += PotZAdjust;
-
 			// Keep the ghost upright, matching the stand's yaw only.
 			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
-			GhostSnapTransform = FTransform(SnapRot, MountWorld);
-			GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
+			GhostSnapTransform = FTransform(SnapRot, PotMountWorld);
+			GhostStillPart->SetActorLocationAndRotation(PotMountWorld, SnapRot);
 			bGhostSnapValid = true;
 		}
 	}
