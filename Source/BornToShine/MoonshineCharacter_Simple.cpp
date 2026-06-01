@@ -568,45 +568,19 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-		if (PendingPlacementItemID == FName(TEXT("CinderBlockStand")))
+		// Every still part (including CinderBlockStand, whose mesh already models all 3 stands)
+		// spawns as a single AStillPartActor at the floor hit point.
+		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
+		if (Part)
 		{
-			// The cinder block stand placement drops the full 3-stand row (pot / thumper / barrel).
-			const float StandSpacingCm = 150.0f;
-			const FVector RowDir = GetActorRightVector();
-			const TCHAR* StandLabels[3] = { TEXT("PotStand"), TEXT("ThumperStand"), TEXT("BarrelStand") };
+			Part->InitFromItemData(PendingPlacementItemID, PartMesh);
 
-			for (int32 StandIdx = 0; StandIdx < 3; ++StandIdx)
-			{
-				const FVector SpawnLoc = Hit.Location + RowDir * (StandSpacingCm * StandIdx);
-				AStillPartActor* Stand = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), SpawnLoc, FRotator::ZeroRotator, SpawnParams);
-				if (Stand)
-				{
-					Stand->InitFromItemData(PendingPlacementItemID, PartMesh);
-					UE_LOG(LogTemp, Log, TEXT("Placed %s (%s) at %s"), StandLabels[StandIdx], *PendingPlacementItemID.ToString(), *SpawnLoc.ToString());
-				}
-			}
-
-			// Placing the set consumes a single inventory item.
 			if (Inventory)
 			{
 				Inventory->RemoveItem(PendingPlacementItemID, 1);
 			}
-		}
-		else
-		{
-			// All other still parts spawn a single actor for now.
-			AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), Hit.Location, FRotator::ZeroRotator, SpawnParams);
-			if (Part)
-			{
-				Part->InitFromItemData(PendingPlacementItemID, PartMesh);
 
-				if (Inventory)
-				{
-					Inventory->RemoveItem(PendingPlacementItemID, 1);
-				}
-
-				UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
-			}
+			UE_LOG(LogTemp, Log, TEXT("Placed %s at %s"), *PendingPlacementItemID.ToString(), *Hit.Location.ToString());
 		}
 	}
 	else
