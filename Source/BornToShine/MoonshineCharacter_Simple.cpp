@@ -808,78 +808,73 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	}
 
 	// CapArm bridges Cap to ThumperCap; requires BOTH to be placed first.
-	if (GhostPartID == FName(TEXT("CapArm")))
+	// Uses the SAME tint + snap pattern as the Cap/vessel blocks below.
+	const bool bIsCapArm = (GhostPartID == FName(TEXT("CapArm")));
+
+	// Cap/ThumperCap/CapArm all share this snap-to-parent path.
+	const bool bIsCap = (GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")));
+
+	if (bIsCapArm || bIsCap)
 	{
-		AStillPartActor* PlacedCap = FindPlacedPart(FName(TEXT("Cap")));
-		AStillPartActor* PlacedThumperCap = FindPlacedPart(FName(TEXT("ThumperCap")));
+		FName SnapTargetID;   // which placed part we snap onto
+		FVector MountOffset;  // local offset on that target
+		const TCHAR* Label = TEXT("?");
 
-		if (!PlacedCap)
+		if (bIsCapArm)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
-		}
-		if (!PlacedThumperCap)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
-		}
+			Label = TEXT("CapArm");
+			SnapTargetID = FName(TEXT("Cap"));
+			MountOffset = CapArmMountOffset;
 
-		if (PlacedCap && PlacedThumperCap)
-		{
-			const FVector MountWorld = PlacedCap->GetActorTransform().TransformPosition(CapArmMountOffset);
-			const float Dist = FVector::Dist(AimPoint, MountWorld);
-			const bool bValid = Dist <= StillSnapRadiusCm;
-
-			UE_LOG(LogTemp, Warning, TEXT("CapArm snap: cap=%s mount=%s aim=%s dist=%.1f valid=%d"),
-				*PlacedCap->GetName(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
-
-			if (bValid)
+			// Dual prerequisite: BOTH Cap AND ThumperCap must be placed.
+			AStillPartActor* PlacedCap = FindPlacedPart(FName(TEXT("Cap")));
+			AStillPartActor* PlacedThumperCap = FindPlacedPart(FName(TEXT("ThumperCap")));
+			if (!PlacedCap)
 			{
-				const FRotator SnapRot(0.0f, PlacedCap->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
-				GhostSnapTransform = FTransform(SnapRot, MountWorld);
-				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
-				bGhostSnapValid = true;
+				UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
+			}
+			if (!PlacedThumperCap)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
+			}
+			if (!PlacedCap || !PlacedThumperCap)
+			{
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+				return;
 			}
 		}
-
-		if (bGhostSnapValid)
+		else if (GhostPartID == FName(TEXT("ThumperCap")))
 		{
-			SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f));
+			Label = TEXT("ThumperCap");
+			SnapTargetID = FName(TEXT("ThumperBody"));
+			MountOffset = ThumperCapMountOffset;
 		}
 		else
 		{
-			GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-			SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+			Label = TEXT("Cap");
+			SnapTargetID = FName(TEXT("Pot"));
+			MountOffset = CapMountOffset;
 		}
-		return;
-	}
 
-	// Cap placement: a cap snaps onto its placed vessel and REQUIRES that vessel to exist first
-	// (Cap -> Pot, ThumperCap -> ThumperBody). If the vessel isn't placed, the cap is invalid.
-	const bool bIsCap = (GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")));
-	if (bIsCap)
-	{
-		const bool bIsThumperCap = (GhostPartID == FName(TEXT("ThumperCap")));
-		const FName RequiredVessel = bIsThumperCap ? FName(TEXT("ThumperBody")) : FName(TEXT("Pot"));
-		const FVector CapOffset = bIsThumperCap ? ThumperCapMountOffset : CapMountOffset;
-		const TCHAR* CapName = bIsThumperCap ? TEXT("ThumperCap") : TEXT("Cap");
-
-		AStillPartActor* Vessel = FindPlacedPart(RequiredVessel);
-		if (!Vessel)
+		AStillPartActor* SnapTarget = FindPlacedPart(SnapTargetID);
+		if (!SnapTarget)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("%s requires %s to be placed first"), CapName, *RequiredVessel.ToString());
+			UE_LOG(LogTemp, Warning, TEXT("%s requires %s to be placed first"), Label, *SnapTargetID.ToString());
 		}
 		else
 		{
-			// TransformPosition respects the vessel's rotation so the cap inherits its yaw.
-			const FVector MountWorld = Vessel->GetActorTransform().TransformPosition(CapOffset);
+			const FVector MountWorld = SnapTarget->GetActorTransform().TransformPosition(MountOffset);
 			const float Dist = FVector::Dist(AimPoint, MountWorld);
 			const bool bValid = Dist <= StillSnapRadiusCm;
 
-			UE_LOG(LogTemp, Warning, TEXT("%s snap: vessel=%s mount=%s aim=%s dist=%.1f valid=%d"),
-				CapName, *Vessel->GetName(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
+			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f offset=%s mount=%s aim=%s dist=%.1f valid=%d"),
+				Label, *SnapTarget->GetName(), SnapTarget->GetActorRotation().Yaw,
+				*MountOffset.ToString(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
 
 			if (bValid)
 			{
-				const FRotator SnapRot(0.0f, Vessel->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
+				const FRotator SnapRot(0.0f, SnapTarget->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
 				GhostSnapTransform = FTransform(SnapRot, MountWorld);
 				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
 				bGhostSnapValid = true;
@@ -954,9 +949,12 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 
 	if (!bGhostSnapValid)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s has no valid placement here."), *GhostPartID.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s has no valid placement here (bGhostSnapValid=false)."), *GhostPartID.ToString());
 		return;
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Confirming %s placement at %s (rot=%s)"),
+		*GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString(), *GhostSnapTransform.Rotator().ToString());
 
 	// Look up the real mesh again for the placed (non-ghost) actor.
 	UStaticMesh* PartMesh = nullptr;
