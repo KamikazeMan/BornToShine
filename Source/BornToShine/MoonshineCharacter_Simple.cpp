@@ -554,7 +554,8 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 	//   Cap/ThumperCap              -> vessel-snap (onto the placed vessel)
 	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("ThumperBody")) ||
 		ItemID == FName(TEXT("WormBarrel")) || ItemID == FName(TEXT("CinderBlockStand")) ||
-		ItemID == FName(TEXT("Cap")) || ItemID == FName(TEXT("ThumperCap")))
+		ItemID == FName(TEXT("Cap")) || ItemID == FName(TEXT("ThumperCap")) ||
+		ItemID == FName(TEXT("CapArm")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -803,6 +804,51 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), StillGhostYaw);
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		return;
+	}
+
+	// CapArm bridges Cap to ThumperCap; requires BOTH to be placed first.
+	if (GhostPartID == FName(TEXT("CapArm")))
+	{
+		AStillPartActor* PlacedCap = FindPlacedPart(FName(TEXT("Cap")));
+		AStillPartActor* PlacedThumperCap = FindPlacedPart(FName(TEXT("ThumperCap")));
+
+		if (!PlacedCap)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
+		}
+		if (!PlacedThumperCap)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
+		}
+
+		if (PlacedCap && PlacedThumperCap)
+		{
+			const FVector MountWorld = PlacedCap->GetActorTransform().TransformPosition(CapArmMountOffset);
+			const float Dist = FVector::Dist(AimPoint, MountWorld);
+			const bool bValid = Dist <= StillSnapRadiusCm;
+
+			UE_LOG(LogTemp, Warning, TEXT("CapArm snap: cap=%s mount=%s aim=%s dist=%.1f valid=%d"),
+				*PlacedCap->GetName(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
+
+			if (bValid)
+			{
+				const FRotator SnapRot(0.0f, PlacedCap->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
+				GhostSnapTransform = FTransform(SnapRot, MountWorld);
+				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
+				bGhostSnapValid = true;
+			}
+		}
+
+		if (bGhostSnapValid)
+		{
+			SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f));
+		}
+		else
+		{
+			GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+			SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+		}
 		return;
 	}
 

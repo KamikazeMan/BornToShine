@@ -80,6 +80,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	FVector ThumperCapMountOffset = FVector(0.0f, 0.0f, 78.13f); // ThumperBody origin -> ThumperCap mount
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FVector CapArmMountOffset = FVector(70.69f, 0.0f, 12.0f);    // Cap origin -> CapArm mount
+
 	// Raises floor-placed still parts so a center-pivot mesh sits ON the floor instead of half-buried.
 	// 7.62cm = half the 6-inch stand height (starting guess).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
