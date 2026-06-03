@@ -555,7 +555,8 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 	if (ItemID == FName(TEXT("Pot")) || ItemID == FName(TEXT("ThumperBody")) ||
 		ItemID == FName(TEXT("WormBarrel")) || ItemID == FName(TEXT("CinderBlockStand")) ||
 		ItemID == FName(TEXT("Cap")) || ItemID == FName(TEXT("ThumperCap")) ||
-		ItemID == FName(TEXT("CapArm")))
+		ItemID == FName(TEXT("CapArm")) ||
+		ItemID == FName(TEXT("OutletPipe")) || ItemID == FName(TEXT("WormCoil")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -807,38 +808,64 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		return;
 	}
 
-	// CapArm bridges Cap to ThumperCap; requires BOTH to be placed first.
-	// Uses the SAME tint + snap pattern as the Cap/vessel blocks below.
-	const bool bIsCapArm = (GhostPartID == FName(TEXT("CapArm")));
+	// Cap-like snap: parts that snap onto a placed parent actor with a local offset.
+	// Cap/ThumperCap/CapArm/OutletPipe/WormCoil all share this path.
+	const bool bIsCapLike =
+		GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")) ||
+		GhostPartID == FName(TEXT("CapArm")) ||
+		GhostPartID == FName(TEXT("OutletPipe")) || GhostPartID == FName(TEXT("WormCoil"));
 
-	// Cap/ThumperCap/CapArm all share this snap-to-parent path.
-	const bool bIsCap = (GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")));
-
-	if (bIsCapArm || bIsCap)
+	if (bIsCapLike)
 	{
 		FName SnapTargetID;   // which placed part we snap onto
 		FVector MountOffset;  // local offset on that target
 		const TCHAR* Label = TEXT("?");
 
-		if (bIsCapArm)
+		if (GhostPartID == FName(TEXT("CapArm")))
 		{
 			Label = TEXT("CapArm");
 			SnapTargetID = FName(TEXT("Cap"));
 			MountOffset = CapArmMountOffset;
 
 			// Dual prerequisite: BOTH Cap AND ThumperCap must be placed.
-			AStillPartActor* PlacedCap = FindPlacedPart(FName(TEXT("Cap")));
-			AStillPartActor* PlacedThumperCap = FindPlacedPart(FName(TEXT("ThumperCap")));
-			if (!PlacedCap)
+			AStillPartActor* PC = FindPlacedPart(FName(TEXT("Cap")));
+			AStillPartActor* PTC = FindPlacedPart(FName(TEXT("ThumperCap")));
+			if (!PC)  UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
+			if (!PTC) UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
+			if (!PC || !PTC)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+				return;
 			}
-			if (!PlacedThumperCap)
+		}
+		else if (GhostPartID == FName(TEXT("OutletPipe")))
+		{
+			Label = TEXT("OutletPipe");
+			SnapTargetID = FName(TEXT("ThumperBody"));
+			MountOffset = OutletPipeMountOffset;
+
+			// Dual prerequisite: BOTH ThumperBody AND WormBarrel must be placed.
+			AStillPartActor* PTB = FindPlacedPart(FName(TEXT("ThumperBody")));
+			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
+			if (!PTB) UE_LOG(LogTemp, Warning, TEXT("OutletPipe requires ThumperBody to be placed first"));
+			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("OutletPipe requires WormBarrel to be placed first"));
+			if (!PTB || !PWB)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
+				return;
 			}
-			if (!PlacedCap || !PlacedThumperCap)
+		}
+		else if (GhostPartID == FName(TEXT("WormCoil")))
+		{
+			Label = TEXT("WormCoil");
+			SnapTargetID = FName(TEXT("WormBarrel"));
+			MountOffset = WormCoilMountOffset;
+
+			if (!FindPlacedPart(FName(TEXT("WormBarrel"))))
 			{
+				UE_LOG(LogTemp, Warning, TEXT("WormCoil requires WormBarrel to be placed first"));
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
