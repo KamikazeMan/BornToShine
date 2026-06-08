@@ -670,6 +670,86 @@ AStillPartActor* AMoonshineCharacter_Simple::FindPlacedPart(FName PartID) const
 	return nullptr;
 }
 
+namespace
+{
+	// Required parts for a complete Tier 2 Pot Still. MasonJarLid is intentionally EXCLUDED:
+	// the empty MasonJar is the catch vessel and is required; the lid is a later output mechanic.
+	static const FName RequiredStillParts[] = {
+		FName(TEXT("CinderBlockStand")),
+		FName(TEXT("Pot")),
+		FName(TEXT("Cap")),
+		FName(TEXT("CapArm")),
+		FName(TEXT("ThumperBody")),
+		FName(TEXT("ThumperCap")),
+		FName(TEXT("OutletPipe")),
+		FName(TEXT("WormBarrel")),
+		FName(TEXT("WormCoil")),
+		FName(TEXT("MasonJar")),
+	};
+}
+
+bool AMoonshineCharacter_Simple::IsStillComplete() const
+{
+	// Tally which required types are present in a single pass over placed parts; ignore extras/dupes.
+	bool bFound[UE_ARRAY_COUNT(RequiredStillParts)] = { false };
+	for (const AStillPartActor* Part : PlacedStillParts)
+	{
+		if (!IsValid(Part)) continue;
+		for (int32 i = 0; i < UE_ARRAY_COUNT(RequiredStillParts); ++i)
+		{
+			if (Part->PartID == RequiredStillParts[i]) { bFound[i] = true; break; }
+		}
+	}
+
+	for (int32 i = 0; i < UE_ARRAY_COUNT(RequiredStillParts); ++i)
+	{
+		if (!bFound[i]) return false;
+	}
+	return true;
+}
+
+void AMoonshineCharacter_Simple::LogMissingStillParts() const
+{
+	FString Missing;
+	for (const FName& Req : RequiredStillParts)
+	{
+		if (!FindPlacedPart(Req))
+		{
+			if (!Missing.IsEmpty()) Missing += TEXT(", ");
+			Missing += Req.ToString();
+		}
+	}
+	if (!Missing.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Still missing: %s"), *Missing);
+	}
+}
+
+void AMoonshineCharacter_Simple::CheckStillCompletion()
+{
+	const bool bNowComplete = IsStillComplete();
+
+	if (bNowComplete && !bStillComplete)
+	{
+		bStillComplete = true;
+		UE_LOG(LogTemp, Warning, TEXT("=== STILL COMPLETE — ready to operate ==="));
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Still complete — ready to operate"));
+		}
+	}
+	else if (!bNowComplete && bStillComplete)
+	{
+		bStillComplete = false;
+		UE_LOG(LogTemp, Warning, TEXT("Still no longer complete"));
+	}
+
+	if (!bNowComplete)
+	{
+		LogMissingStillParts();
+	}
+}
+
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
 {
 	if (!GhostDynamicMaterial) return;
@@ -1063,6 +1143,9 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
+
+		// Detection only: re-evaluate whether the full Tier 2 still is now assembled.
+		CheckStillCompletion();
 	}
 
 	CancelStillGhost();

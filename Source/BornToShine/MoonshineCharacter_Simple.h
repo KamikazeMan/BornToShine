@@ -170,6 +170,21 @@ protected:
 	// Finds the first placed still part with the given PartID (nullptr if none).
 	class AStillPartActor* FindPlacedPart(FName PartID) const;
 
+	// --- Still assembly completion (detection only; no operation/state machine yet) ---
+
+	// True only when every required Tier 2 Pot Still part is placed. The empty MasonJar (catch
+	// vessel) IS required; the MasonJarLid is an output mechanic and is EXCLUDED.
+	bool IsStillComplete() const;
+
+	// Re-evaluates IsStillComplete() and logs/notifies only on a false<->true transition.
+	void CheckStillCompletion();
+
+	// Logs the required part types not yet placed (excludes MasonJarLid).
+	void LogMissingStillParts() const;
+
+	// Latched completion state; only transitions trigger logging/on-screen messages.
+	bool bStillComplete = false;
+
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
 
