@@ -13,6 +13,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "StillPartActor.h"
+#include "BornToShineHUD.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
@@ -648,9 +649,6 @@ namespace
 	static const FVector PotMountLocal(-121.69f, 0.47f, 49.0f);   // LEFT stand   -> Pot
 	static const FVector ThumperMountLocal(0.0f, -1.11f, 49.0f);  // MIDDLE stand -> Thumper Body
 	static const FVector BarrelMountLocal(122.60f, 0.0f, 49.0f);  // RIGHT stand  -> Worm Barrel
-
-	// How close the player's aim must be to the mount point (world cm) to snap.
-	static constexpr float StillSnapRadiusCm = 100.0f;
 }
 
 AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
@@ -704,6 +702,11 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 		PC->bShowMouseCursor = false;
 		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
+
+		if (ABornToShineHUD* HUD = Cast<ABornToShineHUD>(PC->GetHUD()))
+		{
+			HUD->SetCrosshairVisible(true);
+		}
 	}
 
 	// Look up the part's mesh from the data table.
@@ -760,13 +763,11 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	}
 	const FVector CamFwd = CamRot.Vector();
 	const FVector TraceStart = CamLoc;
-	const FVector TraceEnd = CamLoc + CamFwd * 2000.0f;
+	const FVector TraceEnd = CamLoc + CamFwd * MaxAimDistanceCm;
 
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
-	// CRITICAL: the ghost must not block the trace, or the impact point is always on the ghost
-	// right in front of the camera.
 	if (GhostStillPart) Params.AddIgnoredActor(GhostStillPart);
 	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params);
 	const FVector AimPoint = bHit ? Hit.ImpactPoint : TraceEnd;
@@ -912,12 +913,15 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		else
 		{
 			const FVector MountWorld = SnapTarget->GetActorTransform().TransformPosition(MountOffset);
-			const float Dist = FVector::Dist(AimPoint, MountWorld);
-			const bool bValid = Dist <= StillSnapRadiusCm;
+			const FVector ToMount = MountWorld - CamLoc;
+			const float Along = FVector::DotProduct(ToMount, CamFwd);
+			const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
+			const float RayDist = FVector::Dist(ClosestOnRay, MountWorld);
+			const bool bValid = (Along > 0.0f) && (RayDist <= StillSnapRadiusCm);
 
-			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f offset=%s mount=%s aim=%s dist=%.1f valid=%d"),
+			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f mount=%s rayDist=%.1f along=%.0f valid=%d"),
 				Label, *SnapTarget->GetName(), SnapTarget->GetActorRotation().Yaw,
-				*MountOffset.ToString(), *MountWorld.ToString(), *AimPoint.ToString(), Dist, bValid ? 1 : 0);
+				*MountWorld.ToString(), RayDist, Along, bValid ? 1 : 0);
 
 			if (bValid)
 			{
@@ -961,11 +965,14 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		FVector MountWorld = Stand->GetActorTransform().TransformPosition(MountLocal);
 		MountWorld.Z += ZAdjust;
 
-		const float Dist = FVector::Dist(AimPoint, MountWorld);
-		const bool bValid = Dist <= StillSnapRadiusCm;
+		const FVector ToMount = MountWorld - CamLoc;
+		const float Along = FVector::DotProduct(ToMount, CamFwd);
+		const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
+		const float RayDist = FVector::Dist(ClosestOnRay, MountWorld);
+		const bool bValid = (Along > 0.0f) && (RayDist <= StillSnapRadiusCm);
 
-		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s aim=%s dist=%.1f radius=%.1f valid=%d"),
-			VesselName, *MountWorld.ToString(), *AimPoint.ToString(), Dist, StillSnapRadiusCm, bValid ? 1 : 0);
+		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s rayDist=%.1f along=%.0f valid=%d"),
+			VesselName, *MountWorld.ToString(), RayDist, Along, bValid ? 1 : 0);
 
 		if (bValid)
 		{
@@ -1049,6 +1056,11 @@ void AMoonshineCharacter_Simple::CancelStillGhost()
 		PC->bShowMouseCursor = false;
 		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
+
+		if (ABornToShineHUD* HUD = Cast<ABornToShineHUD>(PC->GetHUD()))
+		{
+			HUD->SetCrosshairVisible(false);
+		}
 	}
 }
 

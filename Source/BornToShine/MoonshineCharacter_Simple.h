@@ -117,6 +117,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandPlacementYaw = 90.0f;
 
+	// Max distance (cm) the player can aim to reach a snap point; also the trace length.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float MaxAimDistanceCm = 500.0f;
+
+	// Perpendicular ray-to-mount distance (cm) for a snap to be valid.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float StillSnapRadiusCm = 35.0f;
+
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
 
