@@ -781,14 +781,13 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
 		GridLoc.Z = AimPoint.Z + FloorSpawnZOffset;
 
-		// Auto-rotate to face the player using camera yaw + tunable offset.
-		const FRotator GridRot(0.0f, CamRot.Yaw + StandFacingYawOffset, 0.0f);
+		const FRotator GridRot(0.0f, StandPlacementYaw, 0.0f);
 
 		GhostSnapTransform = FTransform(GridRot, GridLoc);
 		GhostStillPart->SetActorLocationAndRotation(GridLoc, GridRot);
 		bGhostSnapValid = true; // floor is always a valid target
 
-		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f (cam=%.0f + offset=%.0f)"), *AimPoint.ToString(), *GridLoc.ToString(), GridRot.Yaw, CamRot.Yaw, StandFacingYawOffset);
+		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), StandPlacementYaw);
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
 		return;
 	}

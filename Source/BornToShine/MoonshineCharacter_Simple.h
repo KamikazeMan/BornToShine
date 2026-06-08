@@ -101,9 +101,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandGridSizeCm = 100.0f;
 
-	// Yaw offset added to the camera yaw when auto-orienting the stand to face the player.
+	// Fixed yaw applied to the CinderBlockStand when placed (tune in PIE; try 90 or -90).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
-	float StandFacingYawOffset = 0.0f;
+	float StandPlacementYaw = 90.0f;
 
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ToggleInventoryUI();
