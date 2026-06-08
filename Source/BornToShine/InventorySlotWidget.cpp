@@ -11,6 +11,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Blueprint/WidgetTree.h"
+#include "Engine/Texture2D.h"
 
 TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 {
@@ -101,7 +102,19 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 	FItemDataRow* Data = InInventoryRef->GetItemDataRaw(InItemID);
 	if (Data)
 	{
-		ColorRect->SetColorAndOpacity(GetCategoryColor(Data->Category));
+		if (Data->Icon)
+		{
+			ColorRect->SetBrushFromTexture(Data->Icon);
+			ColorRect->SetColorAndOpacity(FLinearColor::White);
+		}
+		else
+		{
+			FSlateBrush WhiteBrush;
+			WhiteBrush.TintColor = FSlateColor(FLinearColor::White);
+			WhiteBrush.DrawAs = ESlateBrushDrawType::Image;
+			ColorRect->SetBrush(WhiteBrush);
+			ColorRect->SetColorAndOpacity(GetCategoryColor(Data->Category));
+		}
 		NameText->SetText(Data->DisplayName);
 
 		FString TooltipStr = FString::Printf(TEXT("%s\nCategory: %s\nID: %s"),
@@ -128,6 +141,10 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 void UInventorySlotWidget::ClearSlot()
 {
 	CurrentItemID = NAME_None;
+	FSlateBrush EmptyBrush;
+	EmptyBrush.TintColor = FSlateColor(FLinearColor::White);
+	EmptyBrush.DrawAs = ESlateBrushDrawType::Image;
+	ColorRect->SetBrush(EmptyBrush);
 	ColorRect->SetColorAndOpacity(FLinearColor(0.15f, 0.12f, 0.09f, 0.1f));
 	NameText->SetText(FText::FromString(TEXT("")));
 	QuantityText->SetText(FText::FromString(TEXT("")));
