@@ -13,6 +13,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "TimerManager.h"
 #include "StillPartActor.h"
 #include "BornToShineHUD.h"
 #include "Materials/MaterialInterface.h"
@@ -120,6 +121,9 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 	{
 		UpdateStillGhost();
 	}
+
+	// Show the operation prompt when aiming at the Pot of a completed still.
+	UpdateStillPrompt();
 }
 
 void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -224,6 +228,9 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 	// Debug keys (raw bindings alongside Enhanced Input)
 	PlayerInputComponent->BindKey(EKeys::Backslash, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugGrantStillParts);
 	PlayerInputComponent->BindKey(EKeys::P, IE_Pressed, this, &AMoonshineCharacter_Simple::DebugDumpInventory);
+
+	// Still operation: E interacts with the Pot of a completed still.
+	PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &AMoonshineCharacter_Simple::InteractWithStill);
 }
 
 void AMoonshineCharacter_Simple::Move(const FInputActionValue& Value)
@@ -748,6 +755,121 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 	{
 		LogMissingStillParts();
 	}
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
+{
+	// Same camera-forward trace pattern as UpdateStillGhost.
+	FVector CamLoc = GetActorLocation();
+	FRotator CamRot = GetActorRotation();
+	if (AController* C = GetController())
+	{
+		C->GetPlayerViewPoint(CamLoc, CamRot);
+	}
+	const FVector TraceEnd = CamLoc + CamRot.Vector() * MaxAimDistanceCm;
+
+	FHitResult Hit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	if (!GetWorld()->LineTraceSingleByChannel(Hit, CamLoc, TraceEnd, ECC_Visibility, Params))
+	{
+		return nullptr;
+	}
+
+	AStillPartActor* Part = Cast<AStillPartActor>(Hit.GetActor());
+	if (Part && Part->PartID == FName(TEXT("Pot")))
+	{
+		return Part;
+	}
+	return nullptr;
+}
+
+void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
+{
+	if (CurrentStillState == NewState) return;
+
+	static const TCHAR* StateNames[] = { TEXT("Empty"), TEXT("Water"), TEXT("Mash"), TEXT("Lit"), TEXT("Running"), TEXT("Done") };
+	UE_LOG(LogTemp, Warning, TEXT("Still state: %s -> %s"),
+		StateNames[(uint8)CurrentStillState], StateNames[(uint8)NewState]);
+	CurrentStillState = NewState;
+}
+
+void AMoonshineCharacter_Simple::InteractWithStill()
+{
+	// Interaction only works on a complete still while aiming at its Pot.
+	if (!bStillComplete) return;
+	if (!GetAimedPot()) return;
+
+	switch (CurrentStillState)
+	{
+	case EStillState::Empty:
+		SetStillState(EStillState::Water);
+		UE_LOG(LogTemp, Warning, TEXT("Water added"));
+		break;
+
+	case EStillState::Water:
+		SetStillState(EStillState::Mash);
+		UE_LOG(LogTemp, Warning, TEXT("Mash added"));
+		break;
+
+	case EStillState::Mash:
+		// Light the fire and immediately begin the distilling run.
+		SetStillState(EStillState::Lit);
+		SetStillState(EStillState::Running);
+		UE_LOG(LogTemp, Warning, TEXT("Fire lit — distilling"));
+		GetWorldTimerManager().SetTimer(BatchTimerHandle, this,
+			&AMoonshineCharacter_Simple::OnBatchComplete, FMath::Max(BatchTimeSeconds, 0.01f), false);
+		break;
+
+	case EStillState::Running:
+		// In progress — ignore.
+		break;
+
+	case EStillState::Done:
+		// Collection handled in a later increment — ignore for now.
+		break;
+
+	default:
+		break;
+	}
+}
+
+void AMoonshineCharacter_Simple::OnBatchComplete()
+{
+	SetStillState(EStillState::Done);
+	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE ==="));
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Batch complete — jar full"));
+	}
+	UE_LOG(LogTemp, Warning, TEXT("Would produce %d jars"), JarsPerRun);
+}
+
+void AMoonshineCharacter_Simple::UpdateStillPrompt()
+{
+	if (!bStillComplete) return;
+	if (!GetAimedPot()) return;
+	if (!GEngine) return;
+
+	FString Prompt;
+	switch (CurrentStillState)
+	{
+	case EStillState::Empty: Prompt = TEXT("Press E: Add Water"); break;
+	case EStillState::Water: Prompt = TEXT("Press E: Add Mash"); break;
+	case EStillState::Mash:  Prompt = TEXT("Press E: Light Fire"); break;
+	case EStillState::Lit:   Prompt = TEXT("Distilling…"); break;
+	case EStillState::Running:
+	{
+		const float Remaining = GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle);
+		Prompt = FString::Printf(TEXT("Distilling… %ds"), FMath::Max(0, FMath::CeilToInt(Remaining)));
+		break;
+	}
+	case EStillState::Done:  Prompt = TEXT("Batch complete — jar full"); break;
+	default: break;
+	}
+
+	// Fixed key so the prompt refreshes in place instead of stacking each tick.
+	GEngine->AddOnScreenDebugMessage(7001, 0.2f, FColor::Yellow, Prompt);
 }
 
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)

@@ -13,6 +13,18 @@ class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class AStillPartActor;
 
+/** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
+UENUM(BlueprintType)
+enum class EStillState : uint8
+{
+	Empty   UMETA(DisplayName="Empty"),
+	Water   UMETA(DisplayName="Water Added"),
+	Mash    UMETA(DisplayName="Mash Added"),
+	Lit     UMETA(DisplayName="Fire Lit"),
+	Running UMETA(DisplayName="Distilling"),
+	Done    UMETA(DisplayName="Batch Complete")
+};
+
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
  * Much cleaner architecture - character handles movement, component handles building
@@ -184,6 +196,38 @@ protected:
 
 	// Latched completion state; only transitions trigger logging/on-screen messages.
 	bool bStillComplete = false;
+
+	// --- Still operation (skeleton: placeholder timer, no real ingredients/jars yet) ---
+
+	// Current operating state of the completed still.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Moonshine")
+	EStillState CurrentStillState = EStillState::Empty;
+
+	// How long a distilling run takes once the fire is lit (seconds).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	float BatchTimeSeconds = 300.0f;
+
+	// Jars produced per completed run. Stored now; consumed by the output increment later.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	int32 JarsPerRun = 15;
+
+	// Running-state countdown timer.
+	FTimerHandle BatchTimerHandle;
+
+	// E-key interaction: advance the still's state when aiming at the Pot and the still is complete.
+	void InteractWithStill();
+
+	// Returns the placed Pot the player is currently aiming at (camera-forward trace), or nullptr.
+	class AStillPartActor* GetAimedPot() const;
+
+	// Applies a state transition with a single concise log line.
+	void SetStillState(EStillState NewState);
+
+	// Running timer callback: Running -> Done.
+	void OnBatchComplete();
+
+	// Per-tick on-screen prompt shown while aiming at the Pot of a complete still.
+	void UpdateStillPrompt();
 
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
