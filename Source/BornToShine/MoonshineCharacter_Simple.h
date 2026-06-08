@@ -84,6 +84,9 @@ public:
 	FVector CapArmMountOffset = FVector(70.69f, 0.0f, 12.0f);    // Cap origin -> CapArm mount
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FRotator CapArmMountRotation = FRotator(0.0f, 0.0f, 0.0f);   // fine rotation tweak so cap arm aligns with thumper cap
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	FVector OutletPipeMountOffset = FVector(59.73f, 0.0f, 78.0f); // ThumperBody origin -> OutletPipe mount
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")

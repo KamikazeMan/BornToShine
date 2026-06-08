@@ -819,6 +819,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	{
 		FName SnapTargetID;   // which placed part we snap onto
 		FVector MountOffset;  // local offset on that target
+		FRotator MountRotation = FRotator::ZeroRotator; // per-part fine rotation tweak
 		const TCHAR* Label = TEXT("?");
 
 		if (GhostPartID == FName(TEXT("CapArm")))
@@ -826,6 +827,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			Label = TEXT("CapArm");
 			SnapTargetID = FName(TEXT("Cap"));
 			MountOffset = CapArmMountOffset;
+			MountRotation = CapArmMountRotation;
 
 			// Dual prerequisite: BOTH Cap AND ThumperCap must be placed.
 			AStillPartActor* PC = FindPlacedPart(FName(TEXT("Cap")));
@@ -901,7 +903,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 			if (bValid)
 			{
-				const FRotator SnapRot(0.0f, SnapTarget->GetActorRotation().Yaw + StillGhostYaw, 0.0f);
+				const FRotator SnapRot = SnapTarget->GetActorRotation() + MountRotation + FRotator(0.0f, StillGhostYaw, 0.0f);
 				GhostSnapTransform = FTransform(SnapRot, MountWorld);
 				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
 				bGhostSnapValid = true;
