@@ -93,7 +93,7 @@ public:
 	FVector WormCoilMountOffset = FVector(-34.72f, 0.0f, 0.0f);   // WormBarrel origin -> WormCoil mount
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
-	FVector MasonJarMountOffset = FVector(0.0f, 25.0f, -49.0f);   // WormBarrel origin -> MasonJar mount
+	FVector MasonJarMountOffset = FVector(48.67f, 0.285f, -49.57f); // WormBarrel origin -> MasonJar mount
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	FRotator MasonJarMountRotation = FRotator(0.0f, 0.0f, 0.0f);
