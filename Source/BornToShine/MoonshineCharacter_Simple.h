@@ -173,6 +173,11 @@ protected:
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
 
+	// World-space VISUAL center the ghost mesh would have at CandidateXform. Used as the snap
+	// AIM target so the player aims at the part's body, not its (possibly offset) pivot. Falls
+	// back to PivotFallback when the ghost has no mesh.
+	FVector GhostVisualCenter(const FTransform& CandidateXform, const FVector& PivotFallback) const;
+
 	// Input callbacks - Movement
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);

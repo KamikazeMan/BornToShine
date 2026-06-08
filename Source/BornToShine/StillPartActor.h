@@ -28,6 +28,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
 	UStaticMeshComponent* MeshComponent;
 
+	// How close the camera ray must pass to this part's visual center to trigger the snap (cm).
+	// Per-part so tiny parts (e.g. MasonJarLid) can use a larger aim radius than big vessels.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float SnapRadiusCm = 35.0f;
+
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);
 };

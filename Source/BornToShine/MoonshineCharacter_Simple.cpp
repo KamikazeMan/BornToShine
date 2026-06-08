@@ -12,6 +12,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/StaticMeshActor.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "StillPartActor.h"
 #include "BornToShineHUD.h"
 #include "Materials/MaterialInterface.h"
@@ -749,6 +750,23 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 		*PartID.ToString(), bGhostFloorGridMode ? TEXT("floor-grid") : TEXT("mount-snap"));
 }
 
+FVector AMoonshineCharacter_Simple::GhostVisualCenter(const FTransform& CandidateXform, const FVector& PivotFallback) const
+{
+	if (IsValid(GhostStillPart) && GhostStillPart->MeshComponent)
+	{
+		if (const UStaticMesh* Mesh = GhostStillPart->MeshComponent->GetStaticMesh())
+		{
+			// Mesh-local bounds center transformed by the transform the part WOULD have when snapped.
+			// Independent of the ghost's current frame position, so there's no one-frame lag.
+			const FVector LocalCenter = Mesh->GetBoundingBox().GetCenter();
+			FTransform Xform = CandidateXform;
+			Xform.SetScale3D(GhostStillPart->GetActorScale3D());
+			return Xform.TransformPosition(LocalCenter);
+		}
+	}
+	return PivotFallback;
+}
+
 void AMoonshineCharacter_Simple::UpdateStillGhost()
 {
 	if (!IsValid(GhostStillPart)) return;
@@ -913,19 +931,26 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		else
 		{
 			const FVector MountWorld = SnapTarget->GetActorTransform().TransformPosition(MountOffset);
-			const FVector ToMount = MountWorld - CamLoc;
+			const FRotator SnapRot = SnapTarget->GetActorRotation() + MountRotation;
+
+			// Aim at the part's VISUAL center, not its pivot. Compute the mesh's local-space bounds
+			// center and transform it by the candidate snapped transform — independent of the ghost's
+			// current frame position (no one-frame lag). Snap POSITION stays MountWorld unchanged.
+			const FVector AimTarget = GhostVisualCenter(FTransform(SnapRot, MountWorld), MountWorld);
+			const float SnapRadius = IsValid(GhostStillPart) ? GhostStillPart->SnapRadiusCm : StillSnapRadiusCm;
+
+			const FVector ToMount = AimTarget - CamLoc;
 			const float Along = FVector::DotProduct(ToMount, CamFwd);
 			const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
-			const float RayDist = FVector::Dist(ClosestOnRay, MountWorld);
-			const bool bValid = (Along > 0.0f) && (RayDist <= StillSnapRadiusCm);
+			const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
+			const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
 
-			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f mount=%s rayDist=%.1f along=%.0f valid=%d"),
+			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f mount=%s aim=%s rayDist=%.1f along=%.0f r=%.1f valid=%d"),
 				Label, *SnapTarget->GetName(), SnapTarget->GetActorRotation().Yaw,
-				*MountWorld.ToString(), RayDist, Along, bValid ? 1 : 0);
+				*MountWorld.ToString(), *AimTarget.ToString(), RayDist, Along, SnapRadius, bValid ? 1 : 0);
 
 			if (bValid)
 			{
-				const FRotator SnapRot = SnapTarget->GetActorRotation() + MountRotation;
 				GhostSnapTransform = FTransform(SnapRot, MountWorld);
 				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
 				bGhostSnapValid = true;
@@ -965,18 +990,23 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		FVector MountWorld = Stand->GetActorTransform().TransformPosition(MountLocal);
 		MountWorld.Z += ZAdjust;
 
-		const FVector ToMount = MountWorld - CamLoc;
+		const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
+
+		// Aim at the vessel's VISUAL center, not its pivot. Snap POSITION stays MountWorld unchanged.
+		const FVector AimTarget = GhostVisualCenter(FTransform(SnapRot, MountWorld), MountWorld);
+		const float SnapRadius = IsValid(GhostStillPart) ? GhostStillPart->SnapRadiusCm : StillSnapRadiusCm;
+
+		const FVector ToMount = AimTarget - CamLoc;
 		const float Along = FVector::DotProduct(ToMount, CamFwd);
 		const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
-		const float RayDist = FVector::Dist(ClosestOnRay, MountWorld);
-		const bool bValid = (Along > 0.0f) && (RayDist <= StillSnapRadiusCm);
+		const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
+		const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
 
-		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s rayDist=%.1f along=%.0f valid=%d"),
-			VesselName, *MountWorld.ToString(), RayDist, Along, bValid ? 1 : 0);
+		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s aim=%s rayDist=%.1f along=%.0f r=%.1f valid=%d"),
+			VesselName, *MountWorld.ToString(), *AimTarget.ToString(), RayDist, Along, SnapRadius, bValid ? 1 : 0);
 
 		if (bValid)
 		{
-			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
 			GhostSnapTransform = FTransform(SnapRot, MountWorld);
 			GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
 			bGhostSnapValid = true;
