@@ -754,11 +754,11 @@ FVector AMoonshineCharacter_Simple::GhostVisualCenter(const FTransform& Candidat
 {
 	if (IsValid(GhostStillPart) && GhostStillPart->MeshComponent)
 	{
-		if (const UStaticMesh* Mesh = GhostStillPart->MeshComponent->GetStaticMesh())
+		if (const UStaticMesh* GhostMesh = GhostStillPart->MeshComponent->GetStaticMesh())
 		{
 			// Mesh-local bounds center transformed by the transform the part WOULD have when snapped.
 			// Independent of the ghost's current frame position, so there's no one-frame lag.
-			const FVector LocalCenter = Mesh->GetBoundingBox().GetCenter();
+			const FVector LocalCenter = GhostMesh->GetBoundingBox().GetCenter();
 			FTransform Xform = CandidateXform;
 			Xform.SetScale3D(GhostStillPart->GetActorScale3D());
 			return Xform.TransformPosition(LocalCenter);
