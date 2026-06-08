@@ -543,7 +543,7 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 		ItemID == FName(TEXT("Cap")) || ItemID == FName(TEXT("ThumperCap")) ||
 		ItemID == FName(TEXT("CapArm")) ||
 		ItemID == FName(TEXT("OutletPipe")) || ItemID == FName(TEXT("WormCoil")) ||
-		ItemID == FName(TEXT("Mason_Jar")) || ItemID == FName(TEXT("Mason_Jar_Lid")))
+		ItemID == FName(TEXT("MasonJar")) || ItemID == FName(TEXT("MasonJarLid")))
 	{
 		BeginStillGhostPlacement(ItemID);
 		return;
@@ -798,7 +798,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GhostPartID == FName(TEXT("Cap")) || GhostPartID == FName(TEXT("ThumperCap")) ||
 		GhostPartID == FName(TEXT("CapArm")) ||
 		GhostPartID == FName(TEXT("OutletPipe")) || GhostPartID == FName(TEXT("WormCoil")) ||
-		GhostPartID == FName(TEXT("Mason_Jar")) || GhostPartID == FName(TEXT("Mason_Jar_Lid"));
+		GhostPartID == FName(TEXT("MasonJar")) || GhostPartID == FName(TEXT("MasonJarLid"));
 
 	if (bIsCapLike)
 	{
@@ -858,17 +858,17 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 				return;
 			}
 		}
-		else if (GhostPartID == FName(TEXT("Mason_Jar")))
+		else if (GhostPartID == FName(TEXT("MasonJar")))
 		{
-			Label = TEXT("Mason_Jar");
+			Label = TEXT("MasonJar");
 			SnapTargetID = FName(TEXT("WormBarrel"));
 			MountOffset = MasonJarMountOffset;
 			MountRotation = MasonJarMountRotation;
 
 			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
 			AStillPartActor* PWC = FindPlacedPart(FName(TEXT("WormCoil")));
-			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("Mason_Jar requires WormBarrel to be placed first"));
-			if (!PWC) UE_LOG(LogTemp, Warning, TEXT("Mason_Jar requires WormCoil to be placed first"));
+			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("MasonJar requires WormBarrel to be placed first"));
+			if (!PWC) UE_LOG(LogTemp, Warning, TEXT("MasonJar requires WormCoil to be placed first"));
 			if (!PWB || !PWC)
 			{
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
@@ -876,16 +876,16 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 				return;
 			}
 		}
-		else if (GhostPartID == FName(TEXT("Mason_Jar_Lid")))
+		else if (GhostPartID == FName(TEXT("MasonJarLid")))
 		{
-			Label = TEXT("Mason_Jar_Lid");
-			SnapTargetID = FName(TEXT("Mason_Jar"));
+			Label = TEXT("MasonJarLid");
+			SnapTargetID = FName(TEXT("MasonJar"));
 			MountOffset = MasonJarLidMountOffset;
 			MountRotation = MasonJarLidMountRotation;
 
-			if (!FindPlacedPart(FName(TEXT("Mason_Jar"))))
+			if (!FindPlacedPart(FName(TEXT("MasonJar"))))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Mason_Jar_Lid requires Mason_Jar to be placed first"));
+				UE_LOG(LogTemp, Warning, TEXT("MasonJarLid requires MasonJar to be placed first"));
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;

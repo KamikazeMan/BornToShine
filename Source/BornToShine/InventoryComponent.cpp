@@ -110,7 +110,7 @@ void UInventoryComponent::DebugGrantStillParts()
 	AddItem(TEXT("WormBarrel"), 1);
 	AddItem(TEXT("WormCoil"), 1);
 	AddItem(TEXT("Thermometer"), 1);
-	AddItem(TEXT("Mason_Jar"), 1);
-	AddItem(TEXT("Mason_Jar_Lid"), 1);
+	AddItem(TEXT("MasonJar"), 1);
+	AddItem(TEXT("MasonJarLid"), 1);
 	DebugLogInventory();
 }
