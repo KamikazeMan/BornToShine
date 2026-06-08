@@ -92,6 +92,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	FVector WormCoilMountOffset = FVector(-34.72f, 0.0f, 0.0f);   // WormBarrel origin -> WormCoil mount
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FVector MasonJarMountOffset = FVector(0.0f, 25.0f, -49.0f);   // WormBarrel origin -> MasonJar mount
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FRotator MasonJarMountRotation = FRotator(0.0f, 0.0f, 0.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FVector MasonJarLidMountOffset = FVector(-0.025f, 0.01f, 6.93f); // MasonJar origin -> MasonJarLid mount
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	FRotator MasonJarLidMountRotation = FRotator(0.0f, 0.0f, 0.0f);
+
 	// Raises floor-placed still parts so a center-pivot mesh sits ON the floor instead of half-buried.
 	// 7.62cm = half the 6-inch stand height (starting guess).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
