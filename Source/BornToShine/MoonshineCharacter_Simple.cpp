@@ -834,7 +834,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			if (!PTC) UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
 			if (!PC || !PTC)
 			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator(0.0f, StillGhostYaw, 0.0f));
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
 			}
@@ -852,7 +852,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("OutletPipe requires WormBarrel to be placed first"));
 			if (!PTB || !PWB)
 			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator(0.0f, StillGhostYaw, 0.0f));
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
 			}
@@ -866,7 +866,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			if (!FindPlacedPart(FName(TEXT("WormBarrel"))))
 			{
 				UE_LOG(LogTemp, Warning, TEXT("WormCoil requires WormBarrel to be placed first"));
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator(0.0f, StillGhostYaw, 0.0f));
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
 			}
@@ -914,7 +914,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else
 		{
-			GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+			GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator(0.0f, StillGhostYaw, 0.0f));
 			SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f)); // red = invalid
 		}
 		return;
@@ -964,8 +964,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	}
 	else
 	{
-		// Free-follow the aim point, invalid tint.
-		GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
+		GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator(0.0f, StillGhostYaw, 0.0f));
 		SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f)); // red = invalid
 	}
 }
