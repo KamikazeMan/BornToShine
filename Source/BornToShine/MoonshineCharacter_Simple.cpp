@@ -642,6 +642,15 @@ AStillPartActor* AMoonshineCharacter_Simple::FindPlacedPart(FName PartID) const
 
 namespace
 {
+	// Fixed on-screen message keys so repeated calls overwrite in place instead of stacking.
+	constexpr uint64 MsgKeyStillPrompt    = 0x5717; // aim-at-pot interact prompt (per tick)
+	constexpr uint64 MsgKeyStillCountdown = 0x5718; // "Distilling… Ns" countdown (per tick)
+	constexpr uint64 MsgKeyStillComplete  = 0x5719; // green "Still complete" transition
+	constexpr uint64 MsgKeyBatchComplete  = 0x571A; // green "Batch complete" event
+	constexpr uint64 MsgKeyNeedWater      = 0x571B; // red requirement failures (E presses)
+	constexpr uint64 MsgKeyNeedMash       = 0x571C;
+	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
+
 	// Required parts for a complete Tier 2 Pot Still. MasonJarLid is intentionally EXCLUDED:
 	// the empty MasonJar is the catch vessel and is required; the lid is a later output mechanic.
 	static const FName RequiredStillParts[] = {
@@ -705,7 +714,7 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 		UE_LOG(LogTemp, Warning, TEXT("=== STILL COMPLETE — ready to operate ==="));
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Still complete — ready to operate"));
+			GEngine->AddOnScreenDebugMessage(MsgKeyStillComplete, 5.0f, FColor::Green, TEXT("Still complete — ready to operate"));
 		}
 	}
 	else if (!bNowComplete && bStillComplete)
@@ -770,7 +779,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Water"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Water (have %d)"), WaterCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Water"), WaterCost));
+			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedWater, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Water"), WaterCost));
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
@@ -783,7 +792,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Mash"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Mash (have %d)"), MashCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Mash"), MashCost));
+			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedMash, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Mash"), MashCost));
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
@@ -797,7 +806,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Firewood"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have));
+			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedFirewood, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have));
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Firewood")), FirewoodCost);
@@ -826,7 +835,7 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE ==="));
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Green, TEXT("Batch complete — jar full"));
+		GEngine->AddOnScreenDebugMessage(MsgKeyBatchComplete, 5.0f, FColor::Green, TEXT("Batch complete — jar full"));
 	}
 	UE_LOG(LogTemp, Warning, TEXT("Would produce %d jars"), JarsPerRun);
 }
@@ -837,25 +846,28 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	if (!GetAimedPot()) return;
 	if (!GEngine) return;
 
+	// Fixed keys so the per-tick prompt overwrites in place instead of stacking. The countdown
+	// uses its own key separate from the interact prompt.
 	FString Prompt;
+	uint64 MsgKey = MsgKeyStillPrompt;
 	switch (CurrentStillState)
 	{
 	case EStillState::Empty: Prompt = FString::Printf(TEXT("Press E: Add Water (%d)"), WaterCost); break;
 	case EStillState::Water: Prompt = FString::Printf(TEXT("Press E: Add Mash (%d)"), MashCost); break;
 	case EStillState::Mash:  Prompt = FString::Printf(TEXT("Press E: Light Fire (%d Firewood)"), FirewoodCost); break;
-	case EStillState::Lit:   Prompt = TEXT("Distilling…"); break;
+	case EStillState::Lit:   Prompt = TEXT("Distilling…"); MsgKey = MsgKeyStillCountdown; break;
 	case EStillState::Running:
 	{
 		const float Remaining = GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle);
 		Prompt = FString::Printf(TEXT("Distilling… %ds"), FMath::Max(0, FMath::CeilToInt(Remaining)));
+		MsgKey = MsgKeyStillCountdown;
 		break;
 	}
 	case EStillState::Done:  Prompt = TEXT("Batch complete — jar full"); break;
 	default: break;
 	}
 
-	// Fixed key so the prompt refreshes in place instead of stacking each tick.
-	GEngine->AddOnScreenDebugMessage(7001, 0.2f, FColor::Yellow, Prompt);
+	GEngine->AddOnScreenDebugMessage(MsgKey, 0.2f, FColor::Yellow, Prompt);
 }
 
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
@@ -995,7 +1007,6 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GhostStillPart->SetActorLocationAndRotation(GridLoc, GridRot);
 		bGhostSnapValid = true; // floor is always a valid target
 
-		UE_LOG(LogTemp, Warning, TEXT("Stand grid: aim=%s grid=%s yaw=%.0f"), *AimPoint.ToString(), *GridLoc.ToString(), StandPlacementYaw);
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
 		return;
 	}
@@ -1012,11 +1023,9 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		FName SnapTargetID;   // which placed part we snap onto
 		FVector MountOffset;  // local offset on that target
 		FRotator MountRotation = FRotator::ZeroRotator; // per-part fine rotation tweak
-		const TCHAR* Label = TEXT("?");
 
 		if (GhostPartID == FName(TEXT("CapArm")))
 		{
-			Label = TEXT("CapArm");
 			SnapTargetID = FName(TEXT("Cap"));
 			MountOffset = CapArmMountOffset;
 			MountRotation = CapArmMountRotation;
@@ -1024,8 +1033,6 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			// Dual prerequisite: BOTH Cap AND ThumperCap must be placed.
 			AStillPartActor* PC = FindPlacedPart(FName(TEXT("Cap")));
 			AStillPartActor* PTC = FindPlacedPart(FName(TEXT("ThumperCap")));
-			if (!PC)  UE_LOG(LogTemp, Warning, TEXT("CapArm requires Cap to be placed first"));
-			if (!PTC) UE_LOG(LogTemp, Warning, TEXT("CapArm requires ThumperCap to be placed first"));
 			if (!PC || !PTC)
 			{
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
@@ -1035,15 +1042,12 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else if (GhostPartID == FName(TEXT("OutletPipe")))
 		{
-			Label = TEXT("OutletPipe");
 			SnapTargetID = FName(TEXT("ThumperBody"));
 			MountOffset = OutletPipeMountOffset;
 
 			// Dual prerequisite: BOTH ThumperBody AND WormBarrel must be placed.
 			AStillPartActor* PTB = FindPlacedPart(FName(TEXT("ThumperBody")));
 			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
-			if (!PTB) UE_LOG(LogTemp, Warning, TEXT("OutletPipe requires ThumperBody to be placed first"));
-			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("OutletPipe requires WormBarrel to be placed first"));
 			if (!PTB || !PWB)
 			{
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
@@ -1053,13 +1057,11 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else if (GhostPartID == FName(TEXT("WormCoil")))
 		{
-			Label = TEXT("WormCoil");
 			SnapTargetID = FName(TEXT("WormBarrel"));
 			MountOffset = WormCoilMountOffset;
 
 			if (!FindPlacedPart(FName(TEXT("WormBarrel"))))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("WormCoil requires WormBarrel to be placed first"));
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
@@ -1067,15 +1069,12 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else if (GhostPartID == FName(TEXT("MasonJar")))
 		{
-			Label = TEXT("MasonJar");
 			SnapTargetID = FName(TEXT("WormBarrel"));
 			MountOffset = MasonJarMountOffset;
 			MountRotation = MasonJarMountRotation;
 
 			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
 			AStillPartActor* PWC = FindPlacedPart(FName(TEXT("WormCoil")));
-			if (!PWB) UE_LOG(LogTemp, Warning, TEXT("MasonJar requires WormBarrel to be placed first"));
-			if (!PWC) UE_LOG(LogTemp, Warning, TEXT("MasonJar requires WormCoil to be placed first"));
 			if (!PWB || !PWC)
 			{
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
@@ -1085,14 +1084,12 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else if (GhostPartID == FName(TEXT("MasonJarLid")))
 		{
-			Label = TEXT("MasonJarLid");
 			SnapTargetID = FName(TEXT("MasonJar"));
 			MountOffset = MasonJarLidMountOffset;
 			MountRotation = MasonJarLidMountRotation;
 
 			if (!FindPlacedPart(FName(TEXT("MasonJar"))))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("MasonJarLid requires MasonJar to be placed first"));
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
@@ -1100,23 +1097,17 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		}
 		else if (GhostPartID == FName(TEXT("ThumperCap")))
 		{
-			Label = TEXT("ThumperCap");
 			SnapTargetID = FName(TEXT("ThumperBody"));
 			MountOffset = ThumperCapMountOffset;
 		}
 		else
 		{
-			Label = TEXT("Cap");
 			SnapTargetID = FName(TEXT("Pot"));
 			MountOffset = CapMountOffset;
 		}
 
 		AStillPartActor* SnapTarget = FindPlacedPart(SnapTargetID);
-		if (!SnapTarget)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("%s requires %s to be placed first"), Label, *SnapTargetID.ToString());
-		}
-		else
+		if (SnapTarget)
 		{
 			const FVector MountWorld = SnapTarget->GetActorTransform().TransformPosition(MountOffset);
 			const FRotator SnapRot = SnapTarget->GetActorRotation() + MountRotation;
@@ -1132,10 +1123,6 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
 			const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
 			const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
-
-			UE_LOG(LogTemp, Warning, TEXT("%s snap: target=%s yaw=%.1f mount=%s aim=%s rayDist=%.1f along=%.0f r=%.1f valid=%d"),
-				Label, *SnapTarget->GetName(), SnapTarget->GetActorRotation().Yaw,
-				*MountWorld.ToString(), *AimTarget.ToString(), RayDist, Along, SnapRadius, bValid ? 1 : 0);
 
 			if (bValid)
 			{
@@ -1161,14 +1148,13 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	// Barrel=right). Pick this vessel's mount + Z-adjust from the part ID.
 	FVector MountLocal = PotMountLocal;
 	float ZAdjust = PotZAdjust;
-	const TCHAR* VesselName = TEXT("Pot");
 	if (GhostPartID == FName(TEXT("ThumperBody")))
 	{
-		MountLocal = ThumperMountLocal; ZAdjust = ThumperZAdjust; VesselName = TEXT("Thumper");
+		MountLocal = ThumperMountLocal; ZAdjust = ThumperZAdjust;
 	}
 	else if (GhostPartID == FName(TEXT("WormBarrel")))
 	{
-		MountLocal = BarrelMountLocal; ZAdjust = BarrelZAdjust; VesselName = TEXT("Barrel");
+		MountLocal = BarrelMountLocal; ZAdjust = BarrelZAdjust;
 	}
 
 	AStillPartActor* Stand = FindPlacedStand();
@@ -1190,9 +1176,6 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
 		const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
 
-		UE_LOG(LogTemp, Warning, TEXT("%s snap: mount=%s aim=%s rayDist=%.1f along=%.0f r=%.1f valid=%d"),
-			VesselName, *MountWorld.ToString(), *AimTarget.ToString(), RayDist, Along, SnapRadius, bValid ? 1 : 0);
-
 		if (bValid)
 		{
 			GhostSnapTransform = FTransform(SnapRot, MountWorld);
@@ -1204,7 +1187,6 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 	if (bGhostSnapValid)
 	{
 		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
-		UE_LOG(LogTemp, VeryVerbose, TEXT("%s ghost snapped Z=%.2f (ZAdjust=%.2f)"), VesselName, GhostSnapTransform.GetLocation().Z, ZAdjust);
 	}
 	else
 	{
