@@ -226,8 +226,18 @@ protected:
 	// E-key interaction: advance the still's state when aiming at the Pot and the still is complete.
 	void InteractWithStill();
 
-	// Returns the placed Pot the player is currently aiming at (camera-forward trace), or nullptr.
+	// Returns the placed still part the player is currently aiming at (camera-forward trace), or nullptr.
+	class AStillPartActor* GetAimedStillPart() const;
+
+	// Returns the placed Pot the player is currently aiming at, or nullptr.
 	class AStillPartActor* GetAimedPot() const;
+
+	// Returns the sealed MasonJar the player is currently aiming at, or nullptr.
+	class AStillPartActor* GetAimedSealedJar() const;
+
+	// Collects the batch from a sealed jar: grants MoonshineJar x JarsPerRun, returns the lid to
+	// inventory, resets the jar and the still state to Empty.
+	void CollectMoonshine(class AStillPartActor* Jar);
 
 	// Applies a state transition with a single concise log line.
 	void SetStillState(EStillState NewState);

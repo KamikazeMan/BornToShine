@@ -650,6 +650,8 @@ namespace
 	constexpr uint64 MsgKeyNeedWater      = 0x571B; // red requirement failures (E presses)
 	constexpr uint64 MsgKeyNeedMash       = 0x571C;
 	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
+	constexpr uint64 MsgKeyJarEmpty       = 0x571E; // red "nothing to seal" while lid-ghosting (per tick)
+	constexpr uint64 MsgKeyCollected      = 0x571F; // green collection confirmation
 
 	// Required parts for a complete Tier 2 Pot Still. MasonJarLid is intentionally EXCLUDED:
 	// the empty MasonJar is the catch vessel and is required; the lid is a later output mechanic.
@@ -729,7 +731,7 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 	}
 }
 
-AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
+AStillPartActor* AMoonshineCharacter_Simple::GetAimedStillPart() const
 {
 	// Same camera-forward trace pattern as UpdateStillGhost.
 	FVector CamLoc = GetActorLocation();
@@ -748,12 +750,19 @@ AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
 		return nullptr;
 	}
 
-	AStillPartActor* Part = Cast<AStillPartActor>(Hit.GetActor());
-	if (Part && Part->PartID == FName(TEXT("Pot")))
-	{
-		return Part;
-	}
-	return nullptr;
+	return Cast<AStillPartActor>(Hit.GetActor());
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
+{
+	AStillPartActor* Part = GetAimedStillPart();
+	return (Part && Part->PartID == FName(TEXT("Pot"))) ? Part : nullptr;
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::GetAimedSealedJar() const
+{
+	AStillPartActor* Part = GetAimedStillPart();
+	return (Part && Part->PartID == FName(TEXT("MasonJar")) && Part->bIsSealed) ? Part : nullptr;
 }
 
 void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
@@ -768,7 +777,14 @@ void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
 
 void AMoonshineCharacter_Simple::InteractWithStill()
 {
-	// Interaction only works on a complete still while aiming at its Pot.
+	// Collecting from a sealed jar is its own interaction, independent of the pot flow.
+	if (AStillPartActor* SealedJar = GetAimedSealedJar())
+	{
+		CollectMoonshine(SealedJar);
+		return;
+	}
+
+	// Otherwise interaction only works on a complete still while aiming at its Pot.
 	if (!bStillComplete) return;
 	if (!GetAimedPot()) return;
 
@@ -837,14 +853,65 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 	{
 		GEngine->AddOnScreenDebugMessage(MsgKeyBatchComplete, 5.0f, FColor::Green, TEXT("Batch complete — jar full"));
 	}
-	UE_LOG(LogTemp, Warning, TEXT("Would produce %d jars"), JarsPerRun);
+
+	// Mark the catch vessel full so the lid can be snapped on to seal it.
+	if (AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar"))))
+	{
+		Jar->bIsFull = true;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("Jar is full — snap the lid to seal it"));
+}
+
+void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
+{
+	if (!IsValid(Jar) || !Jar->bIsSealed) return;
+
+	if (Inventory)
+	{
+		Inventory->AddItem(FName(TEXT("MoonshineJar")), JarsPerRun);
+		// The lid is reusable — return it to inventory.
+		Inventory->AddItem(FName(TEXT("MasonJarLid")), 1);
+	}
+
+	// Remove the placed lid actor from the world and the tracking list. The lid is not in the
+	// required-parts set, so this cannot flip bStillComplete.
+	for (int32 i = PlacedStillParts.Num() - 1; i >= 0; --i)
+	{
+		AStillPartActor* Part = PlacedStillParts[i];
+		if (IsValid(Part) && Part->PartID == FName(TEXT("MasonJarLid")))
+		{
+			Part->Destroy();
+			PlacedStillParts.RemoveAt(i);
+		}
+	}
+
+	// The jar stays placed, empty and ready for the next batch.
+	Jar->bIsFull = false;
+	Jar->bIsSealed = false;
+
+	SetStillState(EStillState::Empty);
+	UE_LOG(LogTemp, Warning, TEXT("Collected %d MoonshineJar; still reset to Empty"), JarsPerRun);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(MsgKeyCollected, 5.0f, FColor::Green,
+			FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun));
+	}
 }
 
 void AMoonshineCharacter_Simple::UpdateStillPrompt()
 {
+	if (!GEngine) return;
+
+	// Sealed jar is a second interactable: show the collect prompt regardless of the pot flow.
+	if (GetAimedSealedJar())
+	{
+		GEngine->AddOnScreenDebugMessage(MsgKeyStillPrompt, 0.2f, FColor::Yellow,
+			FString::Printf(TEXT("Press E: Collect moonshine (%d jars)"), JarsPerRun));
+		return;
+	}
+
 	if (!bStillComplete) return;
 	if (!GetAimedPot()) return;
-	if (!GEngine) return;
 
 	// Fixed keys so the per-tick prompt overwrites in place instead of stacking. The countdown
 	// uses its own key separate from the interact prompt.
@@ -1088,8 +1155,14 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			MountOffset = MasonJarLidMountOffset;
 			MountRotation = MasonJarLidMountRotation;
 
-			if (!FindPlacedPart(FName(TEXT("MasonJar"))))
+			// The lid only seals a FULL jar: placement is invalid until a batch has finished.
+			AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
+			if (!Jar || !Jar->bIsFull)
 			{
+				if (Jar && GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(MsgKeyJarEmpty, 0.2f, FColor::Red, TEXT("Jar is empty — nothing to seal"));
+				}
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
 				return;
@@ -1233,6 +1306,16 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
+
+		// Placing the lid on a full jar seals it (ghost validity already guaranteed the jar is full).
+		if (GhostPartID == FName(TEXT("MasonJarLid")))
+		{
+			if (AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar"))))
+			{
+				Jar->bIsSealed = true;
+				UE_LOG(LogTemp, Warning, TEXT("Jar sealed — press E on the jar to collect"));
+			}
+		}
 
 		// Detection only: re-evaluate whether the full Tier 2 still is now assembled.
 		CheckStillCompletion();

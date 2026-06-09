@@ -33,6 +33,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float SnapRadiusCm = 35.0f;
 
+	// Batch output state (meaningful on the MasonJar catch vessel only).
+	// Full: a distilling run finished and the jar holds moonshine, awaiting the lid.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
+	bool bIsFull = false;
+
+	// Sealed: the lid was placed on a full jar; the moonshine can be collected with E.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
+	bool bIsSealed = false;
+
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);
 };
