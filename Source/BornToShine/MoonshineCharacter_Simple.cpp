@@ -183,17 +183,6 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 			EnhancedInputComponent->BindAction(ScaleAction, ETriggerEvent::Triggered, this, &AMoonshineCharacter_Simple::OnScalePiece);
 		}
 
-		// Rotation - separate left/right for arrow keys
-		if (RotateLeftAction)
-		{
-			EnhancedInputComponent->BindAction(RotateLeftAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotateLeft);
-		}
-
-		if (RotateRightAction)
-		{
-			EnhancedInputComponent->BindAction(RotateRightAction, ETriggerEvent::Started, this, &AMoonshineCharacter_Simple::OnRotateRight);
-		}
-
 		// Rotation (2D axis - for gamepad or alternative input)
 		if (RotateAction)
 		{
@@ -361,32 +350,6 @@ void AMoonshineCharacter_Simple::OnRotate(const FInputActionValue& Value)
 
 	// Y-axis could be used for pitch/roll rotations if needed
 	// For now, just using horizontal rotation
-}
-
-void AMoonshineCharacter_Simple::OnRotateLeft()
-{
-	UE_LOG(LogTemp, Log, TEXT("OnRotateLeft called"));
-	if (BuildingComponent)
-	{
-		BuildingComponent->RotatePreviewLeft();
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRotateLeft: BuildingComponent is null!"));
-	}
-}
-
-void AMoonshineCharacter_Simple::OnRotateRight()
-{
-	UE_LOG(LogTemp, Log, TEXT("OnRotateRight called"));
-	if (BuildingComponent)
-	{
-		BuildingComponent->RotatePreviewRight();
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("OnRotateRight: BuildingComponent is null!"));
-	}
 }
 
 void AMoonshineCharacter_Simple::OnScalePiece(const FInputActionValue& Value)
@@ -803,30 +766,53 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 	switch (CurrentStillState)
 	{
 	case EStillState::Empty:
+		if (!Inventory || !Inventory->HasItem(FName(TEXT("Water")), WaterCost))
+		{
+			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Water"))) : 0;
+			UE_LOG(LogTemp, Warning, TEXT("Need %d Water (have %d)"), WaterCost, Have);
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Water"), WaterCost));
+			break;
+		}
+		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
 		SetStillState(EStillState::Water);
-		UE_LOG(LogTemp, Warning, TEXT("Water added"));
+		UE_LOG(LogTemp, Warning, TEXT("Water added (consumed %d Water)"), WaterCost);
 		break;
 
 	case EStillState::Water:
+		if (!Inventory || !Inventory->HasItem(FName(TEXT("Mash")), MashCost))
+		{
+			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Mash"))) : 0;
+			UE_LOG(LogTemp, Warning, TEXT("Need %d Mash (have %d)"), MashCost, Have);
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Mash"), MashCost));
+			break;
+		}
+		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
 		SetStillState(EStillState::Mash);
-		UE_LOG(LogTemp, Warning, TEXT("Mash added"));
+		UE_LOG(LogTemp, Warning, TEXT("Mash added (consumed %d Mash)"), MashCost);
 		break;
 
 	case EStillState::Mash:
-		// Light the fire and immediately begin the distilling run.
+	{
+		if (!Inventory || !Inventory->HasItem(FName(TEXT("Firewood")), FirewoodCost))
+		{
+			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Firewood"))) : 0;
+			UE_LOG(LogTemp, Warning, TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have);
+			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have));
+			break;
+		}
+		Inventory->RemoveItem(FName(TEXT("Firewood")), FirewoodCost);
 		SetStillState(EStillState::Lit);
 		SetStillState(EStillState::Running);
-		UE_LOG(LogTemp, Warning, TEXT("Fire lit — distilling"));
+		UE_LOG(LogTemp, Warning, TEXT("Fire lit (consumed %d Firewood) — distilling"), FirewoodCost);
 		GetWorldTimerManager().SetTimer(BatchTimerHandle, this,
 			&AMoonshineCharacter_Simple::OnBatchComplete, FMath::Max(BatchTimeSeconds, 0.01f), false);
 		break;
+	}
 
 	case EStillState::Running:
-		// In progress — ignore.
 		break;
 
 	case EStillState::Done:
-		// Collection handled in a later increment — ignore for now.
 		break;
 
 	default:
@@ -854,9 +840,9 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	FString Prompt;
 	switch (CurrentStillState)
 	{
-	case EStillState::Empty: Prompt = TEXT("Press E: Add Water"); break;
-	case EStillState::Water: Prompt = TEXT("Press E: Add Mash"); break;
-	case EStillState::Mash:  Prompt = TEXT("Press E: Light Fire"); break;
+	case EStillState::Empty: Prompt = FString::Printf(TEXT("Press E: Add Water (%d)"), WaterCost); break;
+	case EStillState::Water: Prompt = FString::Printf(TEXT("Press E: Add Mash (%d)"), MashCost); break;
+	case EStillState::Mash:  Prompt = FString::Printf(TEXT("Press E: Light Fire (%d Firewood)"), FirewoodCost); break;
 	case EStillState::Lit:   Prompt = TEXT("Distilling…"); break;
 	case EStillState::Running:
 	{

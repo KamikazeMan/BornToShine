@@ -211,6 +211,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	int32 JarsPerRun = 15;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	int32 WaterCost = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	int32 MashCost = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	int32 FirewoodCost = 3;
+
 	// Running-state countdown timer.
 	FTimerHandle BatchTimerHandle;
 
@@ -248,8 +257,6 @@ protected:
 	void OnToggleBuildMode();
 	void OnPlacePiece();
 	void OnRotate(const FInputActionValue& Value); // Handles 2D rotation input
-	void OnRotateLeft();
-	void OnRotateRight();
 	void OnScalePiece(const FInputActionValue& Value);
 	void OnCyclePieceType();
 	void OnNailPiece();
@@ -286,12 +293,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* RotateAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* RotateLeftAction;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	class UInputAction* RotateRightAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	class UInputAction* ScaleAction;

@@ -112,5 +112,8 @@ void UInventoryComponent::DebugGrantStillParts()
 	AddItem(TEXT("Thermometer"), 1);
 	AddItem(TEXT("MasonJar"), 1);
 	AddItem(TEXT("MasonJarLid"), 1);
+	AddItem(TEXT("Water"), 5);
+	AddItem(TEXT("Mash"), 5);
+	AddItem(TEXT("Firewood"), 9);
 	DebugLogInventory();
 }
