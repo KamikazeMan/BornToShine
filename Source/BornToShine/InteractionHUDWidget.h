@@ -30,8 +30,9 @@ public:
 	void SetPrompt(const FString& ActionText);
 	void ClearPrompt();
 
-	// Shows/updates the top-center countdown ("DISTILLING  M:SS" + fill bar).
-	void ShowTimer(float RemainingSeconds, float TotalSeconds);
+	// Shows/updates the top-center countdown block. Text may be multi-line (one line per running
+	// still); the fill bar shows BarPercent (0..1) for the primary (nearest) still.
+	void ShowTimer(const FString& Text, float BarPercent);
 	void HideTimer();
 
 	// Pushes a fading event message (green when bSuccess, red otherwise). Re-issuing the same

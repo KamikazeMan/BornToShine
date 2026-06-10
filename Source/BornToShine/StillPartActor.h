@@ -9,6 +9,18 @@
 class UStaticMesh;
 class UStaticMeshComponent;
 
+/** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
+UENUM(BlueprintType)
+enum class EStillState : uint8
+{
+	Empty   UMETA(DisplayName="Empty"),
+	Water   UMETA(DisplayName="Water Added"),
+	Mash    UMETA(DisplayName="Mash Added"),
+	Lit     UMETA(DisplayName="Fire Lit"),
+	Running UMETA(DisplayName="Distilling"),
+	Done    UMETA(DisplayName="Batch Complete")
+};
+
 /**
  * Minimal mesh-holder actor for still parts (pot, cap, cinder block stands, etc.).
  * Step 1: just holds a mesh and a PartID. Snapping/sockets come in later steps.
@@ -46,6 +58,22 @@ public:
 	// vessels record the stand they snapped to; cap-like parts inherit it from their snap target.
 	UPROPERTY(VisibleAnywhere, Category="StillPart")
 	TWeakObjectPtr<AStillPartActor> OwningStand;
+
+	// --- Per-assembly operating state (meaningful on the CinderBlockStand only — the assembly
+	// root). Each still runs its own state machine and batch timer. ---
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	EStillState StillState = EStillState::Empty;
+
+	// Seconds elapsed in the current distilling run (counts up while bBatchRunning).
+	float BatchElapsed = 0.0f;
+
+	// True while this stand's batch timer is ticking (Running state).
+	bool bBatchRunning = false;
+
+	// Jars still waiting in THIS jar after a partial collection (MasonJar only). While > 0 the
+	// jar stays sealed and each E press collects as much as fits.
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	int32 RemainingJars = 0;
 
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);

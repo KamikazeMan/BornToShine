@@ -197,15 +197,12 @@ void UInteractionHUDWidget::ClearPrompt()
 	PromptPanel->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UInteractionHUDWidget::ShowTimer(float RemainingSeconds, float TotalSeconds)
+void UInteractionHUDWidget::ShowTimer(const FString& Text, float BarPercent)
 {
 	if (!TimerBox || !TimerText || !TimerBar) return;
 
-	const int32 Remaining = FMath::Max(0, FMath::CeilToInt(RemainingSeconds));
-	TimerText->SetText(FText::FromString(FString::Printf(TEXT("DISTILLING  %d:%02d"), Remaining / 60, Remaining % 60)));
-
-	const float Total = FMath::Max(TotalSeconds, 0.01f);
-	TimerBar->SetPercent(FMath::Clamp(1.0f - RemainingSeconds / Total, 0.0f, 1.0f));
+	TimerText->SetText(FText::FromString(Text));
+	TimerBar->SetPercent(FMath::Clamp(BarPercent, 0.0f, 1.0f));
 
 	TimerBox->SetVisibility(ESlateVisibility::HitTestInvisible);
 }

@@ -41,6 +41,12 @@ struct FSavedStillPart
 	// themselves / unowned). Stands are indexed in the order they appear in StillParts.
 	UPROPERTY()
 	int32 StandIndex = -1;
+
+	// v3: per-stand operating state (EStillState as uint8; meaningful on stands only). Mid-batch
+	// states (Lit/Running) are saved as Empty — same v1 limitation, per stand now. Defaults to
+	// Empty for v1/v2 saves.
+	UPROPERTY()
+	uint8 StillState = 0;
 };
 
 /**
@@ -63,7 +69,7 @@ public:
 	UPROPERTY()
 	TArray<FSavedStillPart> StillParts;
 
-	// v1: no part ownership. v2: per-part StandIndex.
+	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
 	UPROPERTY()
-	int32 SaveVersion = 2;
+	int32 SaveVersion = 3;
 };

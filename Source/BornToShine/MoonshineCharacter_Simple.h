@@ -7,24 +7,12 @@
 #include "InputActionValue.h"
 #include "InventoryComponent.h"
 #include "InventoryGridWidget.h"
+#include "StillPartActor.h" // EStillState lives with the per-stand state container
 #include "MoonshineCharacter_Simple.generated.h"
 
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
-class AStillPartActor;
 class UInteractionHUDWidget;
-
-/** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
-UENUM(BlueprintType)
-enum class EStillState : uint8
-{
-	Empty   UMETA(DisplayName="Empty"),
-	Water   UMETA(DisplayName="Water Added"),
-	Mash    UMETA(DisplayName="Mash Added"),
-	Lit     UMETA(DisplayName="Fire Lit"),
-	Running UMETA(DisplayName="Distilling"),
-	Done    UMETA(DisplayName="Batch Complete")
-};
 
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
@@ -212,16 +200,16 @@ protected:
 	// Logs the required part types not yet placed (excludes MasonJarLid).
 	void LogMissingStillParts() const;
 
-	// Latched completion state; only transitions trigger logging/on-screen messages.
+	// "At least one complete still exists" (legacy aggregate; interactions are per-stand now).
 	bool bStillComplete = false;
+
+	// Stands currently known complete — per-stand transition tracking so the SECOND still also
+	// gets its "complete" toast when it finishes assembly.
+	TSet<TWeakObjectPtr<class AStillPartActor>> CompletedStands;
 
 	// --- Still operation (skeleton: placeholder timer, no real ingredients/jars yet) ---
 
-	// Current operating state of the completed still.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Moonshine")
-	EStillState CurrentStillState = EStillState::Empty;
-
-	// How long a distilling run takes once the fire is lit (seconds).
+	// How long a distilling run takes once the fire is lit (seconds). Shared by every still.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	float BatchTimeSeconds = 300.0f;
 
@@ -238,16 +226,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	int32 FirewoodCost = 3;
 
-	// Running-state countdown timer.
-	FTimerHandle BatchTimerHandle;
-
-	// Jars still waiting in the sealed jar when the inventory couldn't hold the whole batch.
-	// While > 0 the jar stays sealed and each E press collects as much as fits.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Moonshine")
-	int32 RemainingJars = 0;
-
-	// E-key interaction: advance the still's state when aiming at the Pot and the still is complete.
+	// E-key interaction: routes to the aimed part's OWN stand's state machine.
 	void InteractWithStill();
+
+	// Per-frame batch timers: every running stand accumulates BatchElapsed independently.
+	void TickStillBatches(float DeltaTime);
+
+	// 1-based number of a stand by placement order (for "STILL 2" style display/logs).
+	int32 StandNumber(class AStillPartActor* Stand) const;
 
 	// Returns whatever actor the camera-forward interaction trace hits within MaxAimDistanceCm.
 	AActor* GetAimedActor() const;
@@ -313,11 +299,11 @@ protected:
 	// Sells ALL MoonshineJar in inventory to the buyer.
 	void SellMoonshine(class ABuyerActor* Buyer);
 
-	// Applies a state transition with a single concise log line.
-	void SetStillState(EStillState NewState);
+	// Applies a state transition on one stand with a single concise log line.
+	void SetStandState(class AStillPartActor* Stand, EStillState NewState);
 
-	// Running timer callback: Running -> Done.
-	void OnBatchComplete();
+	// Batch finished on this stand: Running -> Done, fill ITS jar, sound at ITS pot.
+	void OnBatchComplete(class AStillPartActor* Stand);
 
 	// Per-tick interaction HUD update: contextual prompt + distill countdown.
 	void UpdateStillPrompt();
@@ -393,10 +379,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
 	class USoundAttenuation* LoopAttenuation = nullptr;
 
-	// Live loop handles (spawned on demand, stopped manually).
-	UPROPERTY() class UAudioComponent* FireLoopAC = nullptr;
-	UPROPERTY() class UAudioComponent* BoilLoopAC = nullptr;
-	UPROPERTY() class UAudioComponent* DripLoopAC = nullptr;
+	// Live loop handles per stand (spawned on demand, stopped manually). Weak pointers stay
+	// GC-safe without UPROPERTY; the components are owned by the audio system while playing.
+	struct FStillLoops
+	{
+		TWeakObjectPtr<class UAudioComponent> Fire;
+		TWeakObjectPtr<class UAudioComponent> Boil;
+		TWeakObjectPtr<class UAudioComponent> Drip;
+	};
+	TMap<TWeakObjectPtr<class AStillPartActor>, FStillLoops> StillLoopMap;
 
 	UPROPERTY() class USoundAttenuation* DefaultLoopAttenuation = nullptr;
 

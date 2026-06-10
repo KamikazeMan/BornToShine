@@ -186,59 +186,75 @@ USoundAttenuation* AMoonshineCharacter_Simple::GetLoopAttenuation()
 
 void AMoonshineCharacter_Simple::UpdateStillAudio()
 {
-	const bool bBurning =
-		CurrentStillState == EStillState::Lit || CurrentStillState == EStillState::Running;
-
-	// The single state machine operates the FIRST complete still; its parts host the loops.
-	// Fall back to first-match parts when no still is complete (preserves single-still behavior).
-	AStillPartActor* OpStand = FindFirstCompleteStand();
-	AStillPartActor* Pot = OpStand ? FindPartOnStand(FName(TEXT("Pot")), OpStand) : FindPlacedPart(FName(TEXT("Pot")));
-	AStillPartActor* Cap = OpStand ? FindPartOnStand(FName(TEXT("Cap")), OpStand) : FindPlacedPart(FName(TEXT("Cap")));
-	AStillPartActor* Jar = OpStand ? FindPartOnStand(FName(TEXT("MasonJar")), OpStand) : FindPlacedPart(FName(TEXT("MasonJar")));
-
-	// Fire crackle at the pot.
-	if (bBurning && !FireLoopAC && Pot && CheckSoundAssigned(FireLoopSound, TEXT("FireLoopSound")))
+	// Drop loop entries whose stand no longer exists (stop anything still playing).
+	for (auto It = StillLoopMap.CreateIterator(); It; ++It)
 	{
-		FireLoopAC = UGameplayStatics::SpawnSoundAttached(FireLoopSound, Pot->MeshComponent, NAME_None,
-			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
-	}
-	else if (!bBurning && FireLoopAC)
-	{
-		FireLoopAC->Stop();
-		FireLoopAC = nullptr;
+		if (!It->Key.IsValid())
+		{
+			if (UAudioComponent* AC = It->Value.Fire.Get()) AC->Stop();
+			if (UAudioComponent* AC = It->Value.Boil.Get()) AC->Stop();
+			if (UAudioComponent* AC = It->Value.Drip.Get()) AC->Stop();
+			It.RemoveCurrent();
+		}
 	}
 
-	// Boil/steam hiss at the cap (falls back to the pot if the cap is somehow gone).
-	USceneComponent* SteamAttach = Cap ? Cap->MeshComponent : (Pot ? Pot->MeshComponent : nullptr);
-	if (bBurning && !BoilLoopAC && SteamAttach && CheckSoundAssigned(BoilSteamLoopSound, TEXT("BoilSteamLoopSound")))
+	// Reconcile each stand's loops against ITS OWN state/timer/jar.
+	for (AStillPartActor* Stand : PlacedStillParts)
 	{
-		BoilLoopAC = UGameplayStatics::SpawnSoundAttached(BoilSteamLoopSound, SteamAttach, NAME_None,
-			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
-	}
-	else if (!bBurning && BoilLoopAC)
-	{
-		BoilLoopAC->Stop();
-		BoilLoopAC = nullptr;
-	}
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
 
-	// Drip at the jar: while the jar holds moonshine, or during the tail end of the run.
-	bool bDrip = Jar && Jar->bIsFull;
-	if (!bDrip && Jar && CurrentStillState == EStillState::Running)
-	{
-		const float Remaining = GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle);
-		const float Elapsed = 1.0f - Remaining / FMath::Max(BatchTimeSeconds, 0.01f);
-		bDrip = Elapsed >= DripStartFraction;
-	}
+		FStillLoops& Loops = StillLoopMap.FindOrAdd(Stand);
 
-	if (bDrip && !DripLoopAC && Jar && CheckSoundAssigned(DripLoopSound, TEXT("DripLoopSound")))
-	{
-		DripLoopAC = UGameplayStatics::SpawnSoundAttached(DripLoopSound, Jar->MeshComponent, NAME_None,
-			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
-	}
-	else if (!bDrip && DripLoopAC)
-	{
-		DripLoopAC->Stop();
-		DripLoopAC = nullptr;
+		const bool bBurning =
+			Stand->StillState == EStillState::Lit || Stand->StillState == EStillState::Running;
+
+		AStillPartActor* Pot = FindPartOnStand(FName(TEXT("Pot")), Stand);
+		AStillPartActor* Cap = FindPartOnStand(FName(TEXT("Cap")), Stand);
+		AStillPartActor* Jar = FindPartOnStand(FName(TEXT("MasonJar")), Stand);
+
+		// Fire crackle at this stand's pot.
+		if (bBurning && !Loops.Fire.IsValid() && Pot && CheckSoundAssigned(FireLoopSound, TEXT("FireLoopSound")))
+		{
+			Loops.Fire = UGameplayStatics::SpawnSoundAttached(FireLoopSound, Pot->MeshComponent, NAME_None,
+				FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+		}
+		else if (!bBurning && Loops.Fire.IsValid())
+		{
+			Loops.Fire->Stop();
+			Loops.Fire.Reset();
+		}
+
+		// Boil/steam hiss at this stand's cap (falls back to its pot).
+		USceneComponent* SteamAttach = Cap ? Cap->MeshComponent : (Pot ? Pot->MeshComponent : nullptr);
+		if (bBurning && !Loops.Boil.IsValid() && SteamAttach && CheckSoundAssigned(BoilSteamLoopSound, TEXT("BoilSteamLoopSound")))
+		{
+			Loops.Boil = UGameplayStatics::SpawnSoundAttached(BoilSteamLoopSound, SteamAttach, NAME_None,
+				FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+		}
+		else if (!bBurning && Loops.Boil.IsValid())
+		{
+			Loops.Boil->Stop();
+			Loops.Boil.Reset();
+		}
+
+		// Drip at this stand's jar: while it holds moonshine, or in the tail end of ITS run.
+		bool bDrip = Jar && Jar->bIsFull;
+		if (!bDrip && Jar && Stand->StillState == EStillState::Running)
+		{
+			const float Elapsed = Stand->BatchElapsed / FMath::Max(BatchTimeSeconds, 0.01f);
+			bDrip = Elapsed >= DripStartFraction;
+		}
+
+		if (bDrip && !Loops.Drip.IsValid() && Jar && CheckSoundAssigned(DripLoopSound, TEXT("DripLoopSound")))
+		{
+			Loops.Drip = UGameplayStatics::SpawnSoundAttached(DripLoopSound, Jar->MeshComponent, NAME_None,
+				FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+		}
+		else if (!bDrip && Loops.Drip.IsValid())
+		{
+			Loops.Drip->Stop();
+			Loops.Drip.Reset();
+		}
 	}
 }
 
@@ -266,11 +282,44 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 		UpdateStillGhost();
 	}
 
+	// Advance every running still's batch timer independently.
+	TickStillBatches(DeltaTime);
+
 	// Show the operation prompt when aiming at the Pot of a completed still.
 	UpdateStillPrompt();
 
 	// Reconcile the still audio loops (fire/steam/drip) against state, timer and jar.
 	UpdateStillAudio();
+}
+
+void AMoonshineCharacter_Simple::TickStillBatches(float DeltaTime)
+{
+	for (AStillPartActor* Stand : PlacedStillParts)
+	{
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+		if (!Stand->bBatchRunning) continue;
+
+		Stand->BatchElapsed += DeltaTime;
+		if (Stand->BatchElapsed >= FMath::Max(BatchTimeSeconds, 0.01f))
+		{
+			Stand->bBatchRunning = false;
+			OnBatchComplete(Stand);
+		}
+	}
+}
+
+int32 AMoonshineCharacter_Simple::StandNumber(AStillPartActor* Stand) const
+{
+	int32 Number = 0;
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		{
+			++Number;
+			if (Part == Stand) return Number;
+		}
+	}
+	return 0;
 }
 
 void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -910,22 +959,40 @@ void AMoonshineCharacter_Simple::LogMissingStillParts() const
 
 void AMoonshineCharacter_Simple::CheckStillCompletion()
 {
-	// "Complete" now means at least one stand has a full still (increment B adds per-still ops).
-	const bool bNowComplete = FindFirstCompleteStand() != nullptr;
+	// Per-stand transition tracking: each still (including the second, third, ...) gets its own
+	// "complete" toast when it finishes assembly, and its own "no longer complete" log.
+	bool bAnyComplete = false;
 
-	if (bNowComplete && !bStillComplete)
+	// Purge stale entries for destroyed stands.
+	for (auto It = CompletedStands.CreateIterator(); It; ++It)
 	{
-		bStillComplete = true;
-		UE_LOG(LogTemp, Warning, TEXT("=== STILL COMPLETE — ready to operate ==="));
-		ShowToast(TEXT("Still complete — ready to operate"), true);
-	}
-	else if (!bNowComplete && bStillComplete)
-	{
-		bStillComplete = false;
-		UE_LOG(LogTemp, Warning, TEXT("Still no longer complete"));
+		if (!It->IsValid()) It.RemoveCurrent();
 	}
 
-	if (!bNowComplete)
+	for (AStillPartActor* Stand : PlacedStillParts)
+	{
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+
+		const bool bComplete = IsStillComplete(Stand);
+		bAnyComplete |= bComplete;
+
+		const TWeakObjectPtr<AStillPartActor> Key(Stand);
+		if (bComplete && !CompletedStands.Contains(Key))
+		{
+			CompletedStands.Add(Key);
+			UE_LOG(LogTemp, Warning, TEXT("=== STILL %d COMPLETE — ready to operate ==="), StandNumber(Stand));
+			ShowToast(FString::Printf(TEXT("Still %d complete — ready to operate"), StandNumber(Stand)), true);
+		}
+		else if (!bComplete && CompletedStands.Contains(Key))
+		{
+			CompletedStands.Remove(Key);
+			UE_LOG(LogTemp, Warning, TEXT("Still %d no longer complete"), StandNumber(Stand));
+		}
+	}
+
+	bStillComplete = bAnyComplete;
+
+	if (!bAnyComplete)
 	{
 		LogMissingStillParts();
 	}
@@ -967,31 +1034,29 @@ ABuyerActor* AMoonshineCharacter_Simple::GetAimedBuyer() const
 
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
 {
-	// The single state machine operates the FIRST complete still for now (increment B: per-still).
+	// Each pot routes to ITS OWN stand's state machine — valid when that stand's still is complete.
 	AStillPartActor* Part = GetAimedStillPart();
 	if (!Part || Part->PartID != FName(TEXT("Pot"))) return nullptr;
 
-	AStillPartActor* FirstComplete = FindFirstCompleteStand();
-	return (FirstComplete && StandOfPart(Part) == FirstComplete) ? Part : nullptr;
+	AStillPartActor* Stand = StandOfPart(Part);
+	return (Stand && IsStillComplete(Stand)) ? Part : nullptr;
 }
 
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedSealedJar() const
 {
+	// A jar can only be sealed if its own still ran a batch, so sealed == collectible.
 	AStillPartActor* Part = GetAimedStillPart();
-	if (!Part || Part->PartID != FName(TEXT("MasonJar")) || !Part->bIsSealed) return nullptr;
-
-	AStillPartActor* FirstComplete = FindFirstCompleteStand();
-	return (FirstComplete && StandOfPart(Part) == FirstComplete) ? Part : nullptr;
+	return (Part && Part->PartID == FName(TEXT("MasonJar")) && Part->bIsSealed) ? Part : nullptr;
 }
 
-void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
+void AMoonshineCharacter_Simple::SetStandState(AStillPartActor* Stand, EStillState NewState)
 {
-	if (CurrentStillState == NewState) return;
+	if (!IsValid(Stand) || Stand->StillState == NewState) return;
 
 	static const TCHAR* StateNames[] = { TEXT("Empty"), TEXT("Water"), TEXT("Mash"), TEXT("Lit"), TEXT("Running"), TEXT("Done") };
-	UE_LOG(LogTemp, Warning, TEXT("Still state: %s -> %s"),
-		StateNames[(uint8)CurrentStillState], StateNames[(uint8)NewState]);
-	CurrentStillState = NewState;
+	UE_LOG(LogTemp, Warning, TEXT("Still %d state: %s -> %s"), StandNumber(Stand),
+		StateNames[(uint8)Stand->StillState], StateNames[(uint8)NewState]);
+	Stand->StillState = NewState;
 }
 
 void AMoonshineCharacter_Simple::InteractWithStill()
@@ -1010,12 +1075,14 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		return;
 	}
 
-	// Otherwise interaction only works on a complete still while aiming at its Pot.
-	if (!bStillComplete) return;
+	// Otherwise interaction routes to the aimed Pot's OWN stand (GetAimedPot already verified
+	// that stand's still is complete). Two stills can be in different states simultaneously.
 	AStillPartActor* Pot = GetAimedPot();
 	if (!Pot) return;
+	AStillPartActor* Stand = StandOfPart(Pot);
+	if (!Stand) return;
 
-	switch (CurrentStillState)
+	switch (Stand->StillState)
 	{
 	case EStillState::Empty:
 		if (!Inventory || !Inventory->HasItem(FName(TEXT("Water")), WaterCost))
@@ -1026,7 +1093,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
-		SetStillState(EStillState::Water);
+		SetStandState(Stand, EStillState::Water);
 		UE_LOG(LogTemp, Warning, TEXT("Water added (consumed %d Water)"), WaterCost);
 		PlaySfxAt(WaterAddSound, TEXT("WaterAddSound"), Pot->GetActorLocation());
 		break;
@@ -1040,7 +1107,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
-		SetStillState(EStillState::Mash);
+		SetStandState(Stand, EStillState::Mash);
 		UE_LOG(LogTemp, Warning, TEXT("Mash added (consumed %d Mash)"), MashCost);
 		PlaySfxAt(MashAddSound, TEXT("MashAddSound"), Pot->GetActorLocation());
 		break;
@@ -1055,12 +1122,12 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Firewood")), FirewoodCost);
-		SetStillState(EStillState::Lit);
-		SetStillState(EStillState::Running);
+		SetStandState(Stand, EStillState::Lit);
+		SetStandState(Stand, EStillState::Running);
 		UE_LOG(LogTemp, Warning, TEXT("Fire lit (consumed %d Firewood) — distilling"), FirewoodCost);
 		PlaySfxAt(FireIgniteSound, TEXT("FireIgniteSound"), Pot->GetActorLocation());
-		GetWorldTimerManager().SetTimer(BatchTimerHandle, this,
-			&AMoonshineCharacter_Simple::OnBatchComplete, FMath::Max(BatchTimeSeconds, 0.01f), false);
+		Stand->BatchElapsed = 0.0f;
+		Stand->bBatchRunning = true;
 		break;
 	}
 
@@ -1075,21 +1142,22 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 	}
 }
 
-void AMoonshineCharacter_Simple::OnBatchComplete()
+void AMoonshineCharacter_Simple::OnBatchComplete(AStillPartActor* Stand)
 {
-	SetStillState(EStillState::Done);
-	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE ==="));
+	if (!IsValid(Stand)) return;
+
+	SetStandState(Stand, EStillState::Done);
+	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE (still %d) ==="), StandNumber(Stand));
 	ShowToast(TEXT("Batch complete — jar is full"), true);
 
-	// Mark the OPERATING still's catch vessel full so the lid can be snapped on to seal it.
-	AStillPartActor* OpStand = FindFirstCompleteStand();
-	if (AStillPartActor* Jar = OpStand ? FindPartOnStand(FName(TEXT("MasonJar")), OpStand) : FindPlacedPart(FName(TEXT("MasonJar"))))
+	// Fill THIS stand's catch vessel so the lid can be snapped on to seal it.
+	if (AStillPartActor* Jar = FindPartOnStand(FName(TEXT("MasonJar")), Stand))
 	{
 		Jar->bIsFull = true;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("Jar is full — snap the lid to seal it"));
 
-	if (AStillPartActor* Pot = OpStand ? FindPartOnStand(FName(TEXT("Pot")), OpStand) : FindPlacedPart(FName(TEXT("Pot"))))
+	if (AStillPartActor* Pot = FindPartOnStand(FName(TEXT("Pot")), Stand))
 	{
 		PlaySfxAt(BatchCompleteSound, TEXT("BatchCompleteSound"), Pot->GetActorLocation());
 	}
@@ -1100,27 +1168,27 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	if (!IsValid(Jar) || !Jar->bIsSealed) return;
 	if (!Inventory) return;
 
-	// Fresh collection starts the full batch; otherwise keep draining the stored remainder.
-	if (RemainingJars <= 0)
+	// Fresh collection starts the full batch; otherwise keep draining THIS jar's remainder.
+	if (Jar->RemainingJars <= 0)
 	{
-		RemainingJars = JarsPerRun;
+		Jar->RemainingJars = JarsPerRun;
 	}
 
 	// Only credit what ACTUALLY fits — AddItem reports the real added count.
-	const int32 Added = Inventory->AddItem(FName(TEXT("MoonshineJar")), RemainingJars);
-	RemainingJars -= Added;
+	const int32 Added = Inventory->AddItem(FName(TEXT("MoonshineJar")), Jar->RemainingJars);
+	Jar->RemainingJars -= Added;
 
 	if (Added > 0)
 	{
 		PlaySfxAt(JarCollectSound, TEXT("JarCollectSound"), Jar->GetActorLocation());
 	}
 
-	if (RemainingJars > 0)
+	if (Jar->RemainingJars > 0)
 	{
 		// Inventory full: jar stays sealed, lid stays on, state stays Done. E collects the rest later.
-		const int32 CollectedSoFar = JarsPerRun - RemainingJars;
+		const int32 CollectedSoFar = JarsPerRun - Jar->RemainingJars;
 		UE_LOG(LogTemp, Warning, TEXT("Inventory full — collected %d of %d jars, %d still in the jar"),
-			CollectedSoFar, JarsPerRun, RemainingJars);
+			CollectedSoFar, JarsPerRun, Jar->RemainingJars);
 		ShowToast(FString::Printf(TEXT("Inventory full — collected %d of %d jars, press E to collect the rest"),
 			CollectedSoFar, JarsPerRun), false);
 		return;
@@ -1143,11 +1211,11 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 		}
 	}
 
-	// The jar stays placed, empty and ready for the next batch.
+	// The jar stays placed, empty and ready for the next batch. ITS still resets to Empty.
 	Jar->bIsFull = false;
 	Jar->bIsSealed = false;
 
-	SetStillState(EStillState::Empty);
+	SetStandState(JarStand, EStillState::Empty);
 	UE_LOG(LogTemp, Warning, TEXT("Collected %d MoonshineJar; still reset to Empty"), JarsPerRun);
 	ShowToast(FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun), true);
 
@@ -1304,6 +1372,16 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		SavedPart.StandIndex = (Part->PartID != FName(TEXT("CinderBlockStand")) && Part->OwningStand.IsValid())
 			? Stands.IndexOfByKey(Part->OwningStand.Get())
 			: INDEX_NONE;
+
+		// v3: per-stand operating state. Mid-batch (Lit/Running) saves as Empty — ingredients
+		// consumed by an interrupted run are not refunded (documented limitation).
+		EStillState SavedState = Part->StillState;
+		if (SavedState == EStillState::Lit || SavedState == EStillState::Running)
+		{
+			SavedState = EStillState::Empty;
+		}
+		SavedPart.StillState = (uint8)SavedState;
+
 		Save->StillParts.Add(SavedPart);
 	}
 
@@ -1378,11 +1456,15 @@ void AMoonshineCharacter_Simple::LoadGame()
 			Part->InitFromItemData(SavedPart.PartID, PartMesh);
 			Part->bIsFull = SavedPart.bIsFull;
 			Part->bIsSealed = SavedPart.bIsSealed;
-			PlacedStillParts.Add(Part);
 			if (SavedPart.PartID == FName(TEXT("CinderBlockStand")))
 			{
+				// v3 restores per-stand state (v1/v2 default to Empty). Batches never resume.
+				Part->StillState = (Save->SaveVersion >= 3) ? (EStillState)SavedPart.StillState : EStillState::Empty;
+				Part->bBatchRunning = false;
+				Part->BatchElapsed = 0.0f;
 				SpawnedStands.Add(Part);
 			}
+			PlacedStillParts.Add(Part);
 		}
 		SpawnedParts.Add(Part);
 	}
@@ -1419,12 +1501,10 @@ void AMoonshineCharacter_Simple::LoadGame()
 		}
 	}
 
-	// Recompute readiness. v1 limitation: mid-batch state is not saved — the still resumes Empty
-	// and ingredients consumed by an interrupted run are not refunded.
+	// Recompute readiness per stand. Completion tracking restarts from scratch; audio loops
+	// reconcile on the next tick. Mid-batch state was not saved (per-stand limitation).
+	CompletedStands.Empty();
 	CheckStillCompletion();
-	SetStillState(EStillState::Empty);
-	RemainingJars = 0;
-	GetWorldTimerManager().ClearTimer(BatchTimerHandle);
 
 	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts"),
 		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
@@ -1459,14 +1539,43 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 {
 	if (!InteractionHUD) return;
 
-	// Countdown is visible while Running regardless of where the player looks.
-	if (CurrentStillState == EStillState::Running)
+	// Countdowns are visible while any still is Running, regardless of where the player looks.
+	// Nearest running still first; up to 3 lines stacked; the bar shows the nearest one's fill.
 	{
-		InteractionHUD->ShowTimer(GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle), BatchTimeSeconds);
-	}
-	else
-	{
-		InteractionHUD->HideTimer();
+		struct FRunningStill { AStillPartActor* Stand; float DistSq; };
+		TArray<FRunningStill> RunningStills;
+		const FVector PlayerLoc = GetActorLocation();
+
+		for (AStillPartActor* Stand : PlacedStillParts)
+		{
+			if (IsValid(Stand) && Stand->PartID == FName(TEXT("CinderBlockStand")) &&
+				Stand->StillState == EStillState::Running)
+			{
+				RunningStills.Add({ Stand, float(FVector::DistSquared(PlayerLoc, Stand->GetActorLocation())) });
+			}
+		}
+
+		if (RunningStills.Num() > 0)
+		{
+			RunningStills.Sort([](const FRunningStill& A, const FRunningStill& B) { return A.DistSq < B.DistSq; });
+
+			const float Total = FMath::Max(BatchTimeSeconds, 0.01f);
+			FString Lines;
+			const int32 NumLines = FMath::Min(RunningStills.Num(), 3);
+			for (int32 i = 0; i < NumLines; ++i)
+			{
+				AStillPartActor* Stand = RunningStills[i].Stand;
+				const int32 Remaining = FMath::Max(0, FMath::CeilToInt(Total - Stand->BatchElapsed));
+				if (!Lines.IsEmpty()) Lines += TEXT("\n");
+				Lines += FString::Printf(TEXT("STILL %d  %d:%02d"), StandNumber(Stand), Remaining / 60, Remaining % 60);
+			}
+
+			InteractionHUD->ShowTimer(Lines, RunningStills[0].Stand->BatchElapsed / Total);
+		}
+		else
+		{
+			InteractionHUD->HideTimer();
+		}
 	}
 
 	// Contextual [E] prompt from whatever interactable is aimed at; empty string = hidden.
@@ -1479,14 +1588,16 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 			? FString::Printf(TEXT("Sell moonshine (%d jars @ $%d)"), JarCount, Buyer->PricePerJar)
 			: FString(TEXT("No moonshine to sell"));
 	}
-	else if (GetAimedSealedJar())
+	else if (AStillPartActor* SealedJar = GetAimedSealedJar())
 	{
-		const int32 ToCollect = (RemainingJars > 0) ? RemainingJars : JarsPerRun;
+		const int32 ToCollect = (SealedJar->RemainingJars > 0) ? SealedJar->RemainingJars : JarsPerRun;
 		Prompt = FString::Printf(TEXT("Collect moonshine (%d jars)"), ToCollect);
 	}
-	else if (bStillComplete && GetAimedPot())
+	else if (AStillPartActor* Pot = GetAimedPot())
 	{
-		switch (CurrentStillState)
+		// Prompt reads the aimed pot's OWN stand state (GetAimedPot verified completeness).
+		AStillPartActor* Stand = StandOfPart(Pot);
+		switch (Stand ? Stand->StillState : EStillState::Empty)
 		{
 		case EStillState::Empty: Prompt = FString::Printf(TEXT("Add Water (%d)"), WaterCost); break;
 		case EStillState::Water: Prompt = FString::Printf(TEXT("Add Mash (%d)"), MashCost); break;
