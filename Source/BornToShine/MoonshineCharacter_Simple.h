@@ -255,6 +255,14 @@ protected:
 	// Returns false with a player-facing message when the part can't be placed yet.
 	bool CheckStillPartPrereqs(FName PartID, FString& OutMsg) const;
 
+	// --- Save/Load (v1: inventory, money, placed still parts; brew state not saved) ---
+
+	UFUNCTION(BlueprintCallable, Category="SaveLoad")
+	void SaveGame();
+
+	UFUNCTION(BlueprintCallable, Category="SaveLoad")
+	void LoadGame();
+
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 
 	// Player money. Read by the HUD for the on-screen readout.

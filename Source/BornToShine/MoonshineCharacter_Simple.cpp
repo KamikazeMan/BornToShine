@@ -17,6 +17,8 @@
 #include "StillPartActor.h"
 #include "BuyerActor.h"
 #include "BornToShineHUD.h"
+#include "BornToShineSaveGame.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
@@ -38,6 +40,10 @@ namespace
 	constexpr uint64 MsgKeyInvFull        = 0x5722; // red partial-collection warning
 	constexpr uint64 MsgKeyCantPlace      = 0x5723; // red "can't place" on selecting a non-placeable item
 	constexpr uint64 MsgKeyPrereqMissing  = 0x5724; // red prerequisite message on part selection
+
+	// Save slot identity.
+	const TCHAR* SaveSlotName = TEXT("BornToShineSlot");
+	constexpr int32 SaveUserIndex = 0;
 }
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
@@ -115,6 +121,13 @@ void AMoonshineCharacter_Simple::BeginPlay()
 				Subsystem->AddMappingContext(DefaultMappingContext, 0);
 			}
 		}
+	}
+
+	// Resume from the save slot if one exists. LoadGame clears current inventory first, so the
+	// default starting grants are never duplicated; with no save, nothing happens here.
+	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
+	{
+		LoadGame();
 	}
 }
 
@@ -240,6 +253,10 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 
 	// Still operation: E interacts with the Pot of a completed still.
 	PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &AMoonshineCharacter_Simple::InteractWithStill);
+
+	// Save/Load debug keys.
+	PlayerInputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshineCharacter_Simple::SaveGame);
+	PlayerInputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshineCharacter_Simple::LoadGame);
 }
 
 void AMoonshineCharacter_Simple::Move(const FInputActionValue& Value)
@@ -645,6 +662,8 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 				}
 
 				UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
+
+				SaveGame(); // autosave: part placed
 			}
 		}
 	}
@@ -982,6 +1001,8 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 		GEngine->AddOnScreenDebugMessage(MsgKeyCollected, 5.0f, FColor::Green,
 			FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun));
 	}
+
+	SaveGame(); // autosave: collection completed
 }
 
 bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& OutMsg) const
@@ -1049,6 +1070,117 @@ bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& Ou
 	return true;
 }
 
+void AMoonshineCharacter_Simple::SaveGame()
+{
+	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(
+		UGameplayStatics::CreateSaveGameObject(UBornToShineSaveGame::StaticClass()));
+	if (!Save) return;
+
+	if (Inventory)
+	{
+		for (const FInventoryItem& Item : Inventory->GetItems())
+		{
+			FSavedInventoryItem Saved;
+			Saved.ItemID = Item.ItemID;
+			Saved.Count = Item.Quantity;
+			Save->InventoryItems.Add(Saved);
+		}
+	}
+	Save->Money = Money;
+
+	for (const AStillPartActor* Part : PlacedStillParts)
+	{
+		if (!IsValid(Part)) continue;
+		FSavedStillPart SavedPart;
+		SavedPart.PartID = Part->PartID;
+		SavedPart.Transform = Part->GetActorTransform();
+		SavedPart.bIsFull = Part->bIsFull;
+		SavedPart.bIsSealed = Part->bIsSealed;
+		Save->StillParts.Add(SavedPart);
+	}
+
+	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
+	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts"),
+		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+}
+
+void AMoonshineCharacter_Simple::LoadGame()
+{
+	if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No save found"));
+		return;
+	}
+
+	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(
+		UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex));
+	if (!Save)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No save found"));
+		return;
+	}
+
+	// Clear current state before restoring.
+	if (Inventory)
+	{
+		Inventory->ClearInventory();
+	}
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part))
+		{
+			Part->Destroy();
+		}
+	}
+	PlacedStillParts.Empty();
+
+	// Restore inventory stacks and money.
+	if (Inventory)
+	{
+		for (const FSavedInventoryItem& Item : Save->InventoryItems)
+		{
+			Inventory->AddItem(Item.ItemID, Item.Count);
+		}
+	}
+	Money = Save->Money;
+
+	// Respawn placed parts: same spawn path + data-table mesh assignment the placement flow uses.
+	for (const FSavedStillPart& SavedPart : Save->StillParts)
+	{
+		UStaticMesh* PartMesh = nullptr;
+		if (Inventory)
+		{
+			FItemDataRow RowData;
+			if (Inventory->GetItemData(SavedPart.PartID, RowData))
+			{
+				PartMesh = RowData.Mesh;
+			}
+		}
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(),
+			SavedPart.Transform.GetLocation(), SavedPart.Transform.Rotator(), SpawnParams);
+		if (Part)
+		{
+			Part->InitFromItemData(SavedPart.PartID, PartMesh);
+			Part->bIsFull = SavedPart.bIsFull;
+			Part->bIsSealed = SavedPart.bIsSealed;
+			PlacedStillParts.Add(Part);
+		}
+	}
+
+	// Recompute readiness. v1 limitation: mid-batch state is not saved — the still resumes Empty
+	// and ingredients consumed by an interrupted run are not refunded.
+	CheckStillCompletion();
+	SetStillState(EStillState::Empty);
+	RemainingJars = 0;
+	GetWorldTimerManager().ClearTimer(BatchTimerHandle);
+
+	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts"),
+		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+}
+
 void AMoonshineCharacter_Simple::AddMoney(int32 Amount)
 {
 	Money = FMath::Max(0, Money + Amount);
@@ -1072,6 +1204,8 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 		GEngine->AddOnScreenDebugMessage(MsgKeySold, 5.0f, FColor::Green,
 			FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money));
 	}
+
+	SaveGame(); // autosave: sale completed
 }
 
 void AMoonshineCharacter_Simple::UpdateStillPrompt()
@@ -1507,6 +1641,8 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 
 		// Detection only: re-evaluate whether the full Tier 2 still is now assembled.
 		CheckStillCompletion();
+
+		SaveGame(); // autosave: part placed
 	}
 
 	CancelStillGhost();

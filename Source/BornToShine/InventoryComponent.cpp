@@ -79,6 +79,12 @@ bool UInventoryComponent::RemoveItem(FName ItemID, int32 Quantity)
 	return true;
 }
 
+void UInventoryComponent::ClearInventory()
+{
+	Items.Empty();
+	OnInventoryChanged.Broadcast();
+}
+
 bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
 {
 	return GetItemCount(ItemID) >= Quantity;

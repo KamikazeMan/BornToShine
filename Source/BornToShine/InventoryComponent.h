@@ -35,6 +35,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool RemoveItem(FName ItemID, int32 Quantity);
 
+	// Remove everything (used by save/load restore).
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void ClearInventory();
+
 	// Check if inventory has at least Quantity of ItemID.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool HasItem(FName ItemID, int32 Quantity = 1) const;
