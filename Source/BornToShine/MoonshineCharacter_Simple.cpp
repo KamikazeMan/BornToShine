@@ -18,6 +18,7 @@
 #include "BuyerActor.h"
 #include "BornToShineHUD.h"
 #include "BornToShineSaveGame.h"
+#include "InteractionHUDWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -25,22 +26,6 @@
 
 namespace
 {
-	// Fixed on-screen message keys so repeated calls overwrite in place instead of stacking.
-	constexpr uint64 MsgKeyStillPrompt    = 0x5717; // aim-at-pot interact prompt (per tick)
-	constexpr uint64 MsgKeyStillCountdown = 0x5718; // "Distilling… Ns" countdown (per tick)
-	constexpr uint64 MsgKeyStillComplete  = 0x5719; // green "Still complete" transition
-	constexpr uint64 MsgKeyBatchComplete  = 0x571A; // green "Batch complete" event
-	constexpr uint64 MsgKeyNeedWater      = 0x571B; // red requirement failures (E presses)
-	constexpr uint64 MsgKeyNeedMash       = 0x571C;
-	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
-	constexpr uint64 MsgKeyJarEmpty       = 0x571E; // red "nothing to seal" while lid-ghosting (per tick)
-	constexpr uint64 MsgKeyCollected      = 0x571F; // green collection confirmation
-	constexpr uint64 MsgKeySellPrompt     = 0x5720; // aim-at-buyer sell prompt (per tick)
-	constexpr uint64 MsgKeySold           = 0x5721; // green sale confirmation
-	constexpr uint64 MsgKeyInvFull        = 0x5722; // red partial-collection warning
-	constexpr uint64 MsgKeyCantPlace      = 0x5723; // red "can't place" on selecting a non-placeable item
-	constexpr uint64 MsgKeyPrereqMissing  = 0x5724; // red prerequisite message on part selection
-
 	// Save slot identity.
 	const TCHAR* SaveSlotName = TEXT("BornToShineSlot");
 	constexpr int32 SaveUserIndex = 0;
@@ -123,11 +108,30 @@ void AMoonshineCharacter_Simple::BeginPlay()
 		}
 	}
 
+	// Interaction HUD overlay (created before auto-load so load-time toasts can show).
+	if (APlayerController* PC = Cast<APlayerController>(Controller))
+	{
+		InteractionHUD = CreateWidget<UInteractionHUDWidget>(PC, UInteractionHUDWidget::StaticClass());
+		if (InteractionHUD)
+		{
+			InteractionHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
+			InteractionHUD->AddToViewport(5);
+		}
+	}
+
 	// Resume from the save slot if one exists. LoadGame clears current inventory first, so the
 	// default starting grants are never duplicated; with no save, nothing happens here.
 	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
 	{
 		LoadGame();
+	}
+}
+
+void AMoonshineCharacter_Simple::ShowToast(const FString& Text, bool bSuccess)
+{
+	if (InteractionHUD)
+	{
+		InteractionHUD->AddToast(Text, bSuccess);
 	}
 }
 
@@ -560,10 +564,7 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 		if (!CheckStillPartPrereqs(ItemID, PrereqMsg))
 		{
 			UE_LOG(LogTemp, Warning, TEXT("%s"), *PrereqMsg);
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(MsgKeyPrereqMissing, 2.0f, FColor::Red, PrereqMsg);
-			}
+			ShowToast(PrereqMsg, false);
 			return;
 		}
 		BeginStillGhostPlacement(ItemID);
@@ -581,10 +582,7 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 		if (bNonPlaceable || !bHasMesh)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Can't place %s — no placement role/mesh"), *ItemID.ToString());
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(MsgKeyCantPlace, 2.0f, FColor::Red, TEXT("Can't place this item"));
-			}
+			ShowToast(TEXT("Can't place this item"), false);
 			return;
 		}
 	}
@@ -635,10 +633,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 		{
 			// Never spawn an empty actor for a meshless item; consume nothing, exit placement mode.
 			UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — placement cancelled"), *PendingPlacementItemID.ToString());
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(MsgKeyCantPlace, 2.0f, FColor::Red, TEXT("Can't place this item"));
-			}
+			ShowToast(TEXT("Can't place this item"), false);
 		}
 		else
 		{
@@ -780,10 +775,7 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 	{
 		bStillComplete = true;
 		UE_LOG(LogTemp, Warning, TEXT("=== STILL COMPLETE — ready to operate ==="));
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(MsgKeyStillComplete, 5.0f, FColor::Green, TEXT("Still complete — ready to operate"));
-		}
+		ShowToast(TEXT("Still complete — ready to operate"), true);
 	}
 	else if (!bNowComplete && bStillComplete)
 	{
@@ -878,7 +870,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Water"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Water (have %d)"), WaterCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedWater, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Water"), WaterCost));
+			ShowToast(FString::Printf(TEXT("Need %d Water (have %d)"), WaterCost, Have), false);
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
@@ -891,7 +883,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Mash"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Mash (have %d)"), MashCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedMash, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Mash"), MashCost));
+			ShowToast(FString::Printf(TEXT("Need %d Mash (have %d)"), MashCost, Have), false);
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
@@ -905,7 +897,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		{
 			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Firewood"))) : 0;
 			UE_LOG(LogTemp, Warning, TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have);
-			if (GEngine) GEngine->AddOnScreenDebugMessage(MsgKeyNeedFirewood, 2.0f, FColor::Red, FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have));
+			ShowToast(FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have), false);
 			break;
 		}
 		Inventory->RemoveItem(FName(TEXT("Firewood")), FirewoodCost);
@@ -932,10 +924,7 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 {
 	SetStillState(EStillState::Done);
 	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE ==="));
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(MsgKeyBatchComplete, 5.0f, FColor::Green, TEXT("Batch complete — jar full"));
-	}
+	ShowToast(TEXT("Batch complete — jar is full"), true);
 
 	// Mark the catch vessel full so the lid can be snapped on to seal it.
 	if (AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar"))))
@@ -966,12 +955,8 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 		const int32 CollectedSoFar = JarsPerRun - RemainingJars;
 		UE_LOG(LogTemp, Warning, TEXT("Inventory full — collected %d of %d jars, %d still in the jar"),
 			CollectedSoFar, JarsPerRun, RemainingJars);
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(MsgKeyInvFull, 3.0f, FColor::Red,
-				FString::Printf(TEXT("Inventory full — collected %d of %d jars, press E to collect the rest"),
-					CollectedSoFar, JarsPerRun));
-		}
+		ShowToast(FString::Printf(TEXT("Inventory full — collected %d of %d jars, press E to collect the rest"),
+			CollectedSoFar, JarsPerRun), false);
 		return;
 	}
 
@@ -996,11 +981,7 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 
 	SetStillState(EStillState::Empty);
 	UE_LOG(LogTemp, Warning, TEXT("Collected %d MoonshineJar; still reset to Empty"), JarsPerRun);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(MsgKeyCollected, 5.0f, FColor::Green,
-			FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun));
-	}
+	ShowToast(FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun), true);
 
 	SaveGame(); // autosave: collection completed
 }
@@ -1102,6 +1083,7 @@ void AMoonshineCharacter_Simple::SaveGame()
 	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
 	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts"),
 		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+	ShowToast(TEXT("Game saved"), true);
 }
 
 void AMoonshineCharacter_Simple::LoadGame()
@@ -1179,6 +1161,7 @@ void AMoonshineCharacter_Simple::LoadGame()
 
 	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts"),
 		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+	ShowToast(TEXT("Game loaded"), true);
 }
 
 void AMoonshineCharacter_Simple::AddMoney(int32 Amount)
@@ -1199,64 +1182,60 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 	AddMoney(Total);
 
 	UE_LOG(LogTemp, Warning, TEXT("Sold %d jars for $%d"), JarCount, Total);
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(MsgKeySold, 5.0f, FColor::Green,
-			FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money));
-	}
+	ShowToast(FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money), true);
 
 	SaveGame(); // autosave: sale completed
 }
 
 void AMoonshineCharacter_Simple::UpdateStillPrompt()
 {
-	if (!GEngine) return;
+	if (!InteractionHUD) return;
 
-	// Buyer: show the sell prompt (or "nothing to sell") regardless of still state.
+	// Countdown is visible while Running regardless of where the player looks.
+	if (CurrentStillState == EStillState::Running)
+	{
+		InteractionHUD->ShowTimer(GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle), BatchTimeSeconds);
+	}
+	else
+	{
+		InteractionHUD->HideTimer();
+	}
+
+	// Contextual [E] prompt from whatever interactable is aimed at; empty string = hidden.
+	FString Prompt;
+
 	if (ABuyerActor* Buyer = GetAimedBuyer())
 	{
 		const int32 JarCount = Inventory ? Inventory->GetItemCount(FName(TEXT("MoonshineJar"))) : 0;
-		const FString SellPrompt = (JarCount > 0)
-			? FString::Printf(TEXT("Press E: Sell moonshine (%d jars @ $%d)"), JarCount, Buyer->PricePerJar)
+		Prompt = (JarCount > 0)
+			? FString::Printf(TEXT("Sell moonshine (%d jars @ $%d)"), JarCount, Buyer->PricePerJar)
 			: FString(TEXT("No moonshine to sell"));
-		GEngine->AddOnScreenDebugMessage(MsgKeySellPrompt, 0.2f, FColor::Yellow, SellPrompt);
-		return;
 	}
-
-	// Sealed jar is a second interactable: show the collect prompt regardless of the pot flow.
-	if (GetAimedSealedJar())
+	else if (GetAimedSealedJar())
 	{
 		const int32 ToCollect = (RemainingJars > 0) ? RemainingJars : JarsPerRun;
-		GEngine->AddOnScreenDebugMessage(MsgKeyStillPrompt, 0.2f, FColor::Yellow,
-			FString::Printf(TEXT("Press E: Collect moonshine (%d jars)"), ToCollect));
-		return;
+		Prompt = FString::Printf(TEXT("Collect moonshine (%d jars)"), ToCollect);
 	}
-
-	if (!bStillComplete) return;
-	if (!GetAimedPot()) return;
-
-	// Fixed keys so the per-tick prompt overwrites in place instead of stacking. The countdown
-	// uses its own key separate from the interact prompt.
-	FString Prompt;
-	uint64 MsgKey = MsgKeyStillPrompt;
-	switch (CurrentStillState)
+	else if (bStillComplete && GetAimedPot())
 	{
-	case EStillState::Empty: Prompt = FString::Printf(TEXT("Press E: Add Water (%d)"), WaterCost); break;
-	case EStillState::Water: Prompt = FString::Printf(TEXT("Press E: Add Mash (%d)"), MashCost); break;
-	case EStillState::Mash:  Prompt = FString::Printf(TEXT("Press E: Light Fire (%d Firewood)"), FirewoodCost); break;
-	case EStillState::Lit:   Prompt = TEXT("Distilling…"); MsgKey = MsgKeyStillCountdown; break;
-	case EStillState::Running:
-	{
-		const float Remaining = GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle);
-		Prompt = FString::Printf(TEXT("Distilling… %ds"), FMath::Max(0, FMath::CeilToInt(Remaining)));
-		MsgKey = MsgKeyStillCountdown;
-		break;
-	}
-	case EStillState::Done:  Prompt = TEXT("Batch complete — jar full"); break;
-	default: break;
+		switch (CurrentStillState)
+		{
+		case EStillState::Empty: Prompt = FString::Printf(TEXT("Add Water (%d)"), WaterCost); break;
+		case EStillState::Water: Prompt = FString::Printf(TEXT("Add Mash (%d)"), MashCost); break;
+		case EStillState::Mash:  Prompt = FString::Printf(TEXT("Light Fire (%d Firewood)"), FirewoodCost); break;
+		case EStillState::Done:  Prompt = TEXT("Batch complete — jar is full"); break;
+		default: break; // Lit/Running: the countdown bar covers it
+		}
 	}
 
-	GEngine->AddOnScreenDebugMessage(MsgKey, 0.2f, FColor::Yellow, Prompt);
+	if (Prompt.IsEmpty())
+	{
+		InteractionHUD->ClearPrompt();
+	}
+	else
+	{
+		InteractionHUD->SetPrompt(Prompt);
+	}
 }
 
 void AMoonshineCharacter_Simple::SetGhostColor(const FLinearColor& Color)
@@ -1481,9 +1460,11 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
 			if (!Jar || !Jar->bIsFull)
 			{
-				if (Jar && GEngine)
+				if (Jar)
 				{
-					GEngine->AddOnScreenDebugMessage(MsgKeyJarEmpty, 0.2f, FColor::Red, TEXT("Jar is empty — nothing to seal"));
+					// Per-tick caller: AddToast dedupes identical fresh messages, so this refreshes
+					// one toast instead of stacking copies.
+					ShowToast(TEXT("Jar is empty — nothing to seal"), false);
 				}
 				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
 				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));

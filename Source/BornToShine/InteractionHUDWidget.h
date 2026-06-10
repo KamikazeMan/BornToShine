@@ -1,0 +1,62 @@
+// Born To Shine - Interaction HUD: [E] prompt, distill countdown, event toasts
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Blueprint/UserWidget.h"
+#include "InteractionHUDWidget.generated.h"
+
+class UBorder;
+class UTextBlock;
+class UProgressBar;
+class UVerticalBox;
+
+/**
+ * Code-built HUD overlay (same style as the inventory widgets):
+ *  - bottom-center contextual prompt: keycap "[E]" + action text
+ *  - top-center distill countdown text + progress bar (only while Running)
+ *  - toast stack above the prompt: short fading event messages (green success / red failure)
+ */
+UCLASS()
+class BORNTOSHINE_API UInteractionHUDWidget : public UUserWidget
+{
+	GENERATED_BODY()
+
+public:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+
+	// Shows the bottom-center prompt as "[E] <ActionText>".
+	void SetPrompt(const FString& ActionText);
+	void ClearPrompt();
+
+	// Shows/updates the top-center countdown ("DISTILLING  M:SS" + fill bar).
+	void ShowTimer(float RemainingSeconds, float TotalSeconds);
+	void HideTimer();
+
+	// Pushes a fading event message (green when bSuccess, red otherwise). Re-issuing the same
+	// text while it is still fresh refreshes it instead of stacking a duplicate.
+	void AddToast(const FString& Text, bool bSuccess);
+
+protected:
+	UPROPERTY() UBorder* PromptPanel = nullptr;
+	UPROPERTY() UTextBlock* PromptText = nullptr;
+
+	UPROPERTY() UVerticalBox* TimerBox = nullptr;
+	UPROPERTY() UTextBlock* TimerText = nullptr;
+	UPROPERTY() UProgressBar* TimerBar = nullptr;
+
+	UPROPERTY() UVerticalBox* ToastBox = nullptr;
+
+	struct FToastEntry
+	{
+		TWeakObjectPtr<UBorder> Panel;
+		FString Text;
+		float Age = 0.0f;
+	};
+	TArray<FToastEntry> Toasts; // panels are owned/GC-rooted by ToastBox
+
+	static constexpr float ToastLifetime = 2.5f;  // total seconds on screen
+	static constexpr float ToastFadeStart = 1.5f; // opacity ramps down after this age
+	static constexpr int32 MaxToasts = 3;
+};

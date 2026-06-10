@@ -12,6 +12,7 @@
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class AStillPartActor;
+class UInteractionHUDWidget;
 
 /** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
 UENUM(BlueprintType)
@@ -285,8 +286,15 @@ protected:
 	// Running timer callback: Running -> Done.
 	void OnBatchComplete();
 
-	// Per-tick on-screen prompt shown while aiming at the Pot of a complete still.
+	// Per-tick interaction HUD update: contextual prompt + distill countdown.
 	void UpdateStillPrompt();
+
+	// Code-built interaction HUD overlay ([E] prompt, countdown bar, toasts).
+	UPROPERTY()
+	UInteractionHUDWidget* InteractionHUD = nullptr;
+
+	// Toast helper (no-ops safely before the HUD exists).
+	void ShowToast(const FString& Text, bool bSuccess);
 
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
