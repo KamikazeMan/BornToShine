@@ -15,6 +15,7 @@
 #include "Engine/StaticMesh.h"
 #include "TimerManager.h"
 #include "StillPartActor.h"
+#include "BuyerActor.h"
 #include "BornToShineHUD.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -652,6 +653,8 @@ namespace
 	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
 	constexpr uint64 MsgKeyJarEmpty       = 0x571E; // red "nothing to seal" while lid-ghosting (per tick)
 	constexpr uint64 MsgKeyCollected      = 0x571F; // green collection confirmation
+	constexpr uint64 MsgKeySellPrompt     = 0x5720; // aim-at-buyer sell prompt (per tick)
+	constexpr uint64 MsgKeySold           = 0x5721; // green sale confirmation
 
 	// Required parts for a complete Tier 2 Pot Still. MasonJarLid is intentionally EXCLUDED:
 	// the empty MasonJar is the catch vessel and is required; the lid is a later output mechanic.
@@ -731,7 +734,7 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 	}
 }
 
-AStillPartActor* AMoonshineCharacter_Simple::GetAimedStillPart() const
+AActor* AMoonshineCharacter_Simple::GetAimedActor() const
 {
 	// Same camera-forward trace pattern as UpdateStillGhost.
 	FVector CamLoc = GetActorLocation();
@@ -750,7 +753,17 @@ AStillPartActor* AMoonshineCharacter_Simple::GetAimedStillPart() const
 		return nullptr;
 	}
 
-	return Cast<AStillPartActor>(Hit.GetActor());
+	return Hit.GetActor();
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::GetAimedStillPart() const
+{
+	return Cast<AStillPartActor>(GetAimedActor());
+}
+
+ABuyerActor* AMoonshineCharacter_Simple::GetAimedBuyer() const
+{
+	return Cast<ABuyerActor>(GetAimedActor());
 }
 
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
@@ -777,6 +790,13 @@ void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
 
 void AMoonshineCharacter_Simple::InteractWithStill()
 {
+	// Selling to a buyer is its own interaction, independent of the still.
+	if (ABuyerActor* Buyer = GetAimedBuyer())
+	{
+		SellMoonshine(Buyer);
+		return;
+	}
+
 	// Collecting from a sealed jar is its own interaction, independent of the pot flow.
 	if (AStillPartActor* SealedJar = GetAimedSealedJar())
 	{
@@ -898,9 +918,45 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	}
 }
 
+void AMoonshineCharacter_Simple::AddMoney(int32 Amount)
+{
+	Money = FMath::Max(0, Money + Amount);
+	UE_LOG(LogTemp, Warning, TEXT("Money: +$%d (total $%d)"), Amount, Money);
+}
+
+void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
+{
+	if (!IsValid(Buyer) || !Inventory) return;
+
+	const int32 JarCount = Inventory->GetItemCount(FName(TEXT("MoonshineJar")));
+	if (JarCount <= 0) return; // nothing to sell — prompt already says so
+
+	Inventory->RemoveItem(FName(TEXT("MoonshineJar")), JarCount);
+	const int32 Total = JarCount * Buyer->PricePerJar;
+	AddMoney(Total);
+
+	UE_LOG(LogTemp, Warning, TEXT("Sold %d jars for $%d"), JarCount, Total);
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(MsgKeySold, 5.0f, FColor::Green,
+			FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money));
+	}
+}
+
 void AMoonshineCharacter_Simple::UpdateStillPrompt()
 {
 	if (!GEngine) return;
+
+	// Buyer: show the sell prompt (or "nothing to sell") regardless of still state.
+	if (ABuyerActor* Buyer = GetAimedBuyer())
+	{
+		const int32 JarCount = Inventory ? Inventory->GetItemCount(FName(TEXT("MoonshineJar"))) : 0;
+		const FString SellPrompt = (JarCount > 0)
+			? FString::Printf(TEXT("Press E: Sell moonshine (%d jars @ $%d)"), JarCount, Buyer->PricePerJar)
+			: FString(TEXT("No moonshine to sell"));
+		GEngine->AddOnScreenDebugMessage(MsgKeySellPrompt, 0.2f, FColor::Yellow, SellPrompt);
+		return;
+	}
 
 	// Sealed jar is a second interactable: show the collect prompt regardless of the pot flow.
 	if (GetAimedSealedJar())

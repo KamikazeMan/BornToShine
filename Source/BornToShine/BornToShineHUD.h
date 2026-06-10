@@ -59,4 +59,7 @@ protected:
 
 	// Draw the delete-mode crosshair
 	void DrawDeleteCrosshair();
+
+	// Draw the persistent "$<Money>" readout (top-right), read from the owning player character.
+	void DrawMoney();
 };

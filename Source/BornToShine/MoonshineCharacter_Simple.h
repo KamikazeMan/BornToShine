@@ -154,6 +154,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	bool IsFirstPerson() const { return bIsFirstPerson; }
 
+	// Current player money (read by the HUD readout).
+	UFUNCTION(BlueprintCallable, Category = "Selling")
+	int32 GetMoney() const { return Money; }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -226,7 +230,10 @@ protected:
 	// E-key interaction: advance the still's state when aiming at the Pot and the still is complete.
 	void InteractWithStill();
 
-	// Returns the placed still part the player is currently aiming at (camera-forward trace), or nullptr.
+	// Returns whatever actor the camera-forward interaction trace hits within MaxAimDistanceCm.
+	AActor* GetAimedActor() const;
+
+	// Returns the placed still part the player is currently aiming at, or nullptr.
 	class AStillPartActor* GetAimedStillPart() const;
 
 	// Returns the placed Pot the player is currently aiming at, or nullptr.
@@ -238,6 +245,22 @@ protected:
 	// Collects the batch from a sealed jar: grants MoonshineJar x JarsPerRun, returns the lid to
 	// inventory, resets the jar and the still state to Empty.
 	void CollectMoonshine(class AStillPartActor* Jar);
+
+	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
+
+	// Player money. Read by the HUD for the on-screen readout.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Selling")
+	int32 Money = 0;
+
+	// Adds (or subtracts) money, clamped at >= 0, with an event log line.
+	UFUNCTION(BlueprintCallable, Category="Selling")
+	void AddMoney(int32 Amount);
+
+	// Returns the buyer the player is currently aiming at (camera-forward trace), or nullptr.
+	class ABuyerActor* GetAimedBuyer() const;
+
+	// Sells ALL MoonshineJar in inventory to the buyer.
+	void SellMoonshine(class ABuyerActor* Buyer);
 
 	// Applies a state transition with a single concise log line.
 	void SetStillState(EStillState NewState);

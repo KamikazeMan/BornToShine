@@ -1,7 +1,10 @@
 // Born To Shine - HUD with crosshair for building mode
 
 #include "BornToShineHUD.h"
+#include "MoonshineCharacter_Simple.h"
 #include "Engine/Canvas.h"
+#include "Engine/Font.h"
+#include "Engine/Engine.h"
 
 ABornToShineHUD::ABornToShineHUD()
 {
@@ -29,6 +32,24 @@ void ABornToShineHUD::DrawHUD()
 	{
 		DrawDeleteCrosshair();
 	}
+
+	DrawMoney();
+}
+
+void ABornToShineHUD::DrawMoney()
+{
+	if (!Canvas) return;
+
+	const AMoonshineCharacter_Simple* Player = Cast<AMoonshineCharacter_Simple>(GetOwningPawn());
+	if (!Player) return;
+
+	const FString MoneyText = FString::Printf(TEXT("$%d"), Player->GetMoney());
+	UFont* Font = GEngine ? GEngine->GetLargeFont() : nullptr;
+
+	// Right-align with a margin in the top-right corner.
+	float TextWidth = 0.0f, TextHeight = 0.0f;
+	GetTextSize(MoneyText, TextWidth, TextHeight, Font, 1.5f);
+	DrawText(MoneyText, FLinearColor::White, Canvas->SizeX - TextWidth - 20.0f, 20.0f, Font, 1.5f);
 }
 
 void ABornToShineHUD::DrawCrosshair()
