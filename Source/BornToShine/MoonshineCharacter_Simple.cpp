@@ -768,7 +768,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 				UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
 				PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), SpawnLocation);
 
-				SaveGame(); // autosave: part placed
+				RequestAutosaveDebounced(); // autosave: part placed (debounced)
 			}
 		}
 	}
@@ -1109,7 +1109,7 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	UE_LOG(LogTemp, Warning, TEXT("Collected %d MoonshineJar; still reset to Empty"), JarsPerRun);
 	ShowToast(FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun), true);
 
-	SaveGame(); // autosave: collection completed
+	AutoSave(); // immediate autosave: collection is a high-value moment
 }
 
 bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& OutMsg) const
@@ -1179,6 +1179,34 @@ bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& Ou
 
 void AMoonshineCharacter_Simple::SaveGame()
 {
+	// Manual save: the player asked for it — confirm loudly.
+	DoSaveGame();
+	ShowToast(TEXT("Game saved"), true);
+}
+
+void AMoonshineCharacter_Simple::AutoSave()
+{
+	if (!bAutosaveEnabled) return;
+
+	// Silent: no toast, no sound — just the fading corner indicator.
+	DoSaveGame();
+	if (InteractionHUD)
+	{
+		InteractionHUD->ShowSaveIndicator();
+	}
+}
+
+void AMoonshineCharacter_Simple::RequestAutosaveDebounced()
+{
+	if (!bAutosaveEnabled) return;
+
+	// Restarting the timer coalesces a burst of placements into a single save.
+	GetWorldTimerManager().SetTimer(AutosaveDebounceHandle, this,
+		&AMoonshineCharacter_Simple::AutoSave, FMath::Max(AutosaveDebounceSeconds, 0.1f), false);
+}
+
+void AMoonshineCharacter_Simple::DoSaveGame()
+{
 	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(
 		UGameplayStatics::CreateSaveGameObject(UBornToShineSaveGame::StaticClass()));
 	if (!Save) return;
@@ -1209,7 +1237,6 @@ void AMoonshineCharacter_Simple::SaveGame()
 	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
 	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts"),
 		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
-	ShowToast(TEXT("Game saved"), true);
 }
 
 void AMoonshineCharacter_Simple::LoadGame()
@@ -1311,7 +1338,7 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 	ShowToast(FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money), true);
 	PlaySfx2D(SellSound, TEXT("SellSound"));
 
-	SaveGame(); // autosave: sale completed
+	AutoSave(); // immediate autosave: sale is a high-value moment
 }
 
 void AMoonshineCharacter_Simple::UpdateStillPrompt()
@@ -1752,7 +1779,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		// Detection only: re-evaluate whether the full Tier 2 still is now assembled.
 		CheckStillCompletion();
 
-		SaveGame(); // autosave: part placed
+		RequestAutosaveDebounced(); // autosave: part placed (debounced)
 	}
 
 	CancelStillGhost();

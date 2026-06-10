@@ -105,6 +105,20 @@ TSharedRef<SWidget> UInteractionHUDWidget::RebuildWidget()
 	TimerSlot->SetPosition(FVector2D(0.0f, 40.0f));
 	TimerBox->SetVisibility(ESlateVisibility::Collapsed);
 
+	// --- Autosave indicator: bottom-right, faded in/out from code ---
+	SaveIndicatorText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("SaveIndicatorText"));
+	SaveIndicatorText->SetText(FText::FromString(TEXT("Saving…")));
+	FSlateFontInfo SaveFont = SaveIndicatorText->GetFont();
+	SaveFont.Size = 12;
+	SaveIndicatorText->SetFont(SaveFont);
+	SaveIndicatorText->SetColorAndOpacity(FSlateColor(FLinearColor(0.8f, 0.8f, 0.8f, 1.0f)));
+	UCanvasPanelSlot* SaveSlot = RootCanvas->AddChildToCanvas(SaveIndicatorText);
+	SaveSlot->SetAnchors(FAnchors(1.0f, 1.0f, 1.0f, 1.0f));
+	SaveSlot->SetAlignment(FVector2D(1.0f, 1.0f));
+	SaveSlot->SetAutoSize(true);
+	SaveSlot->SetPosition(FVector2D(-20.0f, -20.0f));
+	SaveIndicatorText->SetVisibility(ESlateVisibility::Collapsed);
+
 	// --- Toast stack: just above the prompt slot ---
 	ToastBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ToastBox"));
 	UCanvasPanelSlot* ToastSlot = RootCanvas->AddChildToCanvas(ToastBox);
@@ -121,6 +135,21 @@ TSharedRef<SWidget> UInteractionHUDWidget::RebuildWidget()
 void UInteractionHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Fade the autosave indicator out.
+	if (SaveIndicatorAge >= 0.0f && SaveIndicatorText)
+	{
+		SaveIndicatorAge += InDeltaTime;
+		if (SaveIndicatorAge >= SaveIndicatorLifetime)
+		{
+			SaveIndicatorAge = -1.0f;
+			SaveIndicatorText->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else
+		{
+			SaveIndicatorText->SetRenderOpacity(1.0f - SaveIndicatorAge / SaveIndicatorLifetime);
+		}
+	}
 
 	// Age toasts: hold full opacity, then fade out, then drop.
 	for (int32 i = Toasts.Num() - 1; i >= 0; --i)
@@ -145,6 +174,14 @@ void UInteractionHUDWidget::NativeTick(const FGeometry& MyGeometry, float InDelt
 			Panel->SetRenderOpacity(FMath::Clamp(Fade, 0.0f, 1.0f));
 		}
 	}
+}
+
+void UInteractionHUDWidget::ShowSaveIndicator()
+{
+	if (!SaveIndicatorText) return;
+	SaveIndicatorAge = 0.0f;
+	SaveIndicatorText->SetRenderOpacity(1.0f);
+	SaveIndicatorText->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 void UInteractionHUDWidget::SetPrompt(const FString& ActionText)

@@ -39,6 +39,9 @@ public:
 	// when a NEW toast was added (false on refresh) so callers can gate one-shot audio.
 	bool AddToast(const FString& Text, bool bSuccess);
 
+	// Flashes the small bottom-right "Saving…" indicator (fades out over ~1.5s). Silent.
+	void ShowSaveIndicator();
+
 protected:
 	UPROPERTY() UBorder* PromptPanel = nullptr;
 	UPROPERTY() UTextBlock* PromptText = nullptr;
@@ -48,6 +51,10 @@ protected:
 	UPROPERTY() UProgressBar* TimerBar = nullptr;
 
 	UPROPERTY() UVerticalBox* ToastBox = nullptr;
+
+	UPROPERTY() UTextBlock* SaveIndicatorText = nullptr;
+	float SaveIndicatorAge = -1.0f; // < 0 = hidden
+	static constexpr float SaveIndicatorLifetime = 1.5f;
 
 	struct FToastEntry
 	{

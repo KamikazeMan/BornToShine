@@ -258,11 +258,31 @@ protected:
 
 	// --- Save/Load (v1: inventory, money, placed still parts; brew state not saved) ---
 
+	// Manual save (F5): loud — toast + ping.
 	UFUNCTION(BlueprintCallable, Category="SaveLoad")
 	void SaveGame();
 
 	UFUNCTION(BlueprintCallable, Category="SaveLoad")
 	void LoadGame();
+
+	// Kill switch for all autosaving (testing sessions).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Save")
+	bool bAutosaveEnabled = true;
+
+	// Part placements debounce into one save this many seconds after the last placement.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Save")
+	float AutosaveDebounceSeconds = 10.0f;
+
+	// Silent autosave: no toast/sound, just the corner "Saving…" indicator.
+	void AutoSave();
+
+	// (Re)starts the debounce timer; the save fires once placements stop.
+	void RequestAutosaveDebounced();
+
+	// Shared snapshot-and-write core used by both save paths.
+	void DoSaveGame();
+
+	FTimerHandle AutosaveDebounceHandle;
 
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 
