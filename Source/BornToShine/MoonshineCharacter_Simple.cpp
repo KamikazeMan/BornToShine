@@ -901,7 +901,8 @@ void AMoonshineCharacter_Simple::CheckStillCompletion()
 
 AActor* AMoonshineCharacter_Simple::GetAimedActor() const
 {
-	// Same camera-forward trace pattern as UpdateStillGhost.
+	// Camera-forward sweep (sphere for forgiveness; closest hit wins). The still-part GHOST
+	// placement trace and ray-proximity snap test are separate and stay line-based.
 	FVector CamLoc = GetActorLocation();
 	FRotator CamRot = GetActorRotation();
 	if (AController* C = GetController())
@@ -913,7 +914,8 @@ AActor* AMoonshineCharacter_Simple::GetAimedActor() const
 	FHitResult Hit;
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(this);
-	if (!GetWorld()->LineTraceSingleByChannel(Hit, CamLoc, TraceEnd, ECC_Visibility, Params))
+	if (!GetWorld()->SweepSingleByChannel(Hit, CamLoc, TraceEnd, FQuat::Identity, ECC_Visibility,
+		FCollisionShape::MakeSphere(InteractTraceRadiusCm), Params))
 	{
 		return nullptr;
 	}

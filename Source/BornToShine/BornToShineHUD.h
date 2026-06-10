@@ -58,6 +58,16 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	class UTexture2D* MoneyIcon = nullptr;
 
+	// Always-on aiming dot at screen center (hidden while a build/delete crosshair is active).
+	UPROPERTY(EditAnywhere, Category = "Crosshair")
+	bool bShowCenterDot = true;
+
+	UPROPERTY(EditAnywhere, Category = "Crosshair")
+	float DotSize = 4.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Crosshair")
+	float DotOpacity = 0.85f;
+
 	// Draw the crosshair
 	void DrawCrosshair();
 
@@ -66,4 +76,7 @@ protected:
 
 	// Draw the persistent "$<Money>" readout (top-right), read from the owning player character.
 	void DrawMoney();
+
+	// Draw the small always-on center dot.
+	void DrawCenterDot();
 };

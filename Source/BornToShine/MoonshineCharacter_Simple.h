@@ -352,6 +352,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
 	bool bToastSoundOnFailureOnly = false;
 
+	// Sphere radius for the E-interaction sweep — forgiveness when aiming at the pot/jar/buyer.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	float InteractTraceRadiusCm = 12.0f;
+
 	// Optional attenuation override for the still loops; a default (~15 m audible) is built lazily.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
 	class USoundAttenuation* LoopAttenuation = nullptr;

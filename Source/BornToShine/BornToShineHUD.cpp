@@ -34,7 +34,32 @@ void ABornToShineHUD::DrawHUD()
 		DrawDeleteCrosshair();
 	}
 
+	// The big crosshairs replace the dot — never both at once.
+	if (bShowCenterDot && !bShowCrosshair && !bShowDeleteCrosshair)
+	{
+		DrawCenterDot();
+	}
+
 	DrawMoney();
+}
+
+void ABornToShineHUD::DrawCenterDot()
+{
+	if (!Canvas) return;
+
+	// Hide while the inventory UI is open (it shows a cursor; the dot is just noise there).
+	if (const AMoonshineCharacter_Simple* Player = Cast<AMoonshineCharacter_Simple>(GetOwningPawn()))
+	{
+		if (Player->InventoryWidgetInstance && Player->InventoryWidgetInstance->IsInViewport())
+		{
+			return;
+		}
+	}
+
+	const float CenterX = Canvas->SizeX * 0.5f;
+	const float CenterY = Canvas->SizeY * 0.5f;
+	DrawRect(FLinearColor(1.0f, 1.0f, 1.0f, DotOpacity),
+		CenterX - DotSize * 0.5f, CenterY - DotSize * 0.5f, DotSize, DotSize);
 }
 
 void ABornToShineHUD::DrawMoney()
