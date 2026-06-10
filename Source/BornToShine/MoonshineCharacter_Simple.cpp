@@ -21,6 +21,25 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
 
+namespace
+{
+	// Fixed on-screen message keys so repeated calls overwrite in place instead of stacking.
+	constexpr uint64 MsgKeyStillPrompt    = 0x5717; // aim-at-pot interact prompt (per tick)
+	constexpr uint64 MsgKeyStillCountdown = 0x5718; // "Distilling… Ns" countdown (per tick)
+	constexpr uint64 MsgKeyStillComplete  = 0x5719; // green "Still complete" transition
+	constexpr uint64 MsgKeyBatchComplete  = 0x571A; // green "Batch complete" event
+	constexpr uint64 MsgKeyNeedWater      = 0x571B; // red requirement failures (E presses)
+	constexpr uint64 MsgKeyNeedMash       = 0x571C;
+	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
+	constexpr uint64 MsgKeyJarEmpty       = 0x571E; // red "nothing to seal" while lid-ghosting (per tick)
+	constexpr uint64 MsgKeyCollected      = 0x571F; // green collection confirmation
+	constexpr uint64 MsgKeySellPrompt     = 0x5720; // aim-at-buyer sell prompt (per tick)
+	constexpr uint64 MsgKeySold           = 0x5721; // green sale confirmation
+	constexpr uint64 MsgKeyInvFull        = 0x5722; // red partial-collection warning
+	constexpr uint64 MsgKeyCantPlace      = 0x5723; // red "can't place" on selecting a non-placeable item
+	constexpr uint64 MsgKeyPrereqMissing  = 0x5724; // red prerequisite message on part selection
+}
+
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -518,8 +537,39 @@ void AMoonshineCharacter_Simple::BeginItemPlacement(FName ItemID)
 		ItemID == FName(TEXT("OutletPipe")) || ItemID == FName(TEXT("WormCoil")) ||
 		ItemID == FName(TEXT("MasonJar")) || ItemID == FName(TEXT("MasonJarLid")))
 	{
+		// Check prerequisites at SELECTION time so we never enter ghost mode that can only stay
+		// red (e.g. lid on an empty jar). The item stays in inventory, nothing is consumed.
+		FString PrereqMsg;
+		if (!CheckStillPartPrereqs(ItemID, PrereqMsg))
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s"), *PrereqMsg);
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(MsgKeyPrereqMissing, 2.0f, FColor::Red, PrereqMsg);
+			}
+			return;
+		}
 		BeginStillGhostPlacement(ItemID);
 		return;
+	}
+
+	// Items with no placement role (consumables, sale goods, any meshless row) can't be placed.
+	// Never spawn an empty actor for them — block placement-mode entry outright.
+	{
+		FItemDataRow RowData;
+		const bool bHasMesh = Inventory && Inventory->GetItemData(ItemID, RowData) && RowData.Mesh != nullptr;
+		const bool bNonPlaceable =
+			ItemID == FName(TEXT("Water")) || ItemID == FName(TEXT("Mash")) ||
+			ItemID == FName(TEXT("Firewood")) || ItemID == FName(TEXT("MoonshineJar"));
+		if (bNonPlaceable || !bHasMesh)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Can't place %s — no placement role/mesh"), *ItemID.ToString());
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(MsgKeyCantPlace, 2.0f, FColor::Red, TEXT("Can't place this item"));
+			}
+			return;
+		}
 	}
 
 	PendingPlacementItemID = ItemID;
@@ -566,29 +616,36 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 		UStaticMesh* PartMesh = bHasData ? RowData.Mesh : nullptr;
 		if (!PartMesh)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — spawning empty actor(s)"), *PendingPlacementItemID.ToString());
-		}
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		// Every still part (including CinderBlockStand, whose mesh already models all 3 stands)
-		// spawns as a single AStillPartActor at the floor hit point. Raise it by FloorSpawnZOffset
-		// so a center-pivot mesh sits on the floor instead of half-buried.
-		FVector SpawnLocation = Hit.Location;
-		SpawnLocation.Z += FloorSpawnZOffset;
-		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-		if (Part)
-		{
-			Part->InitFromItemData(PendingPlacementItemID, PartMesh);
-			PlacedStillParts.Add(Part);
-
-			if (Inventory)
+			// Never spawn an empty actor for a meshless item; consume nothing, exit placement mode.
+			UE_LOG(LogTemp, Warning, TEXT("Placement: no mesh assigned for %s in the data table — placement cancelled"), *PendingPlacementItemID.ToString());
+			if (GEngine)
 			{
-				Inventory->RemoveItem(PendingPlacementItemID, 1);
+				GEngine->AddOnScreenDebugMessage(MsgKeyCantPlace, 2.0f, FColor::Red, TEXT("Can't place this item"));
 			}
+		}
+		else
+		{
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-			UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
+			// Every still part (including CinderBlockStand, whose mesh already models all 3 stands)
+			// spawns as a single AStillPartActor at the floor hit point. Raise it by FloorSpawnZOffset
+			// so a center-pivot mesh sits on the floor instead of half-buried.
+			FVector SpawnLocation = Hit.Location;
+			SpawnLocation.Z += FloorSpawnZOffset;
+			AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(), SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+			if (Part)
+			{
+				Part->InitFromItemData(PendingPlacementItemID, PartMesh);
+				PlacedStillParts.Add(Part);
+
+				if (Inventory)
+				{
+					Inventory->RemoveItem(PendingPlacementItemID, 1);
+				}
+
+				UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
+			}
 		}
 	}
 	else
@@ -643,19 +700,6 @@ AStillPartActor* AMoonshineCharacter_Simple::FindPlacedPart(FName PartID) const
 
 namespace
 {
-	// Fixed on-screen message keys so repeated calls overwrite in place instead of stacking.
-	constexpr uint64 MsgKeyStillPrompt    = 0x5717; // aim-at-pot interact prompt (per tick)
-	constexpr uint64 MsgKeyStillCountdown = 0x5718; // "Distilling… Ns" countdown (per tick)
-	constexpr uint64 MsgKeyStillComplete  = 0x5719; // green "Still complete" transition
-	constexpr uint64 MsgKeyBatchComplete  = 0x571A; // green "Batch complete" event
-	constexpr uint64 MsgKeyNeedWater      = 0x571B; // red requirement failures (E presses)
-	constexpr uint64 MsgKeyNeedMash       = 0x571C;
-	constexpr uint64 MsgKeyNeedFirewood   = 0x571D;
-	constexpr uint64 MsgKeyJarEmpty       = 0x571E; // red "nothing to seal" while lid-ghosting (per tick)
-	constexpr uint64 MsgKeyCollected      = 0x571F; // green collection confirmation
-	constexpr uint64 MsgKeySellPrompt     = 0x5720; // aim-at-buyer sell prompt (per tick)
-	constexpr uint64 MsgKeySold           = 0x5721; // green sale confirmation
-
 	// Required parts for a complete Tier 2 Pot Still. MasonJarLid is intentionally EXCLUDED:
 	// the empty MasonJar is the catch vessel and is required; the lid is a later output mechanic.
 	static const FName RequiredStillParts[] = {
@@ -885,13 +929,35 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 {
 	if (!IsValid(Jar) || !Jar->bIsSealed) return;
+	if (!Inventory) return;
 
-	if (Inventory)
+	// Fresh collection starts the full batch; otherwise keep draining the stored remainder.
+	if (RemainingJars <= 0)
 	{
-		Inventory->AddItem(FName(TEXT("MoonshineJar")), JarsPerRun);
-		// The lid is reusable — return it to inventory.
-		Inventory->AddItem(FName(TEXT("MasonJarLid")), 1);
+		RemainingJars = JarsPerRun;
 	}
+
+	// Only credit what ACTUALLY fits — AddItem reports the real added count.
+	const int32 Added = Inventory->AddItem(FName(TEXT("MoonshineJar")), RemainingJars);
+	RemainingJars -= Added;
+
+	if (RemainingJars > 0)
+	{
+		// Inventory full: jar stays sealed, lid stays on, state stays Done. E collects the rest later.
+		const int32 CollectedSoFar = JarsPerRun - RemainingJars;
+		UE_LOG(LogTemp, Warning, TEXT("Inventory full — collected %d of %d jars, %d still in the jar"),
+			CollectedSoFar, JarsPerRun, RemainingJars);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(MsgKeyInvFull, 3.0f, FColor::Red,
+				FString::Printf(TEXT("Inventory full — collected %d of %d jars, press E to collect the rest"),
+					CollectedSoFar, JarsPerRun));
+		}
+		return;
+	}
+
+	// Whole batch collected. The lid is reusable — return it to inventory.
+	Inventory->AddItem(FName(TEXT("MasonJarLid")), 1);
 
 	// Remove the placed lid actor from the world and the tracking list. The lid is not in the
 	// required-parts set, so this cannot flip bStillComplete.
@@ -916,6 +982,71 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 		GEngine->AddOnScreenDebugMessage(MsgKeyCollected, 5.0f, FColor::Green,
 			FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun));
 	}
+}
+
+bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& OutMsg) const
+{
+	// Mirrors the prerequisites the ghost-snap logic enforces; checked at selection time so we
+	// never enter a ghost mode that can only stay red.
+	auto RequirePlaced = [this, &OutMsg, &PartID](const TCHAR* Req) -> bool
+	{
+		if (!FindPlacedPart(FName(Req)))
+		{
+			OutMsg = FString::Printf(TEXT("%s requires %s to be placed first"), *PartID.ToString(), Req);
+			return false;
+		}
+		return true;
+	};
+
+	if (PartID == FName(TEXT("Pot")) || PartID == FName(TEXT("ThumperBody")) || PartID == FName(TEXT("WormBarrel")))
+	{
+		if (!FindPlacedStand())
+		{
+			OutMsg = FString::Printf(TEXT("%s requires the CinderBlockStand to be placed first"), *PartID.ToString());
+			return false;
+		}
+	}
+	else if (PartID == FName(TEXT("Cap")))
+	{
+		return RequirePlaced(TEXT("Pot"));
+	}
+	else if (PartID == FName(TEXT("ThumperCap")))
+	{
+		return RequirePlaced(TEXT("ThumperBody"));
+	}
+	else if (PartID == FName(TEXT("CapArm")))
+	{
+		return RequirePlaced(TEXT("Cap")) && RequirePlaced(TEXT("ThumperCap"));
+	}
+	else if (PartID == FName(TEXT("OutletPipe")))
+	{
+		return RequirePlaced(TEXT("ThumperBody")) && RequirePlaced(TEXT("WormBarrel"));
+	}
+	else if (PartID == FName(TEXT("WormCoil")))
+	{
+		return RequirePlaced(TEXT("WormBarrel"));
+	}
+	else if (PartID == FName(TEXT("MasonJar")))
+	{
+		return RequirePlaced(TEXT("WormBarrel")) && RequirePlaced(TEXT("WormCoil"));
+	}
+	else if (PartID == FName(TEXT("MasonJarLid")))
+	{
+		AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
+		if (!Jar)
+		{
+			OutMsg = TEXT("MasonJarLid requires MasonJar to be placed first");
+			return false;
+		}
+		if (!Jar->bIsFull)
+		{
+			OutMsg = TEXT("Jar is empty — nothing to seal");
+			return false;
+		}
+	}
+
+	// CinderBlockStand (and anything unlisted) has no selection-time prerequisite.
+	return true;
 }
 
 void AMoonshineCharacter_Simple::AddMoney(int32 Amount)
@@ -961,8 +1092,9 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	// Sealed jar is a second interactable: show the collect prompt regardless of the pot flow.
 	if (GetAimedSealedJar())
 	{
+		const int32 ToCollect = (RemainingJars > 0) ? RemainingJars : JarsPerRun;
 		GEngine->AddOnScreenDebugMessage(MsgKeyStillPrompt, 0.2f, FColor::Yellow,
-			FString::Printf(TEXT("Press E: Collect moonshine (%d jars)"), JarsPerRun));
+			FString::Printf(TEXT("Press E: Collect moonshine (%d jars)"), ToCollect));
 		return;
 	}
 

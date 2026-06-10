@@ -227,6 +227,11 @@ protected:
 	// Running-state countdown timer.
 	FTimerHandle BatchTimerHandle;
 
+	// Jars still waiting in the sealed jar when the inventory couldn't hold the whole batch.
+	// While > 0 the jar stays sealed and each E press collects as much as fits.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Moonshine")
+	int32 RemainingJars = 0;
+
 	// E-key interaction: advance the still's state when aiming at the Pot and the still is complete.
 	void InteractWithStill();
 
@@ -242,9 +247,13 @@ protected:
 	// Returns the sealed MasonJar the player is currently aiming at, or nullptr.
 	class AStillPartActor* GetAimedSealedJar() const;
 
-	// Collects the batch from a sealed jar: grants MoonshineJar x JarsPerRun, returns the lid to
-	// inventory, resets the jar and the still state to Empty.
+	// Collects the batch from a sealed jar: grants as many MoonshineJar as fit. Only once the whole
+	// batch is collected does the lid return to inventory, the jar reset, and the state go Empty.
 	void CollectMoonshine(class AStillPartActor* Jar);
+
+	// Selection-time prerequisite check for still parts (same prerequisites the ghost enforces).
+	// Returns false with a player-facing message when the part can't be placed yet.
+	bool CheckStillPartPrereqs(FName PartID, FString& OutMsg) const;
 
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 

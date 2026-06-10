@@ -22,7 +22,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	UDataTable* ItemDataTable;
 
-	// Add to inventory. Returns actual amount added (capped at max stack).
+	// Maximum number of stacks (matches the inventory grid: 6 columns x 4 rows).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	int32 MaxSlots = 24;
+
+	// Add to inventory. Fills existing stacks first, then overflows into new stacks while slots
+	// are available. Returns actual amount added; logs a warning when less than requested fits.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	int32 AddItem(FName ItemID, int32 Quantity);
 

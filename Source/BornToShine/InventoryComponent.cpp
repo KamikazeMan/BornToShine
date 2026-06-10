@@ -10,28 +10,46 @@ int32 UInventoryComponent::AddItem(FName ItemID, int32 Quantity)
 	if (Quantity <= 0 || ItemID == NAME_None) return 0;
 
 	FItemDataRow* Data = GetItemDataRaw(ItemID);
-	int32 MaxStack = Data ? Data->MaxStack : 99;
+	const int32 MaxStack = Data ? Data->MaxStack : 99;
 
-	// Find existing stack
+	int32 Remaining = Quantity;
+
+	// Top up existing stacks first.
 	for (FInventoryItem& Item : Items)
 	{
-		if (Item.ItemID == ItemID)
+		if (Remaining <= 0) break;
+		if (Item.ItemID == ItemID && Item.Quantity < MaxStack)
 		{
-			int32 SpaceLeft = MaxStack - Item.Quantity;
-			int32 ToAdd = FMath::Min(Quantity, SpaceLeft);
+			const int32 ToAdd = FMath::Min(Remaining, MaxStack - Item.Quantity);
 			Item.Quantity += ToAdd;
-			UE_LOG(LogTemp, Log, TEXT("Inventory: +%d %s (now %d)"), ToAdd, *ItemID.ToString(), Item.Quantity);
-			OnInventoryChanged.Broadcast();
-			return ToAdd;
+			Remaining -= ToAdd;
 		}
 	}
 
-	// New stack
-	int32 ToAdd = FMath::Min(Quantity, MaxStack);
-	Items.Add(FInventoryItem(ItemID, ToAdd));
-	UE_LOG(LogTemp, Log, TEXT("Inventory: +%d %s (new stack)"), ToAdd, *ItemID.ToString());
-	OnInventoryChanged.Broadcast();
-	return ToAdd;
+	// Overflow the remainder into new stacks while grid slots are available.
+	while (Remaining > 0 && Items.Num() < MaxSlots)
+	{
+		const int32 ToAdd = FMath::Min(Remaining, MaxStack);
+		Items.Add(FInventoryItem(ItemID, ToAdd));
+		Remaining -= ToAdd;
+	}
+
+	const int32 Added = Quantity - Remaining;
+	if (Added < Quantity)
+	{
+		// Never silent: every shortfall (including +0) is logged.
+		UE_LOG(LogTemp, Warning, TEXT("Inventory: wanted +%d %s, added %d (full)"), Quantity, *ItemID.ToString(), Added);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("Inventory: +%d %s (now %d)"), Added, *ItemID.ToString(), GetItemCount(ItemID));
+	}
+
+	if (Added > 0)
+	{
+		OnInventoryChanged.Broadcast();
+	}
+	return Added;
 }
 
 bool UInventoryComponent::RemoveItem(FName ItemID, int32 Quantity)
