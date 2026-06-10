@@ -35,8 +35,9 @@ public:
 	void HideTimer();
 
 	// Pushes a fading event message (green when bSuccess, red otherwise). Re-issuing the same
-	// text while it is still fresh refreshes it instead of stacking a duplicate.
-	void AddToast(const FString& Text, bool bSuccess);
+	// text while it is still fresh refreshes it instead of stacking a duplicate. Returns true
+	// when a NEW toast was added (false on refresh) so callers can gate one-shot audio.
+	bool AddToast(const FString& Text, bool bSuccess);
 
 protected:
 	UPROPERTY() UBorder* PromptPanel = nullptr;

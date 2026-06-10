@@ -296,6 +296,85 @@ protected:
 	// Toast helper (no-ops safely before the HUD exists).
 	void ShowToast(const FString& Text, bool bSuccess);
 
+	// --- Audio (all sounds assigned in BP defaults; unset sounds simply don't play) ---
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* FireLoopSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* BoilSteamLoopSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* DripLoopSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* WaterAddSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* MashAddSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* FireIgniteSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* BatchCompleteSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* LidPlaceSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* JarCollectSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* SellSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* PartPlaceSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* ToastSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* InventoryOpenSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* InventoryCloseSound = nullptr;
+
+	// Global SFX balance knob, multiplied into every play call.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	float MasterSfxVolume = 1.0f;
+
+	// The drip loop starts at this fraction of the Running timer (0.8 = last 20%).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	float DripStartFraction = 0.8f;
+
+	// When true, the toast ping only plays for failure (red) toasts.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	bool bToastSoundOnFailureOnly = false;
+
+	// Optional attenuation override for the still loops; a default (~15 m audible) is built lazily.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundAttenuation* LoopAttenuation = nullptr;
+
+	// Live loop handles (spawned on demand, stopped manually).
+	UPROPERTY() class UAudioComponent* FireLoopAC = nullptr;
+	UPROPERTY() class UAudioComponent* BoilLoopAC = nullptr;
+	UPROPERTY() class UAudioComponent* DripLoopAC = nullptr;
+
+	UPROPERTY() class USoundAttenuation* DefaultLoopAttenuation = nullptr;
+
+	// Per-tick reconciliation of the three still loops against state/timer/jar.
+	void UpdateStillAudio();
+
+	// One-shot helpers; warn once per property name if the sound is unassigned.
+	void PlaySfxAt(class USoundBase* Sound, const TCHAR* PropertyName, const FVector& Location);
+	void PlaySfx2D(class USoundBase* Sound, const TCHAR* PropertyName);
+	bool CheckSoundAssigned(class USoundBase* Sound, const TCHAR* PropertyName);
+	class USoundAttenuation* GetLoopAttenuation();
+
+	// Property names already warned about (one-shot warnings only).
+	TSet<FName> WarnedMissingSounds;
+
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
 

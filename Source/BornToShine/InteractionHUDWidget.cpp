@@ -179,9 +179,9 @@ void UInteractionHUDWidget::HideTimer()
 	TimerBox->SetVisibility(ESlateVisibility::Collapsed);
 }
 
-void UInteractionHUDWidget::AddToast(const FString& Text, bool bSuccess)
+bool UInteractionHUDWidget::AddToast(const FString& Text, bool bSuccess)
 {
-	if (!ToastBox || !WidgetTree) return;
+	if (!ToastBox || !WidgetTree) return false;
 
 	// Refresh instead of duplicating when the same message is re-issued while still fresh
 	// (also protects against per-tick callers stacking copies).
@@ -194,7 +194,7 @@ void UInteractionHUDWidget::AddToast(const FString& Text, bool bSuccess)
 			{
 				Panel->SetRenderOpacity(1.0f);
 			}
-			return;
+			return false;
 		}
 	}
 
@@ -229,4 +229,5 @@ void UInteractionHUDWidget::AddToast(const FString& Text, bool bSuccess)
 	Entry.Panel = Panel;
 	Entry.Text = Text;
 	Toasts.Add(Entry);
+	return true;
 }

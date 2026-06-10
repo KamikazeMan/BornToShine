@@ -20,6 +20,9 @@
 #include "BornToShineSaveGame.h"
 #include "InteractionHUDWidget.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
+#include "Sound/SoundAttenuation.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
@@ -129,9 +132,110 @@ void AMoonshineCharacter_Simple::BeginPlay()
 
 void AMoonshineCharacter_Simple::ShowToast(const FString& Text, bool bSuccess)
 {
-	if (InteractionHUD)
+	if (InteractionHUD && InteractionHUD->AddToast(Text, bSuccess))
 	{
-		InteractionHUD->AddToast(Text, bSuccess);
+		// Ping only when a NEW toast appeared (refreshes stay silent).
+		if (!bToastSoundOnFailureOnly || !bSuccess)
+		{
+			PlaySfx2D(ToastSound, TEXT("ToastSound"));
+		}
+	}
+}
+
+bool AMoonshineCharacter_Simple::CheckSoundAssigned(USoundBase* Sound, const TCHAR* PropertyName)
+{
+	if (Sound) return true;
+
+	const FName Key(PropertyName);
+	if (!WarnedMissingSounds.Contains(Key))
+	{
+		WarnedMissingSounds.Add(Key);
+		UE_LOG(LogTemp, Warning, TEXT("Audio: %s not assigned"), PropertyName);
+	}
+	return false;
+}
+
+void AMoonshineCharacter_Simple::PlaySfxAt(USoundBase* Sound, const TCHAR* PropertyName, const FVector& Location)
+{
+	if (!CheckSoundAssigned(Sound, PropertyName)) return;
+	UGameplayStatics::PlaySoundAtLocation(this, Sound, Location, MasterSfxVolume);
+}
+
+void AMoonshineCharacter_Simple::PlaySfx2D(USoundBase* Sound, const TCHAR* PropertyName)
+{
+	if (!CheckSoundAssigned(Sound, PropertyName)) return;
+	UGameplayStatics::PlaySound2D(this, Sound, MasterSfxVolume);
+}
+
+USoundAttenuation* AMoonshineCharacter_Simple::GetLoopAttenuation()
+{
+	if (LoopAttenuation) return LoopAttenuation; // editor-assigned override
+
+	if (!DefaultLoopAttenuation)
+	{
+		// Audible out to ~15 m, full volume up close.
+		DefaultLoopAttenuation = NewObject<USoundAttenuation>(this);
+		FSoundAttenuationSettings& S = DefaultLoopAttenuation->Attenuation;
+		S.bAttenuate = true;
+		S.AttenuationShape = EAttenuationShape::Sphere;
+		S.AttenuationShapeExtents = FVector(150.0f, 0.0f, 0.0f);
+		S.FalloffDistance = 1350.0f;
+	}
+	return DefaultLoopAttenuation;
+}
+
+void AMoonshineCharacter_Simple::UpdateStillAudio()
+{
+	const bool bBurning =
+		CurrentStillState == EStillState::Lit || CurrentStillState == EStillState::Running;
+
+	AStillPartActor* Pot = FindPlacedPart(FName(TEXT("Pot")));
+	AStillPartActor* Cap = FindPlacedPart(FName(TEXT("Cap")));
+	AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
+
+	// Fire crackle at the pot.
+	if (bBurning && !FireLoopAC && Pot && CheckSoundAssigned(FireLoopSound, TEXT("FireLoopSound")))
+	{
+		FireLoopAC = UGameplayStatics::SpawnSoundAttached(FireLoopSound, Pot->MeshComponent, NAME_None,
+			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+	}
+	else if (!bBurning && FireLoopAC)
+	{
+		FireLoopAC->Stop();
+		FireLoopAC = nullptr;
+	}
+
+	// Boil/steam hiss at the cap (falls back to the pot if the cap is somehow gone).
+	USceneComponent* SteamAttach = Cap ? Cap->MeshComponent : (Pot ? Pot->MeshComponent : nullptr);
+	if (bBurning && !BoilLoopAC && SteamAttach && CheckSoundAssigned(BoilSteamLoopSound, TEXT("BoilSteamLoopSound")))
+	{
+		BoilLoopAC = UGameplayStatics::SpawnSoundAttached(BoilSteamLoopSound, SteamAttach, NAME_None,
+			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+	}
+	else if (!bBurning && BoilLoopAC)
+	{
+		BoilLoopAC->Stop();
+		BoilLoopAC = nullptr;
+	}
+
+	// Drip at the jar: while the jar holds moonshine, or during the tail end of the run.
+	bool bDrip = Jar && Jar->bIsFull;
+	if (!bDrip && Jar && CurrentStillState == EStillState::Running)
+	{
+		const float Remaining = GetWorldTimerManager().GetTimerRemaining(BatchTimerHandle);
+		const float Elapsed = 1.0f - Remaining / FMath::Max(BatchTimeSeconds, 0.01f);
+		bDrip = Elapsed >= DripStartFraction;
+	}
+
+	if (bDrip && !DripLoopAC && Jar && CheckSoundAssigned(DripLoopSound, TEXT("DripLoopSound")))
+	{
+		DripLoopAC = UGameplayStatics::SpawnSoundAttached(DripLoopSound, Jar->MeshComponent, NAME_None,
+			FVector::ZeroVector, EAttachLocation::SnapToTarget, true, MasterSfxVolume, 1.0f, 0.0f, GetLoopAttenuation());
+	}
+	else if (!bDrip && DripLoopAC)
+	{
+		DripLoopAC->Stop();
+		DripLoopAC = nullptr;
 	}
 }
 
@@ -161,6 +265,9 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 
 	// Show the operation prompt when aiming at the Pot of a completed still.
 	UpdateStillPrompt();
+
+	// Reconcile the still audio loops (fire/steam/drip) against state, timer and jar.
+	UpdateStillAudio();
 }
 
 void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -523,6 +630,7 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 		PC->bShowMouseCursor = false;
 		FInputModeGameOnly InputMode;
 		PC->SetInputMode(InputMode);
+		PlaySfx2D(InventoryCloseSound, TEXT("InventoryCloseSound"));
 	}
 	else
 	{
@@ -541,6 +649,7 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 			InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 			InputMode.SetHideCursorDuringCapture(false);
 			PC->SetInputMode(InputMode);
+			PlaySfx2D(InventoryOpenSound, TEXT("InventoryOpenSound"));
 		}
 	}
 }
@@ -657,6 +766,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 				}
 
 				UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
+				PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), SpawnLocation);
 
 				SaveGame(); // autosave: part placed
 			}
@@ -861,7 +971,8 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 
 	// Otherwise interaction only works on a complete still while aiming at its Pot.
 	if (!bStillComplete) return;
-	if (!GetAimedPot()) return;
+	AStillPartActor* Pot = GetAimedPot();
+	if (!Pot) return;
 
 	switch (CurrentStillState)
 	{
@@ -876,6 +987,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
 		SetStillState(EStillState::Water);
 		UE_LOG(LogTemp, Warning, TEXT("Water added (consumed %d Water)"), WaterCost);
+		PlaySfxAt(WaterAddSound, TEXT("WaterAddSound"), Pot->GetActorLocation());
 		break;
 
 	case EStillState::Water:
@@ -889,6 +1001,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
 		SetStillState(EStillState::Mash);
 		UE_LOG(LogTemp, Warning, TEXT("Mash added (consumed %d Mash)"), MashCost);
+		PlaySfxAt(MashAddSound, TEXT("MashAddSound"), Pot->GetActorLocation());
 		break;
 
 	case EStillState::Mash:
@@ -904,6 +1017,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		SetStillState(EStillState::Lit);
 		SetStillState(EStillState::Running);
 		UE_LOG(LogTemp, Warning, TEXT("Fire lit (consumed %d Firewood) — distilling"), FirewoodCost);
+		PlaySfxAt(FireIgniteSound, TEXT("FireIgniteSound"), Pot->GetActorLocation());
 		GetWorldTimerManager().SetTimer(BatchTimerHandle, this,
 			&AMoonshineCharacter_Simple::OnBatchComplete, FMath::Max(BatchTimeSeconds, 0.01f), false);
 		break;
@@ -932,6 +1046,11 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 		Jar->bIsFull = true;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("Jar is full — snap the lid to seal it"));
+
+	if (AStillPartActor* Pot = FindPlacedPart(FName(TEXT("Pot"))))
+	{
+		PlaySfxAt(BatchCompleteSound, TEXT("BatchCompleteSound"), Pot->GetActorLocation());
+	}
 }
 
 void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
@@ -948,6 +1067,11 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	// Only credit what ACTUALLY fits — AddItem reports the real added count.
 	const int32 Added = Inventory->AddItem(FName(TEXT("MoonshineJar")), RemainingJars);
 	RemainingJars -= Added;
+
+	if (Added > 0)
+	{
+		PlaySfxAt(JarCollectSound, TEXT("JarCollectSound"), Jar->GetActorLocation());
+	}
 
 	if (RemainingJars > 0)
 	{
@@ -1183,6 +1307,7 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 
 	UE_LOG(LogTemp, Warning, TEXT("Sold %d jars for $%d"), JarCount, Total);
 	ShowToast(FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money), true);
+	PlaySfx2D(SellSound, TEXT("SellSound"));
 
 	SaveGame(); // autosave: sale completed
 }
@@ -1609,6 +1734,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
+		PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), GhostSnapTransform.GetLocation());
 
 		// Placing the lid on a full jar seals it (ghost validity already guaranteed the jar is full).
 		if (GhostPartID == FName(TEXT("MasonJarLid")))
@@ -1617,6 +1743,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 			{
 				Jar->bIsSealed = true;
 				UE_LOG(LogTemp, Warning, TEXT("Jar sealed — press E on the jar to collect"));
+				PlaySfxAt(LidPlaceSound, TEXT("LidPlaceSound"), Jar->GetActorLocation());
 			}
 		}
 
