@@ -169,6 +169,9 @@ protected:
 	bool bGhostSnapValid = false;             // is the ghost currently within snap range of its mount?
 	FTransform GhostSnapTransform;            // the snapped world transform when valid
 
+	// Stand the pending ghost would belong to (chosen snap candidate's stand); applied on confirm.
+	TWeakObjectPtr<class AStillPartActor> GhostSnapOwningStand;
+
 	UPROPERTY()
 	class AStillPartActor* GhostStillPart = nullptr;     // the live ghost actor
 
@@ -181,19 +184,29 @@ protected:
 	void ConfirmStillGhostPlacement();        // called on click while previewing
 	void CancelStillGhost();                  // tears down the ghost actor
 
-	// Finds the single placed CinderBlockStand actor (nullptr if none).
+	// Finds the FIRST placed CinderBlockStand actor (nullptr if none).
 	class AStillPartActor* FindPlacedStand() const;
 
 	// Finds the first placed still part with the given PartID (nullptr if none).
 	class AStillPartActor* FindPlacedPart(FName PartID) const;
 
+	// Stand a part belongs to: the part itself if it IS a stand, else its OwningStand.
+	class AStillPartActor* StandOfPart(class AStillPartActor* Part) const;
+
+	// Finds the part of the given type belonging to the given stand (the stand answers for
+	// "CinderBlockStand"). Nullptr if that mount is unoccupied.
+	class AStillPartActor* FindPartOnStand(FName PartID, class AStillPartActor* Stand) const;
+
 	// --- Still assembly completion (detection only; no operation/state machine yet) ---
 
-	// True only when every required Tier 2 Pot Still part is placed. The empty MasonJar (catch
-	// vessel) IS required; the MasonJarLid is an output mechanic and is EXCLUDED.
-	bool IsStillComplete() const;
+	// True only when every required Tier 2 Pot Still part is present ON THIS STAND. The empty
+	// MasonJar (catch vessel) IS required; the MasonJarLid is an output mechanic and is EXCLUDED.
+	bool IsStillComplete(class AStillPartActor* Stand) const;
 
-	// Re-evaluates IsStillComplete() and logs/notifies only on a false<->true transition.
+	// First stand (in PlacedStillParts order) whose still is complete; nullptr if none.
+	class AStillPartActor* FindFirstCompleteStand() const;
+
+	// Re-evaluates completion ("at least one complete still") and logs only on transitions.
 	void CheckStillCompletion();
 
 	// Logs the required part types not yet placed (excludes MasonJarLid).

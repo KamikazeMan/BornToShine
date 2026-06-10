@@ -36,6 +36,11 @@ struct FSavedStillPart
 
 	UPROPERTY()
 	bool bIsSealed = false;
+
+	// v2: index of the owning CinderBlockStand within this save's stand list (-1 for stands
+	// themselves / unowned). Stands are indexed in the order they appear in StillParts.
+	UPROPERTY()
+	int32 StandIndex = -1;
 };
 
 /**
@@ -58,6 +63,7 @@ public:
 	UPROPERTY()
 	TArray<FSavedStillPart> StillParts;
 
+	// v1: no part ownership. v2: per-part StandIndex.
 	UPROPERTY()
-	int32 SaveVersion = 1;
+	int32 SaveVersion = 2;
 };

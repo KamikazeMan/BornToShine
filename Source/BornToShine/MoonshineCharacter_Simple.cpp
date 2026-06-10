@@ -189,9 +189,12 @@ void AMoonshineCharacter_Simple::UpdateStillAudio()
 	const bool bBurning =
 		CurrentStillState == EStillState::Lit || CurrentStillState == EStillState::Running;
 
-	AStillPartActor* Pot = FindPlacedPart(FName(TEXT("Pot")));
-	AStillPartActor* Cap = FindPlacedPart(FName(TEXT("Cap")));
-	AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
+	// The single state machine operates the FIRST complete still; its parts host the loops.
+	// Fall back to first-match parts when no still is complete (preserves single-still behavior).
+	AStillPartActor* OpStand = FindFirstCompleteStand();
+	AStillPartActor* Pot = OpStand ? FindPartOnStand(FName(TEXT("Pot")), OpStand) : FindPlacedPart(FName(TEXT("Pot")));
+	AStillPartActor* Cap = OpStand ? FindPartOnStand(FName(TEXT("Cap")), OpStand) : FindPlacedPart(FName(TEXT("Cap")));
+	AStillPartActor* Jar = OpStand ? FindPartOnStand(FName(TEXT("MasonJar")), OpStand) : FindPlacedPart(FName(TEXT("MasonJar")));
 
 	// Fire crackle at the pot.
 	if (bBurning && !FireLoopAC && Pot && CheckSoundAssigned(FireLoopSound, TEXT("FireLoopSound")))
@@ -806,7 +809,6 @@ namespace
 
 AStillPartActor* AMoonshineCharacter_Simple::FindPlacedStand() const
 {
-	// The CinderBlockStand is a single mesh containing all 3 stands, so there's just one actor.
 	return FindPlacedPart(FName(TEXT("CinderBlockStand")));
 }
 
@@ -815,6 +817,28 @@ AStillPartActor* AMoonshineCharacter_Simple::FindPlacedPart(FName PartID) const
 	for (AStillPartActor* Part : PlacedStillParts)
 	{
 		if (IsValid(Part) && Part->PartID == PartID)
+		{
+			return Part;
+		}
+	}
+	return nullptr;
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::StandOfPart(AStillPartActor* Part) const
+{
+	if (!IsValid(Part)) return nullptr;
+	if (Part->PartID == FName(TEXT("CinderBlockStand"))) return Part;
+	return Part->OwningStand.Get();
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::FindPartOnStand(FName PartID, AStillPartActor* Stand) const
+{
+	if (!IsValid(Stand)) return nullptr;
+	if (PartID == FName(TEXT("CinderBlockStand"))) return Stand;
+
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part) && Part->PartID == PartID && Part->OwningStand.Get() == Stand)
 		{
 			return Part;
 		}
@@ -840,32 +864,39 @@ namespace
 	};
 }
 
-bool AMoonshineCharacter_Simple::IsStillComplete() const
+bool AMoonshineCharacter_Simple::IsStillComplete(AStillPartActor* Stand) const
 {
-	// Tally which required types are present in a single pass over placed parts; ignore extras/dupes.
-	bool bFound[UE_ARRAY_COUNT(RequiredStillParts)] = { false };
-	for (const AStillPartActor* Part : PlacedStillParts)
-	{
-		if (!IsValid(Part)) continue;
-		for (int32 i = 0; i < UE_ARRAY_COUNT(RequiredStillParts); ++i)
-		{
-			if (Part->PartID == RequiredStillParts[i]) { bFound[i] = true; break; }
-		}
-	}
+	if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) return false;
 
-	for (int32 i = 0; i < UE_ARRAY_COUNT(RequiredStillParts); ++i)
+	for (const FName& Req : RequiredStillParts)
 	{
-		if (!bFound[i]) return false;
+		if (!FindPartOnStand(Req, Stand)) return false;
 	}
 	return true;
 }
 
+AStillPartActor* AMoonshineCharacter_Simple::FindFirstCompleteStand() const
+{
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")) && IsStillComplete(Part))
+		{
+			return Part;
+		}
+	}
+	return nullptr;
+}
+
 void AMoonshineCharacter_Simple::LogMissingStillParts() const
 {
+	// Report against the first stand (or globally when no stand is placed yet).
+	AStillPartActor* Stand = FindPlacedStand();
+
 	FString Missing;
 	for (const FName& Req : RequiredStillParts)
 	{
-		if (!FindPlacedPart(Req))
+		const bool bPresent = Stand ? (FindPartOnStand(Req, Stand) != nullptr) : false;
+		if (!bPresent)
 		{
 			if (!Missing.IsEmpty()) Missing += TEXT(", ");
 			Missing += Req.ToString();
@@ -879,7 +910,8 @@ void AMoonshineCharacter_Simple::LogMissingStillParts() const
 
 void AMoonshineCharacter_Simple::CheckStillCompletion()
 {
-	const bool bNowComplete = IsStillComplete();
+	// "Complete" now means at least one stand has a full still (increment B adds per-still ops).
+	const bool bNowComplete = FindFirstCompleteStand() != nullptr;
 
 	if (bNowComplete && !bStillComplete)
 	{
@@ -935,14 +967,21 @@ ABuyerActor* AMoonshineCharacter_Simple::GetAimedBuyer() const
 
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
 {
+	// The single state machine operates the FIRST complete still for now (increment B: per-still).
 	AStillPartActor* Part = GetAimedStillPart();
-	return (Part && Part->PartID == FName(TEXT("Pot"))) ? Part : nullptr;
+	if (!Part || Part->PartID != FName(TEXT("Pot"))) return nullptr;
+
+	AStillPartActor* FirstComplete = FindFirstCompleteStand();
+	return (FirstComplete && StandOfPart(Part) == FirstComplete) ? Part : nullptr;
 }
 
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedSealedJar() const
 {
 	AStillPartActor* Part = GetAimedStillPart();
-	return (Part && Part->PartID == FName(TEXT("MasonJar")) && Part->bIsSealed) ? Part : nullptr;
+	if (!Part || Part->PartID != FName(TEXT("MasonJar")) || !Part->bIsSealed) return nullptr;
+
+	AStillPartActor* FirstComplete = FindFirstCompleteStand();
+	return (FirstComplete && StandOfPart(Part) == FirstComplete) ? Part : nullptr;
 }
 
 void AMoonshineCharacter_Simple::SetStillState(EStillState NewState)
@@ -1042,14 +1081,15 @@ void AMoonshineCharacter_Simple::OnBatchComplete()
 	UE_LOG(LogTemp, Warning, TEXT("=== BATCH COMPLETE ==="));
 	ShowToast(TEXT("Batch complete — jar is full"), true);
 
-	// Mark the catch vessel full so the lid can be snapped on to seal it.
-	if (AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar"))))
+	// Mark the OPERATING still's catch vessel full so the lid can be snapped on to seal it.
+	AStillPartActor* OpStand = FindFirstCompleteStand();
+	if (AStillPartActor* Jar = OpStand ? FindPartOnStand(FName(TEXT("MasonJar")), OpStand) : FindPlacedPart(FName(TEXT("MasonJar"))))
 	{
 		Jar->bIsFull = true;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("Jar is full — snap the lid to seal it"));
 
-	if (AStillPartActor* Pot = FindPlacedPart(FName(TEXT("Pot"))))
+	if (AStillPartActor* Pot = OpStand ? FindPartOnStand(FName(TEXT("Pot")), OpStand) : FindPlacedPart(FName(TEXT("Pot"))))
 	{
 		PlaySfxAt(BatchCompleteSound, TEXT("BatchCompleteSound"), Pot->GetActorLocation());
 	}
@@ -1089,12 +1129,14 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	// Whole batch collected. The lid is reusable — return it to inventory.
 	Inventory->AddItem(FName(TEXT("MasonJarLid")), 1);
 
-	// Remove the placed lid actor from the world and the tracking list. The lid is not in the
-	// required-parts set, so this cannot flip bStillComplete.
+	// Remove THIS jar's lid actor from the world and the tracking list (other stills keep theirs).
+	// The lid is not in the required-parts set, so this cannot flip bStillComplete.
+	AStillPartActor* JarStand = StandOfPart(Jar);
 	for (int32 i = PlacedStillParts.Num() - 1; i >= 0; --i)
 	{
 		AStillPartActor* Part = PlacedStillParts[i];
-		if (IsValid(Part) && Part->PartID == FName(TEXT("MasonJarLid")))
+		if (IsValid(Part) && Part->PartID == FName(TEXT("MasonJarLid")) &&
+			(JarStand == nullptr || StandOfPart(Part) == JarStand))
 		{
 			Part->Destroy();
 			PlacedStillParts.RemoveAt(i);
@@ -1114,67 +1156,85 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 
 bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& OutMsg) const
 {
-	// Mirrors the prerequisites the ghost-snap logic enforces; checked at selection time so we
-	// never enter a ghost mode that can only stay red.
-	auto RequirePlaced = [this, &OutMsg, &PartID](const TCHAR* Req) -> bool
-	{
-		if (!FindPlacedPart(FName(Req)))
-		{
-			OutMsg = FString::Printf(TEXT("%s requires %s to be placed first"), *PartID.ToString(), Req);
-			return false;
-		}
-		return true;
-	};
+	// Mirrors the PER-STAND candidate logic the ghost-snap uses: the part is selectable when at
+	// least one stand offers a valid, unoccupied mount with that stand's own prerequisites met.
 
+	// Vessels: need any stand with a free mount for this vessel type.
 	if (PartID == FName(TEXT("Pot")) || PartID == FName(TEXT("ThumperBody")) || PartID == FName(TEXT("WormBarrel")))
 	{
-		if (!FindPlacedStand())
+		bool bAnyStand = false;
+		for (AStillPartActor* Part : PlacedStillParts)
 		{
-			OutMsg = FString::Printf(TEXT("%s requires the CinderBlockStand to be placed first"), *PartID.ToString());
-			return false;
+			if (!IsValid(Part) || Part->PartID != FName(TEXT("CinderBlockStand"))) continue;
+			bAnyStand = true;
+			if (!FindPartOnStand(PartID, Part)) return true; // free mount found
 		}
-	}
-	else if (PartID == FName(TEXT("Cap")))
-	{
-		return RequirePlaced(TEXT("Pot"));
-	}
-	else if (PartID == FName(TEXT("ThumperCap")))
-	{
-		return RequirePlaced(TEXT("ThumperBody"));
-	}
-	else if (PartID == FName(TEXT("CapArm")))
-	{
-		return RequirePlaced(TEXT("Cap")) && RequirePlaced(TEXT("ThumperCap"));
-	}
-	else if (PartID == FName(TEXT("OutletPipe")))
-	{
-		return RequirePlaced(TEXT("ThumperBody")) && RequirePlaced(TEXT("WormBarrel"));
-	}
-	else if (PartID == FName(TEXT("WormCoil")))
-	{
-		return RequirePlaced(TEXT("WormBarrel"));
-	}
-	else if (PartID == FName(TEXT("MasonJar")))
-	{
-		return RequirePlaced(TEXT("WormBarrel")) && RequirePlaced(TEXT("WormCoil"));
-	}
-	else if (PartID == FName(TEXT("MasonJarLid")))
-	{
-		AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
-		if (!Jar)
-		{
-			OutMsg = TEXT("MasonJarLid requires MasonJar to be placed first");
-			return false;
-		}
-		if (!Jar->bIsFull)
-		{
-			OutMsg = TEXT("Jar is empty — nothing to seal");
-			return false;
-		}
+		OutMsg = bAnyStand
+			? FString::Printf(TEXT("No free stand mount for %s"), *PartID.ToString())
+			: FString::Printf(TEXT("%s requires the CinderBlockStand to be placed first"), *PartID.ToString());
+		return false;
 	}
 
-	// CinderBlockStand (and anything unlisted) has no selection-time prerequisite.
-	return true;
+	// Cap-like: same target/prereq table as the ghost snap.
+	FName TargetType = NAME_None;
+	FName SecondPrereq = NAME_None;
+	if (PartID == FName(TEXT("Cap")))             { TargetType = FName(TEXT("Pot")); }
+	else if (PartID == FName(TEXT("ThumperCap"))) { TargetType = FName(TEXT("ThumperBody")); }
+	else if (PartID == FName(TEXT("CapArm")))     { TargetType = FName(TEXT("Cap")); SecondPrereq = FName(TEXT("ThumperCap")); }
+	else if (PartID == FName(TEXT("OutletPipe"))) { TargetType = FName(TEXT("ThumperBody")); SecondPrereq = FName(TEXT("WormBarrel")); }
+	else if (PartID == FName(TEXT("WormCoil")))   { TargetType = FName(TEXT("WormBarrel")); }
+	else if (PartID == FName(TEXT("MasonJar")))   { TargetType = FName(TEXT("WormBarrel")); SecondPrereq = FName(TEXT("WormCoil")); }
+	else if (PartID == FName(TEXT("MasonJarLid"))){ TargetType = FName(TEXT("MasonJar")); }
+
+	if (TargetType == NAME_None)
+	{
+		// CinderBlockStand (and anything unlisted) has no selection-time prerequisite.
+		return true;
+	}
+
+	const bool bIsLid = (PartID == FName(TEXT("MasonJarLid")));
+	bool bAnyTarget = false;
+	bool bAnyPrereqMissing = false;
+	bool bAnyEmptyJar = false;
+
+	for (AStillPartActor* Target : PlacedStillParts)
+	{
+		if (!IsValid(Target) || Target->PartID != TargetType) continue;
+		bAnyTarget = true;
+
+		AStillPartActor* TargetStand = StandOfPart(Target);
+		if (!TargetStand) continue;
+		if (FindPartOnStand(PartID, TargetStand)) continue; // occupied
+		if (SecondPrereq != NAME_None && !FindPartOnStand(SecondPrereq, TargetStand))
+		{
+			bAnyPrereqMissing = true;
+			continue;
+		}
+		if (bIsLid && !Target->bIsFull)
+		{
+			bAnyEmptyJar = true;
+			continue;
+		}
+		return true; // valid candidate exists
+	}
+
+	if (!bAnyTarget)
+	{
+		OutMsg = FString::Printf(TEXT("%s requires %s to be placed first"), *PartID.ToString(), *TargetType.ToString());
+	}
+	else if (bAnyEmptyJar)
+	{
+		OutMsg = TEXT("Jar is empty — nothing to seal");
+	}
+	else if (bAnyPrereqMissing)
+	{
+		OutMsg = FString::Printf(TEXT("%s requires %s to be placed first"), *PartID.ToString(), *SecondPrereq.ToString());
+	}
+	else
+	{
+		OutMsg = FString::Printf(TEXT("No free %s for %s"), *TargetType.ToString(), *PartID.ToString());
+	}
+	return false;
 }
 
 void AMoonshineCharacter_Simple::SaveGame()
@@ -1223,7 +1283,17 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 	}
 	Save->Money = Money;
 
-	for (const AStillPartActor* Part : PlacedStillParts)
+	// v2: persist ownership as an index into the stand list (stands in PlacedStillParts order).
+	TArray<AStillPartActor*> Stands;
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		{
+			Stands.Add(Part);
+		}
+	}
+
+	for (AStillPartActor* Part : PlacedStillParts)
 	{
 		if (!IsValid(Part)) continue;
 		FSavedStillPart SavedPart;
@@ -1231,6 +1301,9 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		SavedPart.Transform = Part->GetActorTransform();
 		SavedPart.bIsFull = Part->bIsFull;
 		SavedPart.bIsSealed = Part->bIsSealed;
+		SavedPart.StandIndex = (Part->PartID != FName(TEXT("CinderBlockStand")) && Part->OwningStand.IsValid())
+			? Stands.IndexOfByKey(Part->OwningStand.Get())
+			: INDEX_NONE;
 		Save->StillParts.Add(SavedPart);
 	}
 
@@ -1280,6 +1353,10 @@ void AMoonshineCharacter_Simple::LoadGame()
 	Money = Save->Money;
 
 	// Respawn placed parts: same spawn path + data-table mesh assignment the placement flow uses.
+	// Track spawned stands in order so v2 StandIndex ownership can be resolved afterwards.
+	TArray<AStillPartActor*> SpawnedStands;
+	TArray<AStillPartActor*> SpawnedParts;   // parallel to Save->StillParts (nullptr on spawn failure)
+
 	for (const FSavedStillPart& SavedPart : Save->StillParts)
 	{
 		UStaticMesh* PartMesh = nullptr;
@@ -1302,6 +1379,43 @@ void AMoonshineCharacter_Simple::LoadGame()
 			Part->bIsFull = SavedPart.bIsFull;
 			Part->bIsSealed = SavedPart.bIsSealed;
 			PlacedStillParts.Add(Part);
+			if (SavedPart.PartID == FName(TEXT("CinderBlockStand")))
+			{
+				SpawnedStands.Add(Part);
+			}
+		}
+		SpawnedParts.Add(Part);
+	}
+
+	// Resolve ownership.
+	if (Save->SaveVersion >= 2)
+	{
+		for (int32 i = 0; i < Save->StillParts.Num(); ++i)
+		{
+			AStillPartActor* Part = SpawnedParts.IsValidIndex(i) ? SpawnedParts[i] : nullptr;
+			const int32 StandIndex = Save->StillParts[i].StandIndex;
+			if (Part && Part->PartID != FName(TEXT("CinderBlockStand")) && SpawnedStands.IsValidIndex(StandIndex))
+			{
+				Part->OwningStand = SpawnedStands[StandIndex];
+			}
+		}
+	}
+	else
+	{
+		// Legacy v1 migration: no ownership data. With exactly one stand, everything belongs to it.
+		if (SpawnedStands.Num() == 1)
+		{
+			for (AStillPartActor* Part : SpawnedParts)
+			{
+				if (Part && Part->PartID != FName(TEXT("CinderBlockStand")))
+				{
+					Part->OwningStand = SpawnedStands[0];
+				}
+			}
+		}
+		else if (SpawnedStands.Num() > 1)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Load: v1 save with %d stands — part ownership cannot be migrated"), SpawnedStands.Num());
 		}
 	}
 
@@ -1542,88 +1656,44 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 	if (bIsCapLike)
 	{
-		FName SnapTargetID;   // which placed part we snap onto
-		FVector MountOffset;  // local offset on that target
-		FRotator MountRotation = FRotator::ZeroRotator; // per-part fine rotation tweak
+		// Per-part snap config: target type, optional second prerequisite (must exist on the SAME
+		// stand as the candidate target), and the mount offset/rotation. Prereqs are evaluated
+		// PER STAND so a complete still #1 never satisfies requirements for still #2's parts.
+		FName SnapTargetID;
+		FName SecondPrereq = NAME_None;
+		FVector MountOffset;
+		FRotator MountRotation = FRotator::ZeroRotator;
 
 		if (GhostPartID == FName(TEXT("CapArm")))
 		{
 			SnapTargetID = FName(TEXT("Cap"));
+			SecondPrereq = FName(TEXT("ThumperCap"));
 			MountOffset = CapArmMountOffset;
 			MountRotation = CapArmMountRotation;
-
-			// Dual prerequisite: BOTH Cap AND ThumperCap must be placed.
-			AStillPartActor* PC = FindPlacedPart(FName(TEXT("Cap")));
-			AStillPartActor* PTC = FindPlacedPart(FName(TEXT("ThumperCap")));
-			if (!PC || !PTC)
-			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
-				return;
-			}
 		}
 		else if (GhostPartID == FName(TEXT("OutletPipe")))
 		{
 			SnapTargetID = FName(TEXT("ThumperBody"));
+			SecondPrereq = FName(TEXT("WormBarrel"));
 			MountOffset = OutletPipeMountOffset;
-
-			// Dual prerequisite: BOTH ThumperBody AND WormBarrel must be placed.
-			AStillPartActor* PTB = FindPlacedPart(FName(TEXT("ThumperBody")));
-			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
-			if (!PTB || !PWB)
-			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
-				return;
-			}
 		}
 		else if (GhostPartID == FName(TEXT("WormCoil")))
 		{
 			SnapTargetID = FName(TEXT("WormBarrel"));
 			MountOffset = WormCoilMountOffset;
-
-			if (!FindPlacedPart(FName(TEXT("WormBarrel"))))
-			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
-				return;
-			}
 		}
 		else if (GhostPartID == FName(TEXT("MasonJar")))
 		{
 			SnapTargetID = FName(TEXT("WormBarrel"));
+			SecondPrereq = FName(TEXT("WormCoil"));
 			MountOffset = MasonJarMountOffset;
 			MountRotation = MasonJarMountRotation;
-
-			AStillPartActor* PWB = FindPlacedPart(FName(TEXT("WormBarrel")));
-			AStillPartActor* PWC = FindPlacedPart(FName(TEXT("WormCoil")));
-			if (!PWB || !PWC)
-			{
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
-				return;
-			}
 		}
 		else if (GhostPartID == FName(TEXT("MasonJarLid")))
 		{
 			SnapTargetID = FName(TEXT("MasonJar"));
 			MountOffset = MasonJarLidMountOffset;
 			MountRotation = MasonJarLidMountRotation;
-
-			// The lid only seals a FULL jar: placement is invalid until a batch has finished.
-			AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar")));
-			if (!Jar || !Jar->bIsFull)
-			{
-				if (Jar)
-				{
-					// Per-tick caller: AddToast dedupes identical fresh messages, so this refreshes
-					// one toast instead of stacking copies.
-					ShowToast(TEXT("Jar is empty — nothing to seal"), false);
-				}
-				GhostStillPart->SetActorLocationAndRotation(AimPoint, FRotator::ZeroRotator);
-				SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f));
-				return;
-			}
 		}
 		else if (GhostPartID == FName(TEXT("ThumperCap")))
 		{
@@ -1636,30 +1706,61 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			MountOffset = CapMountOffset;
 		}
 
-		AStillPartActor* SnapTarget = FindPlacedPart(SnapTargetID);
-		if (SnapTarget)
+		const bool bIsLid = (GhostPartID == FName(TEXT("MasonJarLid")));
+		const float SnapRadius = IsValid(GhostStillPart) ? GhostStillPart->SnapRadiusCm : StillSnapRadiusCm;
+
+		// Scan every valid target candidate and keep the one nearest the aim ray.
+		AStillPartActor* BestTarget = nullptr;
+		float BestRayDist = TNumericLimits<float>::Max();
+		FTransform BestXform;
+		bool bSawEmptyJar = false;
+
+		for (AStillPartActor* Target : PlacedStillParts)
 		{
-			const FVector MountWorld = SnapTarget->GetActorTransform().TransformPosition(MountOffset);
-			const FRotator SnapRot = SnapTarget->GetActorRotation() + MountRotation;
+			if (!IsValid(Target) || Target->PartID != SnapTargetID) continue;
 
-			// Aim at the part's VISUAL center, not its pivot. Compute the mesh's local-space bounds
-			// center and transform it by the candidate snapped transform — independent of the ghost's
-			// current frame position (no one-frame lag). Snap POSITION stays MountWorld unchanged.
+			AStillPartActor* TargetStand = StandOfPart(Target);
+			if (!TargetStand) continue;
+
+			// Mount occupied: a part of the ghost's type already belongs to this stand.
+			if (FindPartOnStand(GhostPartID, TargetStand)) continue;
+
+			// Per-stand prerequisite (e.g. CapArm needs this stand's ThumperCap too).
+			if (SecondPrereq != NAME_None && !FindPartOnStand(SecondPrereq, TargetStand)) continue;
+
+			// The lid only seals a FULL jar.
+			if (bIsLid && !Target->bIsFull) { bSawEmptyJar = true; continue; }
+
+			const FVector MountWorld = Target->GetActorTransform().TransformPosition(MountOffset);
+			const FRotator SnapRot = Target->GetActorRotation() + MountRotation;
+
+			// Aim at the part's VISUAL center, not its pivot (no one-frame lag; see GhostVisualCenter).
 			const FVector AimTarget = GhostVisualCenter(FTransform(SnapRot, MountWorld), MountWorld);
-			const float SnapRadius = IsValid(GhostStillPart) ? GhostStillPart->SnapRadiusCm : StillSnapRadiusCm;
-
 			const FVector ToMount = AimTarget - CamLoc;
 			const float Along = FVector::DotProduct(ToMount, CamFwd);
 			const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
 			const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
-			const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
 
-			if (bValid)
+			if (Along > 0.0f && RayDist < BestRayDist)
 			{
-				GhostSnapTransform = FTransform(SnapRot, MountWorld);
-				GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
-				bGhostSnapValid = true;
+				BestRayDist = RayDist;
+				BestTarget = Target;
+				BestXform = FTransform(SnapRot, MountWorld);
 			}
+		}
+
+		if (bIsLid && !BestTarget && bSawEmptyJar)
+		{
+			// Per-tick caller: AddToast dedupes identical fresh messages (refresh, not stack).
+			ShowToast(TEXT("Jar is empty — nothing to seal"), false);
+		}
+
+		if (BestTarget && BestRayDist <= SnapRadius)
+		{
+			GhostSnapTransform = BestXform;
+			GhostSnapOwningStand = StandOfPart(BestTarget);
+			GhostStillPart->SetActorLocationAndRotation(BestXform.GetLocation(), BestXform.Rotator());
+			bGhostSnapValid = true;
 		}
 
 		if (bGhostSnapValid)
@@ -1687,29 +1788,48 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		MountLocal = BarrelMountLocal; ZAdjust = BarrelZAdjust;
 	}
 
-	AStillPartActor* Stand = FindPlacedStand();
-	if (Stand)
+	// Candidate stands: every placed stand whose mount for THIS vessel type is unoccupied.
+	// Among candidates, snap to the one whose mount point is nearest the camera aim ray.
 	{
-		// TransformPosition respects the stand's rotation, so a rotated stand places vessels correctly.
-		FVector MountWorld = Stand->GetActorTransform().TransformPosition(MountLocal);
-		MountWorld.Z += ZAdjust;
-
-		const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
-
-		// Aim at the vessel's VISUAL center, not its pivot. Snap POSITION stays MountWorld unchanged.
-		const FVector AimTarget = GhostVisualCenter(FTransform(SnapRot, MountWorld), MountWorld);
 		const float SnapRadius = IsValid(GhostStillPart) ? GhostStillPart->SnapRadiusCm : StillSnapRadiusCm;
 
-		const FVector ToMount = AimTarget - CamLoc;
-		const float Along = FVector::DotProduct(ToMount, CamFwd);
-		const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
-		const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
-		const bool bValid = (Along > 0.0f) && (RayDist <= SnapRadius);
+		AStillPartActor* BestStand = nullptr;
+		float BestRayDist = TNumericLimits<float>::Max();
+		FTransform BestXform;
 
-		if (bValid)
+		for (AStillPartActor* Stand : PlacedStillParts)
 		{
-			GhostSnapTransform = FTransform(SnapRot, MountWorld);
-			GhostStillPart->SetActorLocationAndRotation(MountWorld, SnapRot);
+			if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+
+			// Mount occupied: this stand already has a vessel of this type.
+			if (FindPartOnStand(GhostPartID, Stand)) continue;
+
+			// TransformPosition respects the stand's rotation, so a rotated stand places vessels correctly.
+			FVector MountWorld = Stand->GetActorTransform().TransformPosition(MountLocal);
+			MountWorld.Z += ZAdjust;
+
+			const FRotator SnapRot(0.0f, Stand->GetActorRotation().Yaw, 0.0f);
+
+			// Aim at the vessel's VISUAL center, not its pivot. Snap POSITION stays MountWorld unchanged.
+			const FVector AimTarget = GhostVisualCenter(FTransform(SnapRot, MountWorld), MountWorld);
+			const FVector ToMount = AimTarget - CamLoc;
+			const float Along = FVector::DotProduct(ToMount, CamFwd);
+			const FVector ClosestOnRay = CamLoc + CamFwd * FMath::Clamp(Along, 0.0f, MaxAimDistanceCm);
+			const float RayDist = FVector::Dist(ClosestOnRay, AimTarget);
+
+			if (Along > 0.0f && RayDist < BestRayDist)
+			{
+				BestRayDist = RayDist;
+				BestStand = Stand;
+				BestXform = FTransform(SnapRot, MountWorld);
+			}
+		}
+
+		if (BestStand && BestRayDist <= SnapRadius)
+		{
+			GhostSnapTransform = BestXform;
+			GhostSnapOwningStand = BestStand;
+			GhostStillPart->SetActorLocationAndRotation(BestXform.GetLocation(), BestXform.Rotator());
 			bGhostSnapValid = true;
 		}
 	}
@@ -1755,6 +1875,12 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 	if (Placed)
 	{
 		Placed->InitFromItemData(GhostPartID, PartMesh);
+		// Stands own themselves (OwningStand stays null); every other part records its stand,
+		// chosen by the snap candidate selection in UpdateStillGhost.
+		if (GhostPartID != FName(TEXT("CinderBlockStand")))
+		{
+			Placed->OwningStand = GhostSnapOwningStand;
+		}
 		PlacedStillParts.Add(Placed);
 
 		if (Inventory)
@@ -1765,10 +1891,10 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
 		PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), GhostSnapTransform.GetLocation());
 
-		// Placing the lid on a full jar seals it (ghost validity already guaranteed the jar is full).
+		// Placing the lid on a full jar seals THAT stand's jar (ghost validity guaranteed it's full).
 		if (GhostPartID == FName(TEXT("MasonJarLid")))
 		{
-			if (AStillPartActor* Jar = FindPlacedPart(FName(TEXT("MasonJar"))))
+			if (AStillPartActor* Jar = FindPartOnStand(FName(TEXT("MasonJar")), GhostSnapOwningStand.Get()))
 			{
 				Jar->bIsSealed = true;
 				UE_LOG(LogTemp, Warning, TEXT("Jar sealed — press E on the jar to collect"));
@@ -1797,6 +1923,7 @@ void AMoonshineCharacter_Simple::CancelStillGhost()
 	bGhostFloorGridMode = false;
 	bGhostSnapValid = false;
 	GhostPartID = NAME_None;
+	GhostSnapOwningStand.Reset();
 
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{

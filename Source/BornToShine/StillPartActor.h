@@ -42,6 +42,11 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
 	bool bIsSealed = false;
 
+	// The CinderBlockStand this part belongs to (null for stands themselves). Set at placement:
+	// vessels record the stand they snapped to; cap-like parts inherit it from their snap target.
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	TWeakObjectPtr<AStillPartActor> OwningStand;
+
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);
 };
