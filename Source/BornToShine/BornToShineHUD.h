@@ -54,6 +54,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Crosshair")
 	FLinearColor DeleteCrosshairColor;
 
+	// Optional icon drawn left of the money readout (text-only when unset).
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	class UTexture2D* MoneyIcon = nullptr;
+
 	// Draw the crosshair
 	void DrawCrosshair();
 

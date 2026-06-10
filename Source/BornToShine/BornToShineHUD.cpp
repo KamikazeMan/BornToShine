@@ -5,6 +5,7 @@
 #include "Engine/Canvas.h"
 #include "Engine/Font.h"
 #include "Engine/Engine.h"
+#include "Engine/Texture2D.h"
 
 ABornToShineHUD::ABornToShineHUD()
 {
@@ -46,10 +47,20 @@ void ABornToShineHUD::DrawMoney()
 	const FString MoneyText = FString::Printf(TEXT("$%d"), Player->GetMoney());
 	UFont* Font = GEngine ? GEngine->GetLargeFont() : nullptr;
 
-	// Right-align with a margin in the top-right corner.
+	// Right-align with a margin in the top-right corner; the icon+text pair is anchored together.
 	float TextWidth = 0.0f, TextHeight = 0.0f;
 	GetTextSize(MoneyText, TextWidth, TextHeight, Font, 1.5f);
-	DrawText(MoneyText, FLinearColor::White, Canvas->SizeX - TextWidth - 20.0f, 20.0f, Font, 1.5f);
+	const float TextX = Canvas->SizeX - TextWidth - 20.0f;
+	const float TextY = 20.0f;
+	DrawText(MoneyText, FLinearColor::White, TextX, TextY, Font, 1.5f);
+
+	if (MoneyIcon)
+	{
+		const float IconSize = 28.0f;
+		const float IconX = TextX - IconSize - 6.0f;
+		const float IconY = TextY + (TextHeight - IconSize) * 0.5f; // vertically centered on the text
+		DrawTexture(MoneyIcon, IconX, IconY, IconSize, IconSize, 0.0f, 0.0f, 1.0f, 1.0f);
+	}
 }
 
 void ABornToShineHUD::DrawCrosshair()

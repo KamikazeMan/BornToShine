@@ -56,22 +56,27 @@ bool UInventoryComponent::RemoveItem(FName ItemID, int32 Quantity)
 {
 	if (Quantity <= 0 || ItemID == NAME_None) return false;
 
-	for (int32 i = 0; i < Items.Num(); i++)
+	// Items can span multiple stacks (AddItem overflows into new stacks): require the TOTAL
+	// across all stacks, then drain stacks in order.
+	if (GetItemCount(ItemID) < Quantity) return false;
+
+	int32 Remaining = Quantity;
+	for (int32 i = Items.Num() - 1; i >= 0 && Remaining > 0; --i)
 	{
-		if (Items[i].ItemID == ItemID)
+		if (Items[i].ItemID != ItemID) continue;
+
+		const int32 ToRemove = FMath::Min(Remaining, Items[i].Quantity);
+		Items[i].Quantity -= ToRemove;
+		Remaining -= ToRemove;
+		if (Items[i].Quantity <= 0)
 		{
-			if (Items[i].Quantity < Quantity) return false;
-			Items[i].Quantity -= Quantity;
-			UE_LOG(LogTemp, Log, TEXT("Inventory: -%d %s (now %d)"), Quantity, *ItemID.ToString(), Items[i].Quantity);
-			if (Items[i].Quantity <= 0)
-			{
-				Items.RemoveAt(i);
-			}
-			OnInventoryChanged.Broadcast();
-			return true;
+			Items.RemoveAt(i);
 		}
 	}
-	return false;
+
+	UE_LOG(LogTemp, Log, TEXT("Inventory: -%d %s (now %d)"), Quantity, *ItemID.ToString(), GetItemCount(ItemID));
+	OnInventoryChanged.Broadcast();
+	return true;
 }
 
 bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
@@ -81,11 +86,12 @@ bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
 
 int32 UInventoryComponent::GetItemCount(FName ItemID) const
 {
+	int32 Total = 0;
 	for (const FInventoryItem& Item : Items)
 	{
-		if (Item.ItemID == ItemID) return Item.Quantity;
+		if (Item.ItemID == ItemID) Total += Item.Quantity;
 	}
-	return 0;
+	return Total;
 }
 
 bool UInventoryComponent::GetItemData(FName ItemID, FItemDataRow& OutData) const
