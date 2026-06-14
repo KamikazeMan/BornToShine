@@ -19,6 +19,7 @@
 #include "BornToShineHUD.h"
 #include "BornToShineSaveGame.h"
 #include "InteractionHUDWidget.h"
+#include "StillInventoryWidget.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
@@ -823,6 +824,13 @@ void AMoonshineCharacter_Simple::ToggleInventoryUI()
 	}
 	else
 	{
+		// Don't stack with the per-still loading UI.
+		if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport())
+		{
+			StillInventoryWidgetInstance->RemoveFromParent();
+			ActiveStillUIStand.Reset();
+		}
+
 		InventoryWidgetInstance = CreateWidget<UInventoryGridWidget>(PC, InventoryWidgetClass);
 		if (InventoryWidgetInstance)
 		{
@@ -1199,6 +1207,13 @@ void AMoonshineCharacter_Simple::SetStandState(AStillPartActor* Stand, EStillSta
 
 void AMoonshineCharacter_Simple::InteractWithStill()
 {
+	// If the still loading UI is open, E closes it.
+	if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport())
+	{
+		CloseStillInventory();
+		return;
+	}
+
 	// Selling to a buyer is its own interaction, independent of the still.
 	if (ABuyerActor* Buyer = GetAimedBuyer())
 	{
@@ -1214,71 +1229,149 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 	}
 
 	// Otherwise interaction routes to the aimed Pot's OWN stand (GetAimedPot already verified
-	// that stand's still is complete). Two stills can be in different states simultaneously.
+	// that stand's still is complete). E on the pot opens the loading UI for THAT stand.
 	AStillPartActor* Pot = GetAimedPot();
 	if (!Pot) return;
 	AStillPartActor* Stand = StandOfPart(Pot);
 	if (!Stand) return;
 
-	switch (Stand->StillState)
+	// Mid-batch: the countdown HUD already shows the time; loading is locked until it finishes.
+	if (Stand->StillState == EStillState::Running || Stand->StillState == EStillState::Lit)
 	{
-	case EStillState::Empty:
-		if (!Inventory || !Inventory->HasItem(FName(TEXT("Water")), WaterCost))
-		{
-			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Water"))) : 0;
-			UE_LOG(LogTemp, Warning, TEXT("Need %d Water (have %d)"), WaterCost, Have);
-			ShowToast(FString::Printf(TEXT("Need %d Water (have %d)"), WaterCost, Have), false);
-			break;
-		}
-		Inventory->RemoveItem(FName(TEXT("Water")), WaterCost);
-		SetStandState(Stand, EStillState::Water);
-		UE_LOG(LogTemp, Warning, TEXT("Water added (consumed %d Water)"), WaterCost);
-		PlaySfxAt(WaterAddSound, TEXT("WaterAddSound"), Pot->GetActorLocation());
-		break;
+		return;
+	}
 
-	case EStillState::Water:
-		if (!Inventory || !Inventory->HasItem(FName(TEXT("Mash")), MashCost))
-		{
-			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Mash"))) : 0;
-			UE_LOG(LogTemp, Warning, TEXT("Need %d Mash (have %d)"), MashCost, Have);
-			ShowToast(FString::Printf(TEXT("Need %d Mash (have %d)"), MashCost, Have), false);
-			break;
-		}
-		Inventory->RemoveItem(FName(TEXT("Mash")), MashCost);
-		SetStandState(Stand, EStillState::Mash);
-		UE_LOG(LogTemp, Warning, TEXT("Mash added (consumed %d Mash)"), MashCost);
-		PlaySfxAt(MashAddSound, TEXT("MashAddSound"), Pot->GetActorLocation());
-		break;
+	// Empty (or Done) — open the per-still loading UI. Leftover/in-progress states are unreachable
+	// now that batches start via the widget's Start Distilling button.
+	OpenStillInventory(Stand);
+}
 
-	case EStillState::Mash:
+int32 AMoonshineCharacter_Simple::GetIngredientReq(FName Ingredient) const
+{
+	if (Ingredient == FName(TEXT("Water")))    return ReqWater;
+	if (Ingredient == FName(TEXT("Mash")))     return ReqMash;
+	if (Ingredient == FName(TEXT("Firewood"))) return ReqFirewood;
+	return 0;
+}
+
+int32 AMoonshineCharacter_Simple::GetPlayerIngredientCount(FName Ingredient) const
+{
+	return Inventory ? Inventory->GetItemCount(Ingredient) : 0;
+}
+
+int32 AMoonshineCharacter_Simple::GetStandNumber(AStillPartActor* Stand) const
+{
+	return StandNumber(Stand);
+}
+
+bool AMoonshineCharacter_Simple::TransferIngredientToStill(AStillPartActor* Stand, FName Ingredient)
+{
+	if (!IsValid(Stand) || !Inventory) return false;
+	if (Inventory->GetItemCount(Ingredient) < 1) return false;
+
+	Inventory->RemoveItem(Ingredient, 1);
+	Stand->AddStored(Ingredient, 1);
+	RequestAutosaveDebounced(); // stored ingredients persist (debounced; cheap)
+	return true;
+}
+
+bool AMoonshineCharacter_Simple::TransferIngredientToPlayer(AStillPartActor* Stand, FName Ingredient)
+{
+	if (!IsValid(Stand) || !Inventory) return false;
+	if (Stand->GetStored(Ingredient) < 1) return false;
+
+	Stand->AddStored(Ingredient, -1);
+	Inventory->AddItem(Ingredient, 1);
+	RequestAutosaveDebounced();
+	return true;
+}
+
+bool AMoonshineCharacter_Simple::TryStartDistilling(AStillPartActor* Stand)
+{
+	if (!IsValid(Stand)) return false;
+
+	// Require the full batch cost in the still's OWN stash.
+	if (Stand->GetStored(FName(TEXT("Water")))    < ReqWater   ||
+		Stand->GetStored(FName(TEXT("Mash")))     < ReqMash    ||
+		Stand->GetStored(FName(TEXT("Firewood"))) < ReqFirewood)
 	{
-		if (!Inventory || !Inventory->HasItem(FName(TEXT("Firewood")), FirewoodCost))
-		{
-			const int32 Have = Inventory ? Inventory->GetItemCount(FName(TEXT("Firewood"))) : 0;
-			UE_LOG(LogTemp, Warning, TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have);
-			ShowToast(FString::Printf(TEXT("Need %d Firewood (have %d)"), FirewoodCost, Have), false);
-			break;
-		}
-		Inventory->RemoveItem(FName(TEXT("Firewood")), FirewoodCost);
-		SetStandState(Stand, EStillState::Lit);
-		SetStandState(Stand, EStillState::Running);
-		UE_LOG(LogTemp, Warning, TEXT("Fire lit (consumed %d Firewood) — distilling"), FirewoodCost);
+		return false;
+	}
+
+	// Consume the required amounts; leftovers stay in the still for next time.
+	Stand->AddStored(FName(TEXT("Water")),    -ReqWater);
+	Stand->AddStored(FName(TEXT("Mash")),     -ReqMash);
+	Stand->AddStored(FName(TEXT("Firewood")), -ReqFirewood);
+
+	// Same start path the old Mash->Lit transition used: Running + kick the per-stand timer.
+	SetStandState(Stand, EStillState::Lit);
+	SetStandState(Stand, EStillState::Running);
+	Stand->BatchElapsed = 0.0f;
+	Stand->bBatchRunning = true;
+	UE_LOG(LogTemp, Warning, TEXT("Still %d: fire lit — distilling"), StandNumber(Stand));
+
+	if (AStillPartActor* Pot = FindPartOnStand(FName(TEXT("Pot")), Stand))
+	{
 		PlaySfxAt(FireIgniteSound, TEXT("FireIgniteSound"), Pot->GetActorLocation());
 		SpawnVfxAt(IgniteBurstVFX, TEXT("IgniteBurstVFX"), Pot->GetActorLocation());
-		Stand->BatchElapsed = 0.0f;
-		Stand->bBatchRunning = true;
-		break;
 	}
 
-	case EStillState::Running:
-		break;
+	AutoSave(); // starting a batch is a meaningful moment (consumed stash persists)
+	return true;
+}
 
-	case EStillState::Done:
-		break;
+void AMoonshineCharacter_Simple::OpenStillInventory(AStillPartActor* Stand)
+{
+	if (!IsValid(Stand)) return;
 
-	default:
-		break;
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	// Don't stack with the main inventory.
+	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport())
+	{
+		InventoryWidgetInstance->RemoveFromParent();
+		InventoryWidgetInstance = nullptr;
 	}
+
+	if (!StillInventoryWidgetInstance)
+	{
+		StillInventoryWidgetInstance = CreateWidget<UStillInventoryWidget>(PC, UStillInventoryWidget::StaticClass());
+	}
+	if (!StillInventoryWidgetInstance) return;
+
+	ActiveStillUIStand = Stand;
+	StillInventoryWidgetInstance->SetupForStand(this, Stand);
+	if (!StillInventoryWidgetInstance->IsInViewport())
+	{
+		StillInventoryWidgetInstance->AddToViewport(10);
+	}
+
+	// Show the cursor for clicking, but DON'T grab keyboard focus — so the E key still routes to
+	// InteractWithStill (toggle close) while mouse clicks reach the buttons.
+	PC->bShowMouseCursor = true;
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PC->SetInputMode(InputMode);
+	PlaySfx2D(InventoryOpenSound, TEXT("InventoryOpenSound"));
+}
+
+void AMoonshineCharacter_Simple::CloseStillInventory()
+{
+	if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport())
+	{
+		StillInventoryWidgetInstance->RemoveFromParent();
+	}
+	ActiveStillUIStand.Reset();
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->bShowMouseCursor = false;
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+	}
+	PlaySfx2D(InventoryCloseSound, TEXT("InventoryCloseSound"));
 }
 
 void AMoonshineCharacter_Simple::OnBatchComplete(AStillPartActor* Stand)
@@ -1522,6 +1615,11 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		}
 		SavedPart.StillState = (uint8)SavedState;
 
+		// v4: per-stand ingredient stash.
+		SavedPart.StoredWater = Part->StoredWater;
+		SavedPart.StoredMash = Part->StoredMash;
+		SavedPart.StoredFirewood = Part->StoredFirewood;
+
 		Save->StillParts.Add(SavedPart);
 	}
 
@@ -1544,6 +1642,12 @@ void AMoonshineCharacter_Simple::LoadGame()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("No save found"));
 		return;
+	}
+
+	// Close the loading UI first — its target stand is about to be destroyed/respawned.
+	if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport())
+	{
+		CloseStillInventory();
 	}
 
 	// Clear current state before restoring.
@@ -1602,6 +1706,13 @@ void AMoonshineCharacter_Simple::LoadGame()
 				Part->StillState = (Save->SaveVersion >= 3) ? (EStillState)SavedPart.StillState : EStillState::Empty;
 				Part->bBatchRunning = false;
 				Part->BatchElapsed = 0.0f;
+				// v4 restores the ingredient stash (0 for older saves).
+				if (Save->SaveVersion >= 4)
+				{
+					Part->StoredWater = SavedPart.StoredWater;
+					Part->StoredMash = SavedPart.StoredMash;
+					Part->StoredFirewood = SavedPart.StoredFirewood;
+				}
 				SpawnedStands.Add(Part);
 			}
 			PlacedStillParts.Add(Part);
@@ -1736,15 +1847,19 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	else if (AStillPartActor* Pot = GetAimedPot())
 	{
 		// Prompt reads the aimed pot's OWN stand state (GetAimedPot verified completeness).
+		// E opens the loading UI when the still is idle; the countdown covers Lit/Running.
 		AStillPartActor* Stand = StandOfPart(Pot);
-		switch (Stand ? Stand->StillState : EStillState::Empty)
+		const EStillState S = Stand ? Stand->StillState : EStillState::Empty;
+		if (S != EStillState::Lit && S != EStillState::Running)
 		{
-		case EStillState::Empty: Prompt = FString::Printf(TEXT("Add Water (%d)"), WaterCost); break;
-		case EStillState::Water: Prompt = FString::Printf(TEXT("Add Mash (%d)"), MashCost); break;
-		case EStillState::Mash:  Prompt = FString::Printf(TEXT("Light Fire (%d Firewood)"), FirewoodCost); break;
-		case EStillState::Done:  Prompt = TEXT("Batch complete — jar is full"); break;
-		default: break; // Lit/Running: the countdown bar covers it
+			Prompt = TEXT("Load ingredients");
 		}
+	}
+
+	// Suppress the aim prompt while the loading UI itself is open.
+	if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport())
+	{
+		Prompt.Empty();
 	}
 
 	if (Prompt.IsEmpty())

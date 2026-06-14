@@ -147,6 +147,28 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selling")
 	int32 GetMoney() const { return Money; }
 
+	// --- Per-still loading UI API (called by UStillInventoryWidget) ---
+
+	// Required amount of an ingredient for one batch (Water/Mash/Firewood).
+	int32 GetIngredientReq(FName Ingredient) const;
+
+	// How many of an ingredient the player carries in the main inventory.
+	int32 GetPlayerIngredientCount(FName Ingredient) const;
+
+	// 1-based display number of a stand by placement order.
+	int32 GetStandNumber(class AStillPartActor* Stand) const;
+
+	// Move one ingredient between the player and a stand's stash (respects available counts).
+	bool TransferIngredientToStill(class AStillPartActor* Stand, FName Ingredient);
+	bool TransferIngredientToPlayer(class AStillPartActor* Stand, FName Ingredient);
+
+	// Consume the required amounts from the stand's stash and begin its batch. Returns false
+	// (consuming nothing) when the stash is short.
+	bool TryStartDistilling(class AStillPartActor* Stand);
+
+	// Close the still loading UI if open (mouse/input restored to gameplay).
+	void CloseStillInventory();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -217,17 +239,28 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	int32 JarsPerRun = 15;
 
+	// Ingredients required to start one batch (consumed from the still's stash by Start Distilling).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
-	int32 WaterCost = 1;
+	int32 ReqWater = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
-	int32 MashCost = 1;
+	int32 ReqMash = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
-	int32 FirewoodCost = 3;
+	int32 ReqFirewood = 3;
 
-	// E-key interaction: routes to the aimed part's OWN stand's state machine.
+	// E-key interaction: routes to the aimed part's OWN stand (opens the loading UI on the pot).
 	void InteractWithStill();
+
+	// The per-still loading UI (created on demand, like InteractionHUD).
+	UPROPERTY()
+	class UStillInventoryWidget* StillInventoryWidgetInstance = nullptr;
+
+	// Stand whose stash the open loading UI is editing.
+	TWeakObjectPtr<class AStillPartActor> ActiveStillUIStand;
+
+	// Open the loading UI for a stand (closes the main inventory if it is open).
+	void OpenStillInventory(class AStillPartActor* Stand);
 
 	// Per-frame batch timers: every running stand accumulates BatchElapsed independently.
 	void TickStillBatches(float DeltaTime);

@@ -75,6 +75,22 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="StillPart")
 	int32 RemainingJars = 0;
 
+	// --- Per-still ingredient stash (meaningful on the CinderBlockStand only). The player loads
+	// ingredients into the still via the loading UI; a batch consumes the required amounts from
+	// here. Each stand has its OWN stash. ---
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	int32 StoredWater = 0;
+
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	int32 StoredMash = 0;
+
+	UPROPERTY(VisibleAnywhere, Category="StillPart")
+	int32 StoredFirewood = 0;
+
+	// FName-keyed access to the three stored counts (keeps the Water/Mash/Firewood mapping here).
+	int32 GetStored(FName Ingredient) const;
+	void AddStored(FName Ingredient, int32 Delta); // clamps at >= 0
+
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);
 };

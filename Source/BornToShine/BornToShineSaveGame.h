@@ -47,6 +47,16 @@ struct FSavedStillPart
 	// Empty for v1/v2 saves.
 	UPROPERTY()
 	uint8 StillState = 0;
+
+	// v4: per-stand ingredient stash (meaningful on stands only). 0 for older saves.
+	UPROPERTY()
+	int32 StoredWater = 0;
+
+	UPROPERTY()
+	int32 StoredMash = 0;
+
+	UPROPERTY()
+	int32 StoredFirewood = 0;
 };
 
 /**
@@ -70,6 +80,7 @@ public:
 	TArray<FSavedStillPart> StillParts;
 
 	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
+	// v4: per-stand ingredient stash (StoredWater/Mash/Firewood).
 	UPROPERTY()
-	int32 SaveVersion = 3;
+	int32 SaveVersion = 4;
 };
