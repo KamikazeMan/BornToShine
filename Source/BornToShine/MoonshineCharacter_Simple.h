@@ -403,6 +403,73 @@ protected:
 	// Property names already warned about (one-shot warnings only).
 	TSet<FName> WarnedMissingSounds;
 
+	// --- VFX (Niagara; assigned in BP defaults; unset systems simply don't spawn). A parallel
+	// system that MIRRORS the audio loops exactly — per-stand handles reconciled each tick in
+	// lockstep with UpdateStillAudio, same conditions, same attach points. ---
+
+	// Loop systems (one set per running still).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* FireVFX = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* SteamVFX = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* DripVFX = nullptr;
+
+	// One-shot systems (fire-and-forget at location).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* IgniteBurstVFX = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* CollectPoofVFX = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	class UNiagaraSystem* PlacePuffVFX = nullptr;
+
+	// Local attach offsets so each loop seats correctly on its part (tune in PIE).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	FVector FireVfxOffset = FVector(0.0f, 0.0f, -45.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	FVector SteamVfxOffset = FVector(0.0f, 0.0f, 30.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	FVector DripVfxOffset = FVector(0.0f, 0.0f, 20.0f);
+
+	// Fire light (pure code, no asset). Lives with the fire, seated at the fire position.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	float FireLightIntensity = 3000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	float FireLightRadius = 350.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	FLinearColor FireLightColor = FLinearColor(1.0f, 0.45f, 0.15f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="VFX")
+	bool bFireLightFlicker = true;
+
+	// Live VFX/light handles per stand — parallel to StillLoopMap, reconciled in lockstep with it.
+	struct FStillVfx
+	{
+		TWeakObjectPtr<class UNiagaraComponent> Fire;
+		TWeakObjectPtr<class UNiagaraComponent> Steam;
+		TWeakObjectPtr<class UNiagaraComponent> Drip;
+		TWeakObjectPtr<class UPointLightComponent> FireLight;
+	};
+	TMap<TWeakObjectPtr<class AStillPartActor>, FStillVfx> StillVfxMap;
+
+	// Per-tick reconciliation of the still VFX + fire light, mirroring UpdateStillAudio exactly.
+	void UpdateStillVFX();
+
+	// One-shot VFX helper; warns once per property name if the system is unassigned.
+	void SpawnVfxAt(class UNiagaraSystem* System, const TCHAR* PropertyName, const FVector& Location);
+	bool CheckVfxAssigned(class UNiagaraSystem* System, const TCHAR* PropertyName);
+
+	// VFX property names already warned about (one-shot warnings only).
+	TSet<FName> WarnedMissingVfx;
+
 	// Tint helper for the ghost (green = valid snap, red = invalid).
 	void SetGhostColor(const FLinearColor& Color);
 

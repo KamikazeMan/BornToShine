@@ -23,6 +23,10 @@
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
 #include "Sound/SoundAttenuation.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
+#include "Components/PointLightComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
@@ -184,6 +188,25 @@ USoundAttenuation* AMoonshineCharacter_Simple::GetLoopAttenuation()
 	return DefaultLoopAttenuation;
 }
 
+bool AMoonshineCharacter_Simple::CheckVfxAssigned(UNiagaraSystem* System, const TCHAR* PropertyName)
+{
+	if (System) return true;
+
+	const FName Key(PropertyName);
+	if (!WarnedMissingVfx.Contains(Key))
+	{
+		WarnedMissingVfx.Add(Key);
+		UE_LOG(LogTemp, Warning, TEXT("VFX: %s not assigned"), PropertyName);
+	}
+	return false;
+}
+
+void AMoonshineCharacter_Simple::SpawnVfxAt(UNiagaraSystem* System, const TCHAR* PropertyName, const FVector& Location)
+{
+	if (!CheckVfxAssigned(System, PropertyName)) return;
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), System, Location);
+}
+
 void AMoonshineCharacter_Simple::UpdateStillAudio()
 {
 	// Drop loop entries whose stand no longer exists (stop anything still playing).
@@ -258,6 +281,117 @@ void AMoonshineCharacter_Simple::UpdateStillAudio()
 	}
 }
 
+void AMoonshineCharacter_Simple::UpdateStillVFX()
+{
+	// Parallel to UpdateStillAudio: same per-tick reconciliation, same conditions, same attach
+	// points and per-stand handling — so VFX and audio spawn/stop in lockstep.
+
+	// Drop VFX entries whose stand no longer exists (destroy anything still playing).
+	for (auto It = StillVfxMap.CreateIterator(); It; ++It)
+	{
+		if (!It->Key.IsValid())
+		{
+			if (UNiagaraComponent* NC = It->Value.Fire.Get()) NC->DestroyComponent();
+			if (UNiagaraComponent* NC = It->Value.Steam.Get()) NC->DestroyComponent();
+			if (UNiagaraComponent* NC = It->Value.Drip.Get()) NC->DestroyComponent();
+			if (UPointLightComponent* L = It->Value.FireLight.Get()) L->DestroyComponent();
+			It.RemoveCurrent();
+		}
+	}
+
+	// Reconcile each stand's VFX against ITS OWN state/timer/jar — identical conditions to audio.
+	for (AStillPartActor* Stand : PlacedStillParts)
+	{
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+
+		FStillVfx& Fx = StillVfxMap.FindOrAdd(Stand);
+
+		const bool bBurning =
+			Stand->StillState == EStillState::Lit || Stand->StillState == EStillState::Running;
+
+		AStillPartActor* Pot = FindPartOnStand(FName(TEXT("Pot")), Stand);
+		AStillPartActor* Cap = FindPartOnStand(FName(TEXT("Cap")), Stand);
+		AStillPartActor* Jar = FindPartOnStand(FName(TEXT("MasonJar")), Stand);
+
+		// Fire flames under this stand's pot (mirrors FireLoopSound). Niagara dies with the pot
+		// actor via attachment; the cleanup pass above covers stand destruction.
+		if (bBurning && !Fx.Fire.IsValid() && Pot && CheckVfxAssigned(FireVFX, TEXT("FireVFX")))
+		{
+			Fx.Fire = UNiagaraFunctionLibrary::SpawnSystemAttached(FireVFX, Pot->MeshComponent, NAME_None,
+				FireVfxOffset, FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, false);
+		}
+		else if (!bBurning && Fx.Fire.IsValid())
+		{
+			Fx.Fire->DestroyComponent();
+			Fx.Fire.Reset();
+		}
+
+		// Warm point light at the fire position (pure code; same lifecycle as the flames).
+		if (bBurning && !Fx.FireLight.IsValid() && Pot)
+		{
+			UPointLightComponent* Light = NewObject<UPointLightComponent>(Pot);
+			Light->SetMobility(EComponentMobility::Movable);
+			Light->SetLightColor(FireLightColor);
+			Light->SetIntensity(FireLightIntensity);
+			Light->SetAttenuationRadius(FireLightRadius);
+			Light->CastShadows = false; // cheap
+			Light->RegisterComponent();
+			Light->AttachToComponent(Pot->MeshComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			Light->SetRelativeLocation(FireVfxOffset);
+			Fx.FireLight = Light;
+		}
+		else if (!bBurning && Fx.FireLight.IsValid())
+		{
+			Fx.FireLight->DestroyComponent();
+			Fx.FireLight.Reset();
+		}
+
+		// Subtle flicker via a sine on world time (per-stand phase so stills don't pulse in sync).
+		if (bBurning && Fx.FireLight.IsValid())
+		{
+			float Intensity = FireLightIntensity;
+			if (bFireLightFlicker && GetWorld())
+			{
+				const float Phase = (float)StandNumber(Stand);
+				Intensity *= 1.0f + 0.08f * FMath::Sin(GetWorld()->GetTimeSeconds() * 11.0f + Phase);
+			}
+			Fx.FireLight->SetIntensity(Intensity);
+		}
+
+		// Steam at this stand's cap (falls back to its pot; mirrors BoilSteamLoopSound).
+		USceneComponent* SteamAttach = Cap ? Cap->MeshComponent : (Pot ? Pot->MeshComponent : nullptr);
+		if (bBurning && !Fx.Steam.IsValid() && SteamAttach && CheckVfxAssigned(SteamVFX, TEXT("SteamVFX")))
+		{
+			Fx.Steam = UNiagaraFunctionLibrary::SpawnSystemAttached(SteamVFX, SteamAttach, NAME_None,
+				SteamVfxOffset, FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, false);
+		}
+		else if (!bBurning && Fx.Steam.IsValid())
+		{
+			Fx.Steam->DestroyComponent();
+			Fx.Steam.Reset();
+		}
+
+		// Drip at this stand's jar — SAME condition as DripLoopSound (jar full OR Running tail).
+		bool bDrip = Jar && Jar->bIsFull;
+		if (!bDrip && Jar && Stand->StillState == EStillState::Running)
+		{
+			const float Elapsed = Stand->BatchElapsed / FMath::Max(BatchTimeSeconds, 0.01f);
+			bDrip = Elapsed >= DripStartFraction;
+		}
+
+		if (bDrip && !Fx.Drip.IsValid() && Jar && CheckVfxAssigned(DripVFX, TEXT("DripVFX")))
+		{
+			Fx.Drip = UNiagaraFunctionLibrary::SpawnSystemAttached(DripVFX, Jar->MeshComponent, NAME_None,
+				DripVfxOffset, FRotator::ZeroRotator, EAttachLocation::KeepRelativeOffset, false);
+		}
+		else if (!bDrip && Fx.Drip.IsValid())
+		{
+			Fx.Drip->DestroyComponent();
+			Fx.Drip.Reset();
+		}
+	}
+}
+
 void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -290,6 +424,9 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 
 	// Reconcile the still audio loops (fire/steam/drip) against state, timer and jar.
 	UpdateStillAudio();
+
+	// Reconcile the still VFX + fire light in lockstep with the audio loops.
+	UpdateStillVFX();
 }
 
 void AMoonshineCharacter_Simple::TickStillBatches(float DeltaTime)
@@ -819,6 +956,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 
 				UE_LOG(LogTemp, Log, TEXT("Placed %s at Z=%.2f (FloorSpawnZOffset=%.2f) — %s"), *PendingPlacementItemID.ToString(), SpawnLocation.Z, FloorSpawnZOffset, *SpawnLocation.ToString());
 				PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), SpawnLocation);
+				SpawnVfxAt(PlacePuffVFX, TEXT("PlacePuffVFX"), SpawnLocation);
 
 				RequestAutosaveDebounced(); // autosave: part placed (debounced)
 			}
@@ -1126,6 +1264,7 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 		SetStandState(Stand, EStillState::Running);
 		UE_LOG(LogTemp, Warning, TEXT("Fire lit (consumed %d Firewood) — distilling"), FirewoodCost);
 		PlaySfxAt(FireIgniteSound, TEXT("FireIgniteSound"), Pot->GetActorLocation());
+		SpawnVfxAt(IgniteBurstVFX, TEXT("IgniteBurstVFX"), Pot->GetActorLocation());
 		Stand->BatchElapsed = 0.0f;
 		Stand->bBatchRunning = true;
 		break;
@@ -1181,6 +1320,7 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	if (Added > 0)
 	{
 		PlaySfxAt(JarCollectSound, TEXT("JarCollectSound"), Jar->GetActorLocation());
+		SpawnVfxAt(CollectPoofVFX, TEXT("CollectPoofVFX"), Jar->GetActorLocation());
 	}
 
 	if (Jar->RemainingJars > 0)
@@ -2001,6 +2141,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
 		PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), GhostSnapTransform.GetLocation());
+		SpawnVfxAt(PlacePuffVFX, TEXT("PlacePuffVFX"), GhostSnapTransform.GetLocation());
 
 		// Placing the lid on a full jar seals THAT stand's jar (ghost validity guaranteed it's full).
 		if (GhostPartID == FName(TEXT("MasonJarLid")))

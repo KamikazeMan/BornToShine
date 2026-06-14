@@ -18,7 +18,8 @@ public class BornToShine : ModuleRules
 			"Slate",
 			"SlateCore",
 			"Json",
-			"ProceduralMeshComponent"
+			"ProceduralMeshComponent",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
