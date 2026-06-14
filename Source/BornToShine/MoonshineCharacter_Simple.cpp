@@ -1791,34 +1791,43 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	if (!InteractionHUD) return;
 
 	// Countdowns are visible while any still is Running, regardless of where the player looks.
-	// Nearest running still first; up to 3 lines stacked; the bar shows the nearest one's fill.
+	// Soonest-done on top; ALL running stills listed up to MaxTimerLines, then "+N more…".
 	{
-		struct FRunningStill { AStillPartActor* Stand; float DistSq; };
+		struct FRunningStill { AStillPartActor* Stand; float Remaining; };
 		TArray<FRunningStill> RunningStills;
-		const FVector PlayerLoc = GetActorLocation();
+		const float Total = FMath::Max(BatchTimeSeconds, 0.01f);
 
 		for (AStillPartActor* Stand : PlacedStillParts)
 		{
 			if (IsValid(Stand) && Stand->PartID == FName(TEXT("CinderBlockStand")) &&
 				Stand->StillState == EStillState::Running)
 			{
-				RunningStills.Add({ Stand, float(FVector::DistSquared(PlayerLoc, Stand->GetActorLocation())) });
+				RunningStills.Add({ Stand, Total - Stand->BatchElapsed });
 			}
 		}
 
 		if (RunningStills.Num() > 0)
 		{
-			RunningStills.Sort([](const FRunningStill& A, const FRunningStill& B) { return A.DistSq < B.DistSq; });
+			// Sort by time remaining ascending so the most urgent (soonest-done) is always shown.
+			RunningStills.Sort([](const FRunningStill& A, const FRunningStill& B) { return A.Remaining < B.Remaining; });
 
-			const float Total = FMath::Max(BatchTimeSeconds, 0.01f);
+			const int32 Cap = FMath::Max(1, MaxTimerLines);
+			const bool bOverflow = RunningStills.Num() > Cap;
+			// When overflowing, reserve the last line for the "+N more…" summary.
+			const int32 NumListed = bOverflow ? (Cap - 1) : RunningStills.Num();
+
 			FString Lines;
-			const int32 NumLines = FMath::Min(RunningStills.Num(), 3);
-			for (int32 i = 0; i < NumLines; ++i)
+			for (int32 i = 0; i < NumListed; ++i)
 			{
 				AStillPartActor* Stand = RunningStills[i].Stand;
 				const int32 Remaining = FMath::Max(0, FMath::CeilToInt(Total - Stand->BatchElapsed));
 				if (!Lines.IsEmpty()) Lines += TEXT("\n");
 				Lines += FString::Printf(TEXT("STILL %d  %d:%02d"), StandNumber(Stand), Remaining / 60, Remaining % 60);
+			}
+			if (bOverflow)
+			{
+				if (!Lines.IsEmpty()) Lines += TEXT("\n");
+				Lines += FString::Printf(TEXT("+%d more…"), RunningStills.Num() - NumListed);
 			}
 
 			InteractionHUD->ShowTimer(Lines, RunningStills[0].Stand->BatchElapsed / Total);

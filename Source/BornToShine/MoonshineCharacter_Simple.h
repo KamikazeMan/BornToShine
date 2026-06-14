@@ -235,6 +235,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	float BatchTimeSeconds = 300.0f;
 
+	// Safety ceiling on how many running-still countdown lines the HUD lists. Beyond this, the
+	// last line collapses to "+N more…".
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="HUD")
+	int32 MaxTimerLines = 8;
+
 	// Jars produced per completed run. Stored now; consumed by the output increment later.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	int32 JarsPerRun = 15;
