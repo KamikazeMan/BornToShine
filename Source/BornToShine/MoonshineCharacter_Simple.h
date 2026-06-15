@@ -14,6 +14,7 @@ class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UInteractionHUDWidget;
 class AWorldPickupActor;
+class UHotbarWidget;
 
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
@@ -180,6 +181,15 @@ public:
 
 	// Walk-over hook from a pickup's proximity sphere (only acts if bAutoPickupOnOverlap).
 	void NotifyPickupOverlap(class AWorldPickupActor* Pickup);
+
+	// --- Hotbar (a view onto inventory slots 0..HotbarSlots-1) ---
+
+	// Select the active hotbar slot (clamped; updates the highlight). Called by keys and the widget.
+	void SelectHotbarSlot(int32 Index);
+
+	// Decide cancel-vs-world-drop for an inventory drag released off all slots, tested against
+	// every open inventory panel (main grid + hotbar). Called by both widgets' cancel handlers.
+	void HandleInventoryDragRelease(int32 SourceIndex, FVector2D ScreenPos);
 
 protected:
 	virtual void BeginPlay() override;
@@ -452,6 +462,32 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
 	float DropTossStrength = 250.0f;
+
+	// --- Hotbar config/state ---
+
+	// How many inventory slots (0..N-1) the hotbar mirrors.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI")
+	int32 HotbarSlots = 6;
+
+	// Currently selected hotbar slot (0-based).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="UI")
+	int32 ActiveHotbarSlot = 0;
+
+	// The always-on hotbar overlay.
+	UPROPERTY()
+	class UHotbarWidget* HotbarWidget = nullptr;
+
+	// Scroll-wheel cycle of the active slot (wraps). Skipped during still-ghost placement.
+	void CycleHotbarSlot(int32 Direction);
+
+	// Stub for "using" the active hotbar item (eat/equip/etc.) — wired to a key, no-op for now.
+	void UseActiveHotbarItem();
+
+	// Raw-key handlers for hotbar selection (number keys 1..6) and scroll cycling.
+	void OnHotbar1(); void OnHotbar2(); void OnHotbar3();
+	void OnHotbar4(); void OnHotbar5(); void OnHotbar6();
+	void OnHotbarScrollUp();
+	void OnHotbarScrollDown();
 
 	// The pickup the player is currently aiming at (camera-forward sweep), or nullptr.
 	class AWorldPickupActor* GetAimedPickup() const;

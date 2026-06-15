@@ -193,26 +193,20 @@ void UInventoryGridWidget::HandleSlotDropped(int32 FromIndex, int32 ToIndex)
 	}
 }
 
+bool UInventoryGridWidget::IsScreenInsidePanel(const FVector2D& ScreenPos) const
+{
+	return BackgroundImage && BackgroundImage->GetCachedGeometry().IsUnderLocation(ScreenPos);
+}
+
 void UInventoryGridWidget::HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos)
 {
-	// Released inside the visible panel (but not on a slot) => cancel; the source un-dims itself.
-	// Only a release CLEARLY outside the panel bounds drops the stack to the world.
-	if (BackgroundImage && BackgroundImage->GetCachedGeometry().IsUnderLocation(ScreenPos))
-	{
-		return;
-	}
-
-	if (!InventoryRef || !InventoryRef->GetItems().IsValidIndex(SourceIndex)) return;
-
-	const FInventoryItem Item = InventoryRef->GetItems()[SourceIndex];
-	if (Item.ItemID == NAME_None || Item.Quantity <= 0) return;
-
-	// World-drop is gated to the MAIN inventory grid (the still loading UI doesn't use these slots).
+	// The character decides cancel-vs-world-drop against ALL open inventory panels (grid + hotbar),
+	// so releasing over the hotbar while the grid is open cancels rather than dropping to world.
 	if (APawn* Pawn = GetOwningPlayerPawn())
 	{
 		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
 		{
-			Character->DropItemToWorld(Item.ItemID, Item.Quantity);
+			Character->HandleInventoryDragRelease(SourceIndex, ScreenPos);
 		}
 	}
 }

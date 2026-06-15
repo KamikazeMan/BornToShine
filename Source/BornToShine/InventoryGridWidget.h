@@ -22,6 +22,9 @@ public:
 	void SetInventoryComponent(UInventoryComponent* InInventory);
 	void RefreshGrid();
 
+	// True when a screen-space point lies within the visible grid panel (drag-release bounds test).
+	bool IsScreenInsidePanel(const FVector2D& ScreenPos) const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	UTexture2D* BackgroundTexture;
 

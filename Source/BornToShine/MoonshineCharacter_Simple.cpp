@@ -20,6 +20,7 @@
 #include "BornToShineSaveGame.h"
 #include "InteractionHUDWidget.h"
 #include "StillInventoryWidget.h"
+#include "HotbarWidget.h"
 #include "WorldPickupActor.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -126,6 +127,17 @@ void AMoonshineCharacter_Simple::BeginPlay()
 		{
 			InteractionHUD->SetVisibility(ESlateVisibility::HitTestInvisible);
 			InteractionHUD->AddToViewport(5);
+		}
+
+		// Always-on hotbar over the world. ZOrder 2 keeps its slots above the main grid (ZOrder 0)
+		// so items can be dragged between them; the still UI (10) covers it when open.
+		HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
+		if (HotbarWidget)
+		{
+			HotbarWidget->NumSlots = HotbarSlots;        // set before the slots are built
+			HotbarWidget->SetInventoryComponent(Inventory);
+			HotbarWidget->AddToViewport(2);
+			HotbarWidget->SetActiveSlot(ActiveHotbarSlot);
 		}
 	}
 
@@ -560,6 +572,21 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 	// Save/Load debug keys.
 	PlayerInputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshineCharacter_Simple::SaveGame);
 	PlayerInputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshineCharacter_Simple::LoadGame);
+
+	// Hotbar: number keys 1..6 select the active slot (each handler clamps to HotbarSlots).
+	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar1);
+	PlayerInputComponent->BindKey(EKeys::Two,   IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar2);
+	PlayerInputComponent->BindKey(EKeys::Three, IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar3);
+	PlayerInputComponent->BindKey(EKeys::Four,  IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar4);
+	PlayerInputComponent->BindKey(EKeys::Five,  IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar5);
+	PlayerInputComponent->BindKey(EKeys::Six,   IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar6);
+
+	// Mouse wheel cycles the active hotbar slot (guarded against still-ghost placement).
+	PlayerInputComponent->BindKey(EKeys::MouseScrollUp,   IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbarScrollUp);
+	PlayerInputComponent->BindKey(EKeys::MouseScrollDown, IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbarScrollDown);
+
+	// "Use" the active hotbar item (stub for now).
+	PlayerInputComponent->BindKey(EKeys::G, IE_Pressed, this, &AMoonshineCharacter_Simple::UseActiveHotbarItem);
 }
 
 void AMoonshineCharacter_Simple::Move(const FInputActionValue& Value)
@@ -1252,6 +1279,65 @@ void AMoonshineCharacter_Simple::NotifyPickupOverlap(AWorldPickupActor* Pickup)
 	if (bAutoPickupOnOverlap)
 	{
 		TryPickup(Pickup);
+	}
+}
+
+void AMoonshineCharacter_Simple::SelectHotbarSlot(int32 Index)
+{
+	if (Index < 0 || Index >= HotbarSlots) return;
+	ActiveHotbarSlot = Index;
+	if (HotbarWidget)
+	{
+		HotbarWidget->SetActiveSlot(ActiveHotbarSlot);
+	}
+}
+
+void AMoonshineCharacter_Simple::CycleHotbarSlot(int32 Direction)
+{
+	// Scroll may be used by still-ghost placement; don't fight it there.
+	if (bIsPlacingStillGhost) return;
+	if (HotbarSlots <= 0) return;
+
+	ActiveHotbarSlot = ((ActiveHotbarSlot + Direction) % HotbarSlots + HotbarSlots) % HotbarSlots;
+	if (HotbarWidget)
+	{
+		HotbarWidget->SetActiveSlot(ActiveHotbarSlot);
+	}
+}
+
+void AMoonshineCharacter_Simple::UseActiveHotbarItem()
+{
+	// TODO: actual "use" behavior for the active hotbar slot (eat/drink/equip/etc.). No-op for now.
+}
+
+void AMoonshineCharacter_Simple::OnHotbar1() { SelectHotbarSlot(0); }
+void AMoonshineCharacter_Simple::OnHotbar2() { SelectHotbarSlot(1); }
+void AMoonshineCharacter_Simple::OnHotbar3() { SelectHotbarSlot(2); }
+void AMoonshineCharacter_Simple::OnHotbar4() { SelectHotbarSlot(3); }
+void AMoonshineCharacter_Simple::OnHotbar5() { SelectHotbarSlot(4); }
+void AMoonshineCharacter_Simple::OnHotbar6() { SelectHotbarSlot(5); }
+void AMoonshineCharacter_Simple::OnHotbarScrollUp()   { CycleHotbarSlot(-1); }
+void AMoonshineCharacter_Simple::OnHotbarScrollDown() { CycleHotbarSlot(1); }
+
+void AMoonshineCharacter_Simple::HandleInventoryDragRelease(int32 SourceIndex, FVector2D ScreenPos)
+{
+	// Released over any open inventory panel (main grid or hotbar) = cancel (return to source).
+	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport() &&
+		InventoryWidgetInstance->IsScreenInsidePanel(ScreenPos))
+	{
+		return;
+	}
+	if (HotbarWidget && HotbarWidget->IsInViewport() && HotbarWidget->IsScreenInsidePanel(ScreenPos))
+	{
+		return;
+	}
+
+	// Clearly outside all inventory UI -> drop the whole stack into the world.
+	if (!Inventory || !Inventory->GetItems().IsValidIndex(SourceIndex)) return;
+	const FInventoryItem Item = Inventory->GetItems()[SourceIndex];
+	if (Item.ItemID != NAME_None && Item.Quantity > 0)
+	{
+		DropItemToWorld(Item.ItemID, Item.Quantity);
 	}
 }
 

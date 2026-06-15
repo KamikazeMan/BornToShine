@@ -152,8 +152,10 @@ void UInventorySlotWidget::ClearSlot()
 void UInventorySlotWidget::SetSelected(bool bSelected)
 {
 	bIsSelected = bSelected;
-	// Yellow selection highlight removed — slots always keep the normal translucent border.
-	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
+	// Gold highlight for the active hotbar slot; normal translucent border otherwise.
+	SelectionBorder->SetBrushColor(bSelected
+		? FLinearColor(1.0f, 0.85f, 0.3f, 0.55f)
+		: FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
 }
 
 FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& Geo, const FPointerEvent& Event)
