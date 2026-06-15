@@ -8,6 +8,7 @@ UInventoryComponent::UInventoryComponent()
 int32 UInventoryComponent::AddItem(FName ItemID, int32 Quantity)
 {
 	if (Quantity <= 0 || ItemID == NAME_None) return 0;
+	if (!IsItemAllowed(ItemID)) return 0; // filtered container (e.g. still: ingredients only)
 
 	FItemDataRow* Data = GetItemDataRaw(ItemID);
 	const int32 MaxStack = Data ? Data->MaxStack : 99;
@@ -137,9 +138,19 @@ void UInventoryComponent::TransferFrom(UInventoryComponent* Source, int32 FromIn
 
 	const FInventoryItem Moving = Source->Items[FromIndex];
 
+	// Respect this container's whitelist (the moving item must be allowed here). On rejection,
+	// still refresh the source so its dragged slot un-dims.
+	if (!IsItemAllowed(Moving.ItemID)) { Source->OnInventoryChanged.Broadcast(); return; }
+
 	if (Items.IsValidIndex(ToIndex))
 	{
 		FInventoryItem& Target = Items[ToIndex];
+		// A swap would send the target item back to the source — only if the source accepts it.
+		if (Target.ItemID != Moving.ItemID && !Source->IsItemAllowed(Target.ItemID))
+		{
+			Source->OnInventoryChanged.Broadcast();
+			return;
+		}
 		if (Target.ItemID == Moving.ItemID)
 		{
 			// Merge what fits under MaxStack; if the target is full, swap the two stacks.

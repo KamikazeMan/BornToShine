@@ -1,4 +1,4 @@
-// Born To Shine - Per-still loading UI (split player/storage view)
+// Born To Shine - Per-still loading UI (single container view)
 
 #include "StillInventoryWidget.h"
 #include "InventorySlotWidget.h"
@@ -10,8 +10,6 @@
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
-#include "Components/HorizontalBox.h"
-#include "Components/HorizontalBoxSlot.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/UniformGridPanel.h"
@@ -22,7 +20,6 @@
 namespace
 {
 	const FLinearColor PanelDark(0.08f, 0.06f, 0.04f, 0.95f);
-	const FLinearColor TitleGold(0.95f, 0.8f, 0.2f, 1.0f);
 	const FLinearColor TextCream(1.0f, 0.95f, 0.8f, 1.0f);
 	const FLinearColor TextGrey(0.7f, 0.7f, 0.7f, 1.0f);
 	const FLinearColor MetGreen(0.45f, 0.9f, 0.35f, 1.0f);
@@ -51,38 +48,6 @@ namespace
 	}
 }
 
-UUniformGridPanel* UStillInventoryWidget::BuildGrid(int32 NumSlots, int32 Columns, bool bStorageSide, TArray<UInventorySlotWidget*>& OutSlots)
-{
-	UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
-	const int32 Cols = FMath::Max(1, Columns);
-	for (int32 i = 0; i < NumSlots; ++i)
-	{
-		UInventorySlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass());
-		SlotWidget->SlotIndex = i;
-		if (bStorageSide)
-		{
-			SlotWidget->OnSlotClicked.AddDynamic(this, &UStillInventoryWidget::HandleStorageSlotClicked);
-		}
-		else
-		{
-			SlotWidget->OnSlotClicked.AddDynamic(this, &UStillInventoryWidget::HandlePlayerSlotClicked);
-		}
-		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UStillInventoryWidget::HandleSlotDragCancelled);
-
-		USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		SizeBox->SetWidthOverride(80.0f);
-		SizeBox->SetHeightOverride(80.0f);
-		SizeBox->AddChild(SlotWidget);
-
-		UUniformGridSlot* Cell = Grid->AddChildToUniformGrid(SizeBox, i / Cols, i % Cols);
-		Cell->SetHorizontalAlignment(HAlign_Center);
-		Cell->SetVerticalAlignment(VAlign_Center);
-
-		OutSlots.Add(SlotWidget);
-	}
-	return Grid;
-}
-
 TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 {
 	UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
@@ -98,34 +63,36 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 	Panel->SetContent(VBox);
 
-	TitleText = MakeLabel(WidgetTree, TEXT("STILL"), 40, TitleGold);
-	UVerticalBoxSlot* TS = VBox->AddChildToVerticalBox(TitleText);
-	TS->SetHorizontalAlignment(HAlign_Center);
-	TS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
-
-	UTextBlock* Sub = MakeLabel(WidgetTree, TEXT("Drag ingredients into the still  |  E to close"), 11, TextGrey);
+	UTextBlock* Sub = MakeLabel(WidgetTree, TEXT("Drag ingredients from the hotbar  |  E to close"), 11, TextGrey);
 	UVerticalBoxSlot* SubS = VBox->AddChildToVerticalBox(Sub);
 	SubS->SetHorizontalAlignment(HAlign_Center);
-	SubS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
+	SubS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 
-	// Split: player items (left) | still storage (right).
-	UHorizontalBox* Split = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+	// The still's storage grid (no header label).
+	UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
+	Grid->SetSlotPadding(FMargin(SlotPadding)); // visible gap between cells
+	const int32 Cols = FMath::Max(1, StorageColumns);
+	const int32 Count = FMath::Max(0, StorageSlots);
+	for (int32 i = 0; i < Count; ++i)
+	{
+		UInventorySlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass());
+		SlotWidget->SlotIndex = i;
+		SlotWidget->OnSlotClicked.AddDynamic(this, &UStillInventoryWidget::HandleStorageSlotClicked);
+		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UStillInventoryWidget::HandleSlotDragCancelled);
 
-	UVerticalBox* LeftCol = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-	LeftCol->AddChildToVerticalBox(MakeLabel(WidgetTree, TEXT("YOUR ITEMS"), 16, TextCream));
-	LeftCol->AddChildToVerticalBox(BuildGrid(FMath::Max(0, PlayerSlots), PlayerColumns, false, PlayerSlotWidgets));
-	UHorizontalBoxSlot* LS = Split->AddChildToHorizontalBox(LeftCol);
-	LS->SetPadding(FMargin(0.0f, 0.0f, 24.0f, 0.0f));
-	LS->SetVerticalAlignment(VAlign_Top);
+		USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		SizeBox->SetWidthOverride(90.0f);
+		SizeBox->SetHeightOverride(90.0f);
+		SizeBox->AddChild(SlotWidget);
 
-	UVerticalBox* RightCol = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-	RightCol->AddChildToVerticalBox(MakeLabel(WidgetTree, TEXT("STILL STORAGE"), 16, TextCream));
-	RightCol->AddChildToVerticalBox(BuildGrid(FMath::Max(0, StorageSlots), StorageColumns, true, StorageSlotWidgets));
-	UHorizontalBoxSlot* RS = Split->AddChildToHorizontalBox(RightCol);
-	RS->SetVerticalAlignment(VAlign_Top);
+		UUniformGridSlot* Cell = Grid->AddChildToUniformGrid(SizeBox, i / Cols, i % Cols);
+		Cell->SetHorizontalAlignment(HAlign_Fill);
+		Cell->SetVerticalAlignment(VAlign_Fill);
 
-	UVerticalBoxSlot* SplitSlot = VBox->AddChildToVerticalBox(Split);
-	SplitSlot->SetHorizontalAlignment(HAlign_Center);
+		StorageSlotWidgets.Add(SlotWidget);
+	}
+	UVerticalBoxSlot* GridS = VBox->AddChildToVerticalBox(Grid);
+	GridS->SetHorizontalAlignment(HAlign_Center);
 
 	RequirementText = MakeLabel(WidgetTree, TEXT(""), 16, TextCream);
 	UVerticalBoxSlot* ReqS = VBox->AddChildToVerticalBox(RequirementText);
@@ -146,8 +113,7 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 		StartButton->SetStyle(S);
 	}
 	StartButton->OnClicked.AddDynamic(this, &UStillInventoryWidget::OnStartClicked);
-	UTextBlock* StartLabel = MakeLabel(WidgetTree, TEXT("Start Distilling"), 20, FLinearColor::White);
-	StartButton->AddChild(StartLabel);
+	StartButton->AddChild(MakeLabel(WidgetTree, TEXT("Start Distilling"), 20, FLinearColor::White));
 	UVerticalBoxSlot* StartS = VBox->AddChildToVerticalBox(StartButton);
 	StartS->SetHorizontalAlignment(HAlign_Fill);
 	StartS->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 4.0f));
@@ -172,15 +138,12 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 
 void UStillInventoryWidget::NativeDestruct()
 {
-	if (PlayerInv) PlayerInv->OnInventoryChanged.RemoveDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 	if (StorageInv) StorageInv->OnInventoryChanged.RemoveDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 	Super::NativeDestruct();
 }
 
 void UStillInventoryWidget::SetupForStand(AMoonshineCharacter_Simple* InOwner, AStillPartActor* InStand)
 {
-	// Unbind any previous bindings (the widget is reused across stands).
-	if (PlayerInv) PlayerInv->OnInventoryChanged.RemoveDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 	if (StorageInv) StorageInv->OnInventoryChanged.RemoveDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 
 	Owner = InOwner;
@@ -189,7 +152,6 @@ void UStillInventoryWidget::SetupForStand(AMoonshineCharacter_Simple* InOwner, A
 	StorageInv = InStand ? InStand->StillStorage : nullptr;
 	bShowShortWarning = false;
 
-	if (PlayerInv) PlayerInv->OnInventoryChanged.AddDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 	if (StorageInv) StorageInv->OnInventoryChanged.AddDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 
 	Refresh();
@@ -197,23 +159,6 @@ void UStillInventoryWidget::SetupForStand(AMoonshineCharacter_Simple* InOwner, A
 
 void UStillInventoryWidget::Refresh()
 {
-	if (Owner.IsValid() && Stand.IsValid() && TitleText)
-	{
-		TitleText->SetText(FText::FromString(FString::Printf(TEXT("STILL %d"), Owner->GetStandNumber(Stand.Get()))));
-	}
-
-	if (PlayerInv)
-	{
-		const TArray<FInventoryItem>& Items = PlayerInv->GetItems();
-		for (int32 i = 0; i < PlayerSlotWidgets.Num(); ++i)
-		{
-			if (Items.IsValidIndex(i) && Items[i].Quantity > 0)
-				PlayerSlotWidgets[i]->SetSlotData(Items[i].ItemID, Items[i].Quantity, PlayerInv);
-			else
-				PlayerSlotWidgets[i]->SetSlotData(NAME_None, 0, PlayerInv);
-		}
-	}
-
 	if (StorageInv)
 	{
 		const TArray<FInventoryItem>& Items = StorageInv->GetItems();
@@ -226,25 +171,21 @@ void UStillInventoryWidget::Refresh()
 		}
 	}
 
-	// Requirements scan the still storage.
 	if (RequirementText && Owner.IsValid() && StorageInv)
 	{
 		auto ReqStr = [this](const TCHAR* Name, FName Id) -> FString
 		{
-			const int32 Have = StorageInv->GetItemCount(Id);
-			const int32 Req = Owner->GetIngredientReq(Id);
-			return FString::Printf(TEXT("%s %d/%d"), Name, Have, Req);
+			return FString::Printf(TEXT("%s %d/%d"), Name, StorageInv->GetItemCount(Id), Owner->GetIngredientReq(Id));
 		};
-		const FString Line = ReqStr(TEXT("Water"), FName(TEXT("Water"))) + TEXT("    ")
-			+ ReqStr(TEXT("Mash"), FName(TEXT("Mash"))) + TEXT("    ")
-			+ ReqStr(TEXT("Firewood"), FName(TEXT("Firewood")));
+		RequirementText->SetText(FText::FromString(
+			ReqStr(TEXT("Water"), FName(TEXT("Water"))) + TEXT(", ")
+			+ ReqStr(TEXT("Mash"), FName(TEXT("Mash"))) + TEXT(", ")
+			+ ReqStr(TEXT("Firewood"), FName(TEXT("Firewood")))));
 
 		const bool bMet =
 			StorageInv->GetItemCount(FName(TEXT("Water")))    >= Owner->GetIngredientReq(FName(TEXT("Water")))    &&
 			StorageInv->GetItemCount(FName(TEXT("Mash")))     >= Owner->GetIngredientReq(FName(TEXT("Mash")))     &&
 			StorageInv->GetItemCount(FName(TEXT("Firewood"))) >= Owner->GetIngredientReq(FName(TEXT("Firewood")));
-
-		RequirementText->SetText(FText::FromString(Line));
 		RequirementText->SetColorAndOpacity(FSlateColor(bMet ? MetGreen : ShortRed));
 	}
 
@@ -257,21 +198,6 @@ void UStillInventoryWidget::Refresh()
 bool UStillInventoryWidget::IsScreenInsidePanel(const FVector2D& ScreenPos) const
 {
 	return Panel && Panel->GetCachedGeometry().IsUnderLocation(ScreenPos);
-}
-
-void UStillInventoryWidget::HandlePlayerSlotClicked(int32 Index)
-{
-	// Click-transfer fallback: deposit 1 of this player slot's item into the still storage.
-	if (!PlayerInv || !StorageInv) return;
-	const TArray<FInventoryItem>& Items = PlayerInv->GetItems();
-	if (!Items.IsValidIndex(Index) || Items[Index].Quantity <= 0) return;
-
-	const FName ItemID = Items[Index].ItemID;
-	const int32 Added = StorageInv->AddItem(ItemID, 1);
-	if (Added > 0)
-	{
-		PlayerInv->RemoveItem(ItemID, Added);
-	}
 }
 
 void UStillInventoryWidget::HandleStorageSlotClicked(int32 Index)

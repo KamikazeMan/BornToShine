@@ -54,8 +54,10 @@ public:
 protected:
 	UPROPERTY() UBorder* SelectionBorder;
 	UPROPERTY() UImage* ColorRect;
-	UPROPERTY() UTextBlock* NameText;
 	UPROPERTY() UTextBlock* QuantityText;
+
+	// Applies the cell background brush (gold outline when selected, subtle otherwise).
+	void ApplyCellBrush(bool bSelected);
 
 	UPROPERTY() UInventoryComponent* SlotInventory = nullptr;
 

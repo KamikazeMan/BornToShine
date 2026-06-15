@@ -36,6 +36,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI")
 	int32 NumSlots = 6;
 
+	// Gap between hotbar cells (px).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI")
+	float SlotPadding = 6.0f;
+
 protected:
 	UPROPERTY() UBorder* PanelBackground;
 	UPROPERTY() UHorizontalBox* Row;

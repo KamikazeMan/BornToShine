@@ -49,7 +49,7 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	TitleSlot->SetHorizontalAlignment(HAlign_Center);
 
 	SlotGrid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass(), TEXT("SlotGrid"));
-	SlotGrid->SetSlotPadding(FMargin(0.0f));
+	SlotGrid->SetSlotPadding(FMargin(SlotPadding)); // visible gap between cells
 	UVerticalBoxSlot* GridSlot = VBox->AddChildToVerticalBox(SlotGrid);
 	GridSlot->SetPadding(FMargin(16.0f, 4.0f, 16.0f, 4.0f));
 	GridSlot->SetHorizontalAlignment(HAlign_Center);

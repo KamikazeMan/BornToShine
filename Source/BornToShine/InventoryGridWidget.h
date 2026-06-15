@@ -34,6 +34,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 NumRows = 4;
 
+	// Gap between grid cells (px).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	float SlotPadding = 6.0f;
+
 protected:
 	UPROPERTY() UUniformGridPanel* SlotGrid;
 	UPROPERTY() UTextBlock* TitleText;

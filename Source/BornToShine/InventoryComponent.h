@@ -26,6 +26,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
 	int32 MaxSlots = 24;
 
+	// Optional whitelist: when non-empty this container only accepts these item ids (used by the
+	// still storage to stay ingredients-only). Empty = accept anything.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	TArray<FName> AllowedItemIDs;
+
+	// True when ItemID may enter this container (respects the AllowedItemIDs whitelist).
+	bool IsItemAllowed(FName ItemID) const { return AllowedItemIDs.Num() == 0 || AllowedItemIDs.Contains(ItemID); }
+
 	// Add to inventory. Fills existing stacks first, then overflows into new stacks while slots
 	// are available. Returns actual amount added; logs a warning when less than requested fits.
 	UFUNCTION(BlueprintCallable, Category="Inventory")

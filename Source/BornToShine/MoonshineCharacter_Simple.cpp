@@ -1451,6 +1451,8 @@ void AMoonshineCharacter_Simple::ConfigureStillStorage(AStillPartActor* Stand)
 		Stand->StillStorage->ItemDataTable = Inventory->ItemDataTable; // share the item data
 	}
 	Stand->StillStorage->MaxSlots = StillStorageSlots;
+	// Ingredient-filtered: the still only accepts the brew ingredients.
+	Stand->StillStorage->AllowedItemIDs = { FName(TEXT("Water")), FName(TEXT("Mash")), FName(TEXT("Firewood")) };
 }
 
 bool AMoonshineCharacter_Simple::TryStartDistilling(AStillPartActor* Stand)
@@ -1510,8 +1512,7 @@ void AMoonshineCharacter_Simple::OpenStillInventory(AStillPartActor* Stand)
 		StillInventoryWidgetInstance = CreateWidget<UStillInventoryWidget>(PC, UStillInventoryWidget::StaticClass());
 		if (StillInventoryWidgetInstance)
 		{
-			// Sizing must be set before the slots are built (first AddToViewport).
-			StillInventoryWidgetInstance->PlayerSlots = Inventory ? Inventory->MaxSlots : 24;
+			// Slot count must be set before the grid is built (first AddToViewport).
 			StillInventoryWidgetInstance->StorageSlots = StillStorageSlots;
 		}
 	}

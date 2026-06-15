@@ -16,8 +16,8 @@
 TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 {
 	SelectionBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("SelectionBorder"));
-	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
-	SelectionBorder->SetPadding(FMargin(3.0f));
+	SelectionBorder->SetPadding(FMargin(4.0f));
+	ApplyCellBrush(false); // boxed cell: subtle rounded background + thin outline
 
 	UOverlay* Overlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("SlotOverlay"));
 
@@ -31,17 +31,8 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	IconSlot->SetHorizontalAlignment(HAlign_Fill);
 	IconSlot->SetVerticalAlignment(VAlign_Fill);
 
-	NameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("NameText"));
-	NameText->SetText(FText::FromString(TEXT("")));
-	NameText->SetJustification(ETextJustify::Center);
-	FSlateFontInfo NameFont = NameText->GetFont();
-	NameFont.Size = 14;
-	NameText->SetFont(NameFont);
-	NameText->SetColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.95f, 0.8f, 1.0f)));
-	UOverlaySlot* NameSlot = Overlay->AddChildToOverlay(NameText);
-	NameSlot->SetHorizontalAlignment(HAlign_Center);
-	NameSlot->SetVerticalAlignment(VAlign_Bottom);
-	NameSlot->SetPadding(FMargin(2.0f, 0.0f, 2.0f, 4.0f));
+	// Item NAME is intentionally NOT shown in-cell (it overflowed into neighbours). The name is
+	// available on hover via the tooltip set in SetSlotData.
 
 	QuantityText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("QuantityText"));
 	QuantityText->SetText(FText::FromString(TEXT("")));
@@ -111,7 +102,6 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 			ColorRect->SetBrush(WhiteBrush);
 			ColorRect->SetColorAndOpacity(GetCategoryColor(Data->Category));
 		}
-		NameText->SetText(Data->DisplayName);
 
 		FString TooltipStr = FString::Printf(TEXT("%s\nCategory: %s\nID: %s"),
 			*Data->DisplayName.ToString(), *Data->Category, *InItemID.ToString());
@@ -120,7 +110,6 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 	else
 	{
 		ColorRect->SetColorAndOpacity(GetCategoryColor(TEXT("General")));
-		NameText->SetText(FText::FromName(InItemID));
 		SetToolTipText(FText::FromName(InItemID));
 	}
 
@@ -144,7 +133,6 @@ void UInventorySlotWidget::ClearSlot()
 	EmptyBrush.DrawAs = ESlateBrushDrawType::Image;
 	ColorRect->SetBrush(EmptyBrush);
 	ColorRect->SetColorAndOpacity(FLinearColor(0.15f, 0.12f, 0.09f, 0.1f));
-	NameText->SetText(FText::FromString(TEXT("")));
 	QuantityText->SetText(FText::FromString(TEXT("")));
 	SetToolTipText(FText::FromString(TEXT("")));
 }
@@ -152,10 +140,24 @@ void UInventorySlotWidget::ClearSlot()
 void UInventorySlotWidget::SetSelected(bool bSelected)
 {
 	bIsSelected = bSelected;
-	// Gold highlight for the active hotbar slot; normal translucent border otherwise.
-	SelectionBorder->SetBrushColor(bSelected
-		? FLinearColor(1.0f, 0.85f, 0.3f, 0.55f)
-		: FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
+	ApplyCellBrush(bSelected);
+}
+
+void UInventorySlotWidget::ApplyCellBrush(bool bSelected)
+{
+	if (!SelectionBorder) return;
+
+	// Boxed cell: subtle rounded fill + a thin outline (gold when this is the active hotbar slot).
+	FSlateBrush Cell;
+	Cell.DrawAs = ESlateBrushDrawType::RoundedBox;
+	Cell.TintColor = FSlateColor(FLinearColor(0.12f, 0.09f, 0.06f, 0.55f));
+	Cell.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+	Cell.OutlineSettings.CornerRadii = FVector4(6.0f, 6.0f, 6.0f, 6.0f);
+	Cell.OutlineSettings.Width = bSelected ? 2.5f : 1.0f;
+	Cell.OutlineSettings.Color = bSelected
+		? FLinearColor(1.0f, 0.85f, 0.3f, 0.95f)
+		: FLinearColor(0.0f, 0.0f, 0.0f, 0.5f);
+	SelectionBorder->SetBrush(Cell);
 }
 
 FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& Geo, const FPointerEvent& Event)

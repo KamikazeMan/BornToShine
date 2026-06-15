@@ -51,7 +51,7 @@ TSharedRef<SWidget> UHotbarWidget::RebuildWidget()
 		SlotSize->AddChild(SlotWidget);
 
 		UHorizontalBoxSlot* HSlot = Row->AddChildToHorizontalBox(SlotSize);
-		HSlot->SetPadding(FMargin(3.0f, 0.0f));
+		HSlot->SetPadding(FMargin(SlotPadding * 0.5f, 0.0f)); // half each side => SlotPadding gap between cells
 		HSlot->SetVerticalAlignment(VAlign_Center);
 
 		SlotWidgets.Add(SlotWidget);
