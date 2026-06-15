@@ -1,5 +1,6 @@
 #include "InventorySlotWidget.h"
 #include "InventoryComponent.h"
+#include "MoonshineCharacter_Simple.h"
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
@@ -87,6 +88,21 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 	}
 
 	FItemDataRow* Data = InInventoryRef->GetItemDataRaw(InItemID);
+	if (!Data)
+	{
+		// Fallback: resolve via the owning player's inventory data table, so containers that don't
+		// carry their own DT (e.g. the still storage / hotbar) still draw item icons.
+		if (APawn* P = GetOwningPlayerPawn())
+		{
+			if (AMoonshineCharacter_Simple* C = Cast<AMoonshineCharacter_Simple>(P))
+			{
+				if (UInventoryComponent* PlayerInv = C->GetInventoryComponent())
+				{
+					Data = PlayerInv->GetItemDataRaw(InItemID);
+				}
+			}
+		}
+	}
 	if (Data)
 	{
 		if (Data->Icon)
@@ -216,8 +232,8 @@ bool UInventorySlotWidget::NativeOnDrop(const FGeometry& Geo, const FDragDropEve
 	UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation);
 	if (Op && SlotInventory)
 	{
-		// The target slot owns the move: works within one container or across two (player <-> still).
-		SlotInventory->TransferFrom(Op->SourceInventory.Get(), Op->SourceIndex, SlotIndex);
+		// Route to the owner: it picks whole-stack move vs the transfer-amount slider. Shift bypasses.
+		OnSlotDrop.Broadcast(Op->SourceInventory.Get(), Op->SourceIndex, SlotInventory, SlotIndex, Op->Count, Event.IsShiftDown());
 		return true;
 	}
 	return Super::NativeOnDrop(Geo, Event, InOperation);

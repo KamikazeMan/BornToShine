@@ -58,6 +58,7 @@ protected:
 
 	UFUNCTION() void HandleStorageSlotClicked(int32 Index);
 	UFUNCTION() void HandleSlotDragCancelled(UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
+	UFUNCTION() void HandleSlotDrop(UInventoryComponent* SourceInventory, int32 SourceIndex, UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown);
 	UFUNCTION() void HandleInventoryChanged();
 	UFUNCTION() void OnStartClicked();
 	UFUNCTION() void OnCloseClicked();

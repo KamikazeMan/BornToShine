@@ -58,6 +58,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void TransferFrom(UInventoryComponent* Source, int32 FromIndex, int32 ToIndex);
 
+	// Partial transfer: move up to Count units of Source[FromIndex]'s item into this container
+	// (stacks/new slots per AddItem; respects filter/MaxStack/MaxSlots). Remainder stays in source.
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void TransferAmountFrom(UInventoryComponent* Source, int32 FromIndex, int32 Count);
+
 	// Check if inventory has at least Quantity of ItemID.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool HasItem(FName ItemID, int32 Quantity = 1) const;

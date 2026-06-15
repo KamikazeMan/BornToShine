@@ -21,6 +21,7 @@
 #include "InteractionHUDWidget.h"
 #include "StillInventoryWidget.h"
 #include "HotbarWidget.h"
+#include "TransferAmountWidget.h"
 #include "WorldPickupActor.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
@@ -86,6 +87,7 @@ AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
 	GetCharacterMovement()->AirControl = 0.3f;
 
 	Inventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("Inventory"));
+	HotbarInventory = CreateDefaultSubobject<UInventoryComponent>(TEXT("HotbarInventory"));
 	InventoryWidgetInstance = nullptr;
 
 	// Don't rotate character with controller (camera is independent)
@@ -131,11 +133,18 @@ void AMoonshineCharacter_Simple::BeginPlay()
 
 		// Always-on hotbar over the world. ZOrder 2 keeps its slots above the main grid (ZOrder 0)
 		// so items can be dragged between them; the still UI (10) covers it when open.
+		// The hotbar is its OWN container (separate from the main inventory).
+		if (HotbarInventory)
+		{
+			HotbarInventory->MaxSlots = HotbarSlots;
+			if (Inventory) HotbarInventory->ItemDataTable = Inventory->ItemDataTable;
+		}
+
 		HotbarWidget = CreateWidget<UHotbarWidget>(PC, UHotbarWidget::StaticClass());
 		if (HotbarWidget)
 		{
 			HotbarWidget->NumSlots = HotbarSlots;        // set before the slots are built
-			HotbarWidget->SetInventoryComponent(Inventory);
+			HotbarWidget->SetInventoryComponent(HotbarInventory);
 			HotbarWidget->AddToViewport(2);
 			HotbarWidget->SetActiveSlot(ActiveHotbarSlot);
 		}
@@ -1355,6 +1364,86 @@ void AMoonshineCharacter_Simple::HandleInventoryDragRelease(UInventoryComponent*
 	}
 }
 
+void AMoonshineCharacter_Simple::HandleSlotDrop(UInventoryComponent* SourceInventory, int32 SourceIndex,
+	UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown)
+{
+	if (!SourceInventory || !TargetInventory) return;
+
+	const FName MovingId = SourceInventory->GetItems().IsValidIndex(SourceIndex)
+		? SourceInventory->GetItems()[SourceIndex].ItemID : NAME_None;
+
+	// A drop onto an occupied slot holding a DIFFERENT item is a swap — not splittable.
+	const TArray<FInventoryItem>& TItems = TargetInventory->GetItems();
+	const bool bDiffItemTarget = TItems.IsValidIndex(TargetIndex)
+		&& TItems[TargetIndex].ItemID != NAME_None && TItems[TargetIndex].ItemID != MovingId;
+
+	const bool bWantSlider = bSplitStackOnTransfer && !bShiftDown && Count > 1
+		&& (SourceInventory != TargetInventory) && !bDiffItemTarget
+		&& TargetInventory->IsItemAllowed(MovingId); // don't prompt for items the target rejects
+
+	if (bWantSlider)
+	{
+		BeginTransferAmount(SourceInventory, SourceIndex, TargetInventory, Count);
+	}
+	else
+	{
+		// Whole-stack move/merge/swap (Shift, count 1, same container, or different-item swap).
+		TargetInventory->TransferFrom(SourceInventory, SourceIndex, TargetIndex);
+	}
+}
+
+void AMoonshineCharacter_Simple::BeginTransferAmount(UInventoryComponent* Source, int32 SourceIndex, UInventoryComponent* Target, int32 MaxAmount)
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	PendingTransferSource = Source;
+	PendingTransferSourceIndex = SourceIndex;
+	PendingTransferTarget = Target;
+
+	if (!TransferAmountWidget)
+	{
+		TransferAmountWidget = CreateWidget<UTransferAmountWidget>(PC, UTransferAmountWidget::StaticClass());
+	}
+	if (!TransferAmountWidget) return;
+
+	TransferAmountWidget->Setup(this, MaxAmount);
+	if (!TransferAmountWidget->IsInViewport())
+	{
+		TransferAmountWidget->AddToViewport(20); // above all inventory UIs
+	}
+}
+
+void AMoonshineCharacter_Simple::ConfirmTransferAmount(int32 Amount)
+{
+	if (PendingTransferTarget.IsValid() && PendingTransferSource.IsValid())
+	{
+		PendingTransferTarget->TransferAmountFrom(PendingTransferSource.Get(), PendingTransferSourceIndex, Amount);
+	}
+	CloseTransferAmount();
+}
+
+void AMoonshineCharacter_Simple::CancelTransferAmount()
+{
+	// Refresh the source so its dragged slot un-dims (nothing was moved).
+	if (PendingTransferSource.IsValid())
+	{
+		PendingTransferSource->OnInventoryChanged.Broadcast();
+	}
+	CloseTransferAmount();
+}
+
+void AMoonshineCharacter_Simple::CloseTransferAmount()
+{
+	if (TransferAmountWidget && TransferAmountWidget->IsInViewport())
+	{
+		TransferAmountWidget->RemoveFromParent();
+	}
+	PendingTransferSource.Reset();
+	PendingTransferTarget.Reset();
+	PendingTransferSourceIndex = -1;
+}
+
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
 {
 	// Each pot routes to ITS OWN stand's state machine — valid when that stand's still is complete.
@@ -1765,6 +1854,18 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 	}
 	Save->Money = Money;
 
+	// v7: the hotbar's own container.
+	if (HotbarInventory)
+	{
+		for (const FInventoryItem& Item : HotbarInventory->GetItems())
+		{
+			FSavedInventoryItem Saved;
+			Saved.ItemID = Item.ItemID;
+			Saved.Count = Item.Quantity;
+			Save->HotbarItems.Add(Saved);
+		}
+	}
+
 	// v2: persist ownership as an index into the stand list (stands in PlacedStillParts order).
 	TArray<AStillPartActor*> Stands;
 	for (AStillPartActor* Part : PlacedStillParts)
@@ -1882,6 +1983,16 @@ void AMoonshineCharacter_Simple::LoadGame()
 		}
 	}
 	Money = Save->Money;
+
+	// v7: restore the hotbar's own container (older saves: stays empty).
+	if (HotbarInventory)
+	{
+		HotbarInventory->ClearInventory();
+		for (const FSavedInventoryItem& Item : Save->HotbarItems)
+		{
+			HotbarInventory->AddItem(Item.ItemID, Item.Count);
+		}
+	}
 
 	// Respawn placed parts: same spawn path + data-table mesh assignment the placement flow uses.
 	// Track spawned stands in order so v2 StandIndex ownership can be resolved afterwards.

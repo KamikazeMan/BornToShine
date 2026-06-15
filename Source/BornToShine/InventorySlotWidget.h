@@ -12,6 +12,7 @@ class UInventoryComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSlotClicked, int32, SlotIndex);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSlotDragCancelled, UInventoryComponent*, SourceInventory, int32, SourceIndex, FVector2D, ScreenPos);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_SixParams(FOnSlotDrop, UInventoryComponent*, SourceInventory, int32, SourceIndex, UInventoryComponent*, TargetInventory, int32, TargetIndex, int32, Count, bool, bShiftDown);
 
 /** Payload carried while dragging an inventory stack (container-aware for cross-container drops). */
 UCLASS()
@@ -48,6 +49,7 @@ public:
 	int32 SlotIndex = -1;
 	FOnSlotClicked OnSlotClicked;
 	FOnSlotDragCancelled OnSlotDragCancelled; // (SourceInventory, SourceIndex, ScreenPos) — released off any slot
+	FOnSlotDrop OnSlotDrop;                    // (Src, SrcIdx, Tgt, TgtIdx, Count, bShift) — dropped onto this slot
 
 	UInventoryComponent* GetSlotInventory() const { return SlotInventory; }
 

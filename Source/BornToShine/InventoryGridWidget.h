@@ -54,4 +54,7 @@ protected:
 
 	// Drag-and-drop: a stack released off any slot. The character decides cancel vs world-drop.
 	UFUNCTION() void HandleSlotDragCancelled(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
+
+	// Drag-and-drop: a stack dropped onto a slot. The character decides whole-move vs split slider.
+	UFUNCTION() void HandleSlotDrop(class UInventoryComponent* SourceInventory, int32 SourceIndex, class UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown);
 };

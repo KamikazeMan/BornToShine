@@ -187,6 +187,17 @@ public:
 	// every open inventory panel (main grid + hotbar + still UI). Drops from the SOURCE container.
 	void HandleInventoryDragRelease(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
 
+	// A stack dropped onto a slot: whole-stack move, or (count > 1, cross-container, no Shift) the
+	// transfer-amount slider. Called by every container widget's slot-drop handler.
+	void HandleSlotDrop(class UInventoryComponent* SourceInventory, int32 SourceIndex, class UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown);
+
+	// Transfer-amount popup result hooks.
+	void ConfirmTransferAmount(int32 Amount);
+	void CancelTransferAmount();
+
+	// The independent hotbar container (its own storage, NOT a view of the main inventory).
+	UInventoryComponent* GetHotbarInventory() const { return HotbarInventory; }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -479,6 +490,23 @@ protected:
 	// The always-on hotbar overlay.
 	UPROPERTY()
 	class UHotbarWidget* HotbarWidget = nullptr;
+
+	// The hotbar's own independent storage (separate from the main Inventory; starts empty).
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Inventory")
+	UInventoryComponent* HotbarInventory;
+
+	// Show the transfer-amount slider when dragging a stack > 1 between containers (Shift bypasses).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory")
+	bool bSplitStackOnTransfer = true;
+
+	// Transfer-amount popup + the pending transfer it confirms.
+	UPROPERTY() class UTransferAmountWidget* TransferAmountWidget = nullptr;
+	TWeakObjectPtr<UInventoryComponent> PendingTransferSource;
+	TWeakObjectPtr<UInventoryComponent> PendingTransferTarget;
+	int32 PendingTransferSourceIndex = -1;
+
+	void BeginTransferAmount(UInventoryComponent* Source, int32 SourceIndex, UInventoryComponent* Target, int32 MaxAmount);
+	void CloseTransferAmount();
 
 	// Scroll-wheel cycle of the active slot (wraps). Skipped during still-ghost placement.
 	void CycleHotbarSlot(int32 Direction);

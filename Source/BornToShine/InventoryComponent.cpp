@@ -193,6 +193,25 @@ void UInventoryComponent::TransferFrom(UInventoryComponent* Source, int32 FromIn
 	OnInventoryChanged.Broadcast();
 }
 
+void UInventoryComponent::TransferAmountFrom(UInventoryComponent* Source, int32 FromIndex, int32 Count)
+{
+	if (!Source || !Source->Items.IsValidIndex(FromIndex)) return;
+
+	const FName Id = Source->Items[FromIndex].ItemID;
+	const int32 N = FMath::Clamp(Count, 0, Source->Items[FromIndex].Quantity);
+	if (N <= 0) return;
+
+	const int32 Moved = AddItem(Id, N); // into this container (respects filter/MaxStack/MaxSlots; broadcasts)
+	if (Moved > 0)
+	{
+		Source->RemoveItem(Id, Moved); // remainder stays in source (broadcasts)
+	}
+	else
+	{
+		Source->OnInventoryChanged.Broadcast(); // nothing fit — refresh source so its slot un-dims
+	}
+}
+
 bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
 {
 	return GetItemCount(ItemID) >= Quantity;

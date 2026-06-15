@@ -77,6 +77,7 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		SlotWidget->SlotIndex = i;
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
 		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UInventoryGridWidget::HandleSlotDragCancelled);
+		SlotWidget->OnSlotDrop.AddDynamic(this, &UInventoryGridWidget::HandleSlotDrop);
 
 		USizeBox* SlotSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("SlotSizeBox_%d"), i));
 		SlotSizeBox->SetWidthOverride(200.0f);
@@ -198,6 +199,17 @@ void UInventoryGridWidget::HandleSlotDragCancelled(UInventoryComponent* SourceIn
 		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
 		{
 			Character->HandleInventoryDragRelease(SourceInventory, SourceIndex, ScreenPos);
+		}
+	}
+}
+
+void UInventoryGridWidget::HandleSlotDrop(UInventoryComponent* SourceInventory, int32 SourceIndex, UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown)
+{
+	if (APawn* Pawn = GetOwningPlayerPawn())
+	{
+		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
+		{
+			Character->HandleSlotDrop(SourceInventory, SourceIndex, TargetInventory, TargetIndex, Count, bShiftDown);
 		}
 	}
 }

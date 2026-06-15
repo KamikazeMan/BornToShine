@@ -79,6 +79,7 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 		SlotWidget->SlotIndex = i;
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UStillInventoryWidget::HandleStorageSlotClicked);
 		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UStillInventoryWidget::HandleSlotDragCancelled);
+		SlotWidget->OnSlotDrop.AddDynamic(this, &UStillInventoryWidget::HandleSlotDrop);
 
 		USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
 		SizeBox->SetWidthOverride(90.0f);
@@ -152,6 +153,12 @@ void UStillInventoryWidget::SetupForStand(AMoonshineCharacter_Simple* InOwner, A
 	StorageInv = InStand ? InStand->StillStorage : nullptr;
 	bShowShortWarning = false;
 
+	// Make sure the still container can resolve item icons (share the player's item data table).
+	if (StorageInv && PlayerInv && !StorageInv->ItemDataTable)
+	{
+		StorageInv->ItemDataTable = PlayerInv->ItemDataTable;
+	}
+
 	if (StorageInv) StorageInv->OnInventoryChanged.AddDynamic(this, &UStillInventoryWidget::HandleInventoryChanged);
 
 	Refresh();
@@ -220,6 +227,14 @@ void UStillInventoryWidget::HandleSlotDragCancelled(UInventoryComponent* SourceI
 	if (Owner.IsValid())
 	{
 		Owner->HandleInventoryDragRelease(SourceInventory, SourceIndex, ScreenPos);
+	}
+}
+
+void UStillInventoryWidget::HandleSlotDrop(UInventoryComponent* SourceInventory, int32 SourceIndex, UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown)
+{
+	if (Owner.IsValid())
+	{
+		Owner->HandleSlotDrop(SourceInventory, SourceIndex, TargetInventory, TargetIndex, Count, bShiftDown);
 	}
 }
 

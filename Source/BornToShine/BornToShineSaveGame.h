@@ -104,8 +104,12 @@ public:
 	UPROPERTY()
 	TArray<FSavedWorldPickup> WorldPickups;
 
-	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
-	// v4: per-stand ingredient counters. v5: world pickups. v6: still storage container contents.
+	// v7: the hotbar's own container (separate from the main inventory).
 	UPROPERTY()
-	int32 SaveVersion = 6;
+	TArray<FSavedInventoryItem> HotbarItems;
+
+	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
+	// v4: per-stand ingredient counters. v5: world pickups. v6: still storage. v7: hotbar container.
+	UPROPERTY()
+	int32 SaveVersion = 7;
 };

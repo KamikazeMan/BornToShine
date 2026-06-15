@@ -50,5 +50,6 @@ protected:
 
 	UFUNCTION() void HandleSlotClicked(int32 SlotIndex);
 	UFUNCTION() void HandleSlotDragCancelled(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
+	UFUNCTION() void HandleSlotDrop(class UInventoryComponent* SourceInventory, int32 SourceIndex, class UInventoryComponent* TargetInventory, int32 TargetIndex, int32 Count, bool bShiftDown);
 	UFUNCTION() void HandleInventoryChanged();
 };
