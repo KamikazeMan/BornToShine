@@ -1407,11 +1407,21 @@ void AMoonshineCharacter_Simple::BeginTransferAmount(UInventoryComponent* Source
 	}
 	if (!TransferAmountWidget) return;
 
-	TransferAmountWidget->Setup(this, MaxAmount);
+	// Add to viewport FIRST so RebuildWidget constructs the slider/text, THEN configure the range —
+	// otherwise Setup runs against null widgets and the slider stays stuck at 1 with no readout.
 	if (!TransferAmountWidget->IsInViewport())
 	{
 		TransferAmountWidget->AddToViewport(20); // above all inventory UIs
 	}
+	TransferAmountWidget->SetVisibility(ESlateVisibility::Visible); // hit-testable: slider is draggable
+	TransferAmountWidget->Setup(this, MaxAmount);
+
+	// Make sure the cursor is available so the slider is draggable.
+	PC->bShowMouseCursor = true;
+	FInputModeGameAndUI InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PC->SetInputMode(InputMode);
 }
 
 void AMoonshineCharacter_Simple::ConfirmTransferAmount(int32 Amount)

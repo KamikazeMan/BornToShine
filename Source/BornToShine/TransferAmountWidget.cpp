@@ -101,7 +101,20 @@ TSharedRef<SWidget> UTransferAmountWidget::RebuildWidget()
 	AmountSlider->OnValueChanged.AddDynamic(this, &UTransferAmountWidget::OnSliderChanged);
 	UVerticalBoxSlot* SS = VBox->AddChildToVerticalBox(AmountSlider);
 	SS->SetHorizontalAlignment(HAlign_Fill);
-	SS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+	SS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 8.0f));
+
+	// Quick-amount controls (fine-dragging large stacks is tedious).
+	UHorizontalBox* QuickRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
+	UButton* HalfBtn = TaMakeButton(WidgetTree, TEXT("Half"), FLinearColor(0.25f, 0.2f, 0.12f, 0.95f));
+	HalfBtn->OnClicked.AddDynamic(this, &UTransferAmountWidget::OnHalf);
+	UHorizontalBoxSlot* HB = QuickRow->AddChildToHorizontalBox(HalfBtn);
+	HB->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+	UButton* MaxBtn = TaMakeButton(WidgetTree, TEXT("Max"), FLinearColor(0.25f, 0.2f, 0.12f, 0.95f));
+	MaxBtn->OnClicked.AddDynamic(this, &UTransferAmountWidget::OnMax);
+	QuickRow->AddChildToHorizontalBox(MaxBtn);
+	UVerticalBoxSlot* QuickSlot = VBox->AddChildToVerticalBox(QuickRow);
+	QuickSlot->SetHorizontalAlignment(HAlign_Center);
+	QuickSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 
 	UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 
@@ -151,6 +164,24 @@ void UTransferAmountWidget::UpdateAmountText()
 void UTransferAmountWidget::OnSliderChanged(float Value)
 {
 	UpdateAmountText();
+}
+
+void UTransferAmountWidget::OnHalf()
+{
+	if (AmountSlider)
+	{
+		AmountSlider->SetValue((float)FMath::Max(1, MaxAmount / 2));
+		UpdateAmountText();
+	}
+}
+
+void UTransferAmountWidget::OnMax()
+{
+	if (AmountSlider)
+	{
+		AmountSlider->SetValue((float)MaxAmount);
+		UpdateAmountText();
+	}
 }
 
 void UTransferAmountWidget::OnConfirm()

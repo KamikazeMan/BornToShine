@@ -33,6 +33,8 @@ protected:
 	void UpdateAmountText();
 
 	UFUNCTION() void OnSliderChanged(float Value);
+	UFUNCTION() void OnHalf();
+	UFUNCTION() void OnMax();
 	UFUNCTION() void OnConfirm();
 	UFUNCTION() void OnCancel();
 };

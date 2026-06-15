@@ -70,6 +70,8 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 	VBoxSlot->SetHorizontalAlignment(HAlign_Fill);
 	VBoxSlot->SetVerticalAlignment(VAlign_Fill);
 
+	SlotWidgets.Empty(); // guard against RebuildWidget re-running and duplicating slot entries
+
 	int32 TotalSlots = NumColumns * NumRows;
 	for (int32 i = 0; i < TotalSlots; i++)
 	{

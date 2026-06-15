@@ -36,6 +36,8 @@ TSharedRef<SWidget> UHotbarWidget::RebuildWidget()
 	Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("HotbarRow"));
 	PanelBackground->SetContent(Row);
 
+	SlotWidgets.Empty(); // guard against RebuildWidget re-running and duplicating slot entries
+
 	const int32 Count = FMath::Max(0, NumSlots);
 	for (int32 i = 0; i < Count; ++i)
 	{

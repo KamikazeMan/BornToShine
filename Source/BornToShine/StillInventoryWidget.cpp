@@ -68,7 +68,11 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	SubS->SetHorizontalAlignment(HAlign_Center);
 	SubS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
 
-	// The still's storage grid (no header label).
+	// The still's storage grid (no header label). Clear first: the widget is reused across opens
+	// and RebuildWidget can re-run, which would otherwise leave stale slot entries that desync the
+	// item->slot mapping in Refresh (visible slots end up blank).
+	StorageSlotWidgets.Empty();
+
 	UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
 	Grid->SetSlotPadding(FMargin(SlotPadding)); // visible gap between cells
 	const int32 Cols = FMath::Max(1, StorageColumns);
