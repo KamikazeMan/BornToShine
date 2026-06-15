@@ -1891,19 +1891,33 @@ bool AMoonshineCharacter_Simple::DoSaveGame()
 		}
 	}
 
-	// v2: persist ownership as an index into the stand list (stands in PlacedStillParts order).
-	TArray<AStillPartActor*> Stands;
-	for (AStillPartActor* Part : PlacedStillParts)
+	// Snapshot still parts from the AUTHORITATIVE world source (every AStillPartActor) rather than
+	// the PlacedStillParts array, so the save is correct regardless of how parts are tracked. Skip
+	// the translucent placement ghost (it's also an AStillPartActor).
+	TArray<AStillPartActor*> AllParts;
+	for (TActorIterator<AStillPartActor> It(GetWorld()); It; ++It)
 	{
-		if (IsValid(Part) && Part->PartID == FName(TEXT("CinderBlockStand")))
+		AStillPartActor* Part = *It;
+		if (!IsValid(Part) || Part == GhostStillPart) continue;
+		AllParts.Add(Part);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Save snapshot: PlacedStillParts.Num()=%d, World AStillPartActor count=%d"),
+		PlacedStillParts.Num(), AllParts.Num());
+
+	// Stand index order = the order stands appear in AllParts; load rebuilds the same order from
+	// Save->StillParts, so OwningStand links resolve consistently.
+	TArray<AStillPartActor*> Stands;
+	for (AStillPartActor* Part : AllParts)
+	{
+		if (Part->PartID == FName(TEXT("CinderBlockStand")))
 		{
 			Stands.Add(Part);
 		}
 	}
 
-	for (AStillPartActor* Part : PlacedStillParts)
+	for (AStillPartActor* Part : AllParts)
 	{
-		if (!IsValid(Part)) continue;
 		FSavedStillPart SavedPart;
 		SavedPart.PartID = Part->PartID;
 		SavedPart.Transform = Part->GetActorTransform();
@@ -1954,9 +1968,9 @@ bool AMoonshineCharacter_Simple::DoSaveGame()
 	// SaveGameToSlot writes to <Project>/Saved/SaveGames/<Slot>.sav via the platform save system —
 	// works in PIE, standalone, and packaged builds (no editor-only path assumed).
 	const bool bWritten = UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
-	UE_LOG(LogTemp, Warning, TEXT("Saved to slot '%s' idx %d: success=%s  (%d items, $%d, %d still parts, %d pickups, ver %d)"),
-		SaveSlotName, SaveUserIndex, bWritten ? TEXT("true") : TEXT("false"),
-		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num(), Save->SaveVersion);
+	UE_LOG(LogTemp, Warning, TEXT("Saved %d pieces to slot '%s' idx %d: success=%s  (%d items, $%d, %d pickups, ver %d)"),
+		Save->StillParts.Num(), SaveSlotName, SaveUserIndex, bWritten ? TEXT("true") : TEXT("false"),
+		Save->InventoryItems.Num(), Save->Money, Save->WorldPickups.Num(), Save->SaveVersion);
 
 	if (!bWritten)
 	{
@@ -2010,9 +2024,13 @@ void AMoonshineCharacter_Simple::LoadGame()
 	{
 		Inventory->ClearInventory();
 	}
-	for (AStillPartActor* Part : PlacedStillParts)
+	// Destroy EVERY existing still part in the world (authoritative — matches the world-iterator
+	// snapshot on save), not just those tracked in PlacedStillParts, so reload can't leave dupes.
+	// Skip the placement ghost.
+	for (TActorIterator<AStillPartActor> It(GetWorld()); It; ++It)
 	{
-		if (IsValid(Part))
+		AStillPartActor* Part = *It;
+		if (IsValid(Part) && Part != GhostStillPart)
 		{
 			Part->Destroy();
 		}
@@ -2159,8 +2177,8 @@ void AMoonshineCharacter_Simple::LoadGame()
 	CompletedStands.Empty();
 	CheckStillCompletion();
 
-	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts, %d pickups"),
-		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num());
+	UE_LOG(LogTemp, Warning, TEXT("Game loaded from slot '%s': %d pieces restored, %d items, $%d, %d pickups (PlacedStillParts.Num()=%d)"),
+		SaveSlotName, Save->StillParts.Num(), Save->InventoryItems.Num(), Save->Money, Save->WorldPickups.Num(), PlacedStillParts.Num());
 	ShowToast(TEXT("Game loaded"), true);
 }
 

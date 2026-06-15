@@ -52,12 +52,14 @@ void AMoonshinePlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	// Dev quick save/load bindings (F6/F9 — F5 conflicts with UE5 shader complexity view)
+	// RETIRED: the old dev JSON quicksave (QuickSave/QuickLoad -> Saved/DevSave.json) is no longer
+	// bound — F6/F7 now drive the real UBornToShineSaveGame system on the character (SaveGame /
+	// LoadGame via SaveGameToSlot, slot "BornToShineSlot"). The QuickSave/QuickLoad functions remain
+	// below (unbound) in case any of that piece-serialization logic is wanted later.
 	if (InputComponent)
 	{
-		InputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AMoonshinePlayerController::QuickSave);
-		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::QuickLoad);
-		InputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AMoonshinePlayerController::ToggleDeleteMode);
+		// Delete mode moved F7 -> F9 so F7 is free for the real LoadGame on the character.
+		InputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshinePlayerController::ToggleDeleteMode);
 
 		// X key: Legacy fallback for delete. If IA_ToggleBoardType is set up
 		// in Enhanced Input, Enhanced Input consumes X first and this never fires.
@@ -87,7 +89,7 @@ void AMoonshinePlayerController::PlayerTick(float DeltaTime)
 		// Show delete mode indicator
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(43, 0.0f, FColor::Red, TEXT("** DELETE MODE (F7 to exit) **"));
+			GEngine->AddOnScreenDebugMessage(43, 0.0f, FColor::Red, TEXT("** DELETE MODE (F9 to exit) **"));
 		}
 	}
 }
@@ -202,7 +204,7 @@ void AMoonshinePlayerController::OnDeletePressed()
 		if (!bShiftHeld)
 		{
 			if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow,
-				TEXT("Press F7 first to enable delete mode, then look at a piece and press X"));
+				TEXT("Press F9 first to enable delete mode, then look at a piece and press X"));
 			return;
 		}
 	}
@@ -212,7 +214,7 @@ void AMoonshinePlayerController::OnDeletePressed()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("OnDeletePressed: No highlighted piece"));
 		if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow,
-			TEXT("No piece targeted — look at a placed piece (F7 must be ON)"));
+			TEXT("No piece targeted — look at a placed piece (F9 must be ON)"));
 		return;
 	}
 
@@ -233,7 +235,7 @@ void AMoonshinePlayerController::OnDeletePressed()
 }
 
 // ---------------------------------------------------------------------------
-// Toggle Delete Mode (F7)
+// Toggle Delete Mode (F9 — moved from F7, which is now the real LoadGame)
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::ToggleDeleteMode()
 {
@@ -418,7 +420,9 @@ FString AMoonshinePlayerController::GetCurrentPhaseDescription() const
 }
 
 // ---------------------------------------------------------------------------
-// Dev Quick Save (F6) — serialize all placed pieces to JSON
+// RETIRED dev quicksave (no longer bound to any key) — serialized placed pieces to
+// Saved/DevSave.json. Superseded by the UBornToShineSaveGame system (F6/F7 on the character).
+// Kept for reference / potential reuse of the piece-serialization + socket-restore logic.
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::QuickSave()
 {
@@ -518,7 +522,8 @@ void AMoonshinePlayerController::QuickSave()
 }
 
 // ---------------------------------------------------------------------------
-// Dev Quick Load (F9) — destroy all pieces, then respawn from JSON
+// RETIRED dev quickload (no longer bound to any key) — respawned pieces from Saved/DevSave.json.
+// Superseded by the UBornToShineSaveGame system (F6/F7 on the character).
 // ---------------------------------------------------------------------------
 void AMoonshinePlayerController::QuickLoad()
 {
