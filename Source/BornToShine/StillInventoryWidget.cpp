@@ -19,13 +19,13 @@
 
 namespace
 {
-	const FLinearColor PanelDark(0.08f, 0.06f, 0.04f, 0.95f);
-	const FLinearColor TextCream(1.0f, 0.95f, 0.8f, 1.0f);
-	const FLinearColor TextGrey(0.7f, 0.7f, 0.7f, 1.0f);
-	const FLinearColor MetGreen(0.45f, 0.9f, 0.35f, 1.0f);
-	const FLinearColor ShortRed(1.0f, 0.4f, 0.35f, 1.0f);
+	const FLinearColor SiPanelDark(0.08f, 0.06f, 0.04f, 0.95f);
+	const FLinearColor SiTextCream(1.0f, 0.95f, 0.8f, 1.0f);
+	const FLinearColor SiTextGrey(0.7f, 0.7f, 0.7f, 1.0f);
+	const FLinearColor SiMetGreen(0.45f, 0.9f, 0.35f, 1.0f);
+	const FLinearColor SiShortRed(1.0f, 0.4f, 0.35f, 1.0f);
 
-	FSlateBrush MakeRounded(const FLinearColor& Color, float Radius)
+	FSlateBrush SiMakeRounded(const FLinearColor& Color, float Radius)
 	{
 		FSlateBrush Brush;
 		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
@@ -35,7 +35,7 @@ namespace
 		return Brush;
 	}
 
-	UTextBlock* MakeLabel(UWidgetTree* Tree, const FString& Text, int32 Size, const FLinearColor& Color)
+	UTextBlock* SiMakeLabel(UWidgetTree* Tree, const FString& Text, int32 Size, const FLinearColor& Color)
 	{
 		UTextBlock* T = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		T->SetText(FText::FromString(Text));
@@ -53,7 +53,7 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
 
 	Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-	Panel->SetBrush(MakeRounded(PanelDark, 10.0f));
+	Panel->SetBrush(SiMakeRounded(SiPanelDark, 10.0f));
 	Panel->SetPadding(FMargin(26.0f, 20.0f));
 	UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(Panel);
 	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
@@ -63,7 +63,7 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
 	Panel->SetContent(VBox);
 
-	UTextBlock* Sub = MakeLabel(WidgetTree, TEXT("Drag ingredients from the hotbar  |  E to close"), 11, TextGrey);
+	UTextBlock* Sub = SiMakeLabel(WidgetTree, TEXT("Drag ingredients from the hotbar  |  E to close"), 11, SiTextGrey);
 	UVerticalBoxSlot* SubS = VBox->AddChildToVerticalBox(Sub);
 	SubS->SetHorizontalAlignment(HAlign_Center);
 	SubS->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
@@ -95,12 +95,12 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	UVerticalBoxSlot* GridS = VBox->AddChildToVerticalBox(Grid);
 	GridS->SetHorizontalAlignment(HAlign_Center);
 
-	RequirementText = MakeLabel(WidgetTree, TEXT(""), 16, TextCream);
+	RequirementText = SiMakeLabel(WidgetTree, TEXT(""), 16, SiTextCream);
 	UVerticalBoxSlot* ReqS = VBox->AddChildToVerticalBox(RequirementText);
 	ReqS->SetHorizontalAlignment(HAlign_Center);
 	ReqS->SetPadding(FMargin(0.0f, 14.0f, 0.0f, 2.0f));
 
-	StatusText = MakeLabel(WidgetTree, TEXT(""), 14, ShortRed);
+	StatusText = SiMakeLabel(WidgetTree, TEXT(""), 14, SiShortRed);
 	UVerticalBoxSlot* StS = VBox->AddChildToVerticalBox(StatusText);
 	StS->SetHorizontalAlignment(HAlign_Center);
 	StS->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 6.0f));
@@ -108,13 +108,13 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	StartButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("StartButton"));
 	{
 		FButtonStyle S = StartButton->GetStyle();
-		S.Normal = MakeRounded(FLinearColor(0.15f, 0.55f, 0.15f, 0.95f), 6.0f);
-		S.Hovered = MakeRounded(FLinearColor(0.20f, 0.70f, 0.20f, 0.95f), 6.0f);
-		S.Pressed = MakeRounded(FLinearColor(0.12f, 0.45f, 0.12f, 0.95f), 6.0f);
+		S.Normal = SiMakeRounded(FLinearColor(0.15f, 0.55f, 0.15f, 0.95f), 6.0f);
+		S.Hovered = SiMakeRounded(FLinearColor(0.20f, 0.70f, 0.20f, 0.95f), 6.0f);
+		S.Pressed = SiMakeRounded(FLinearColor(0.12f, 0.45f, 0.12f, 0.95f), 6.0f);
 		StartButton->SetStyle(S);
 	}
 	StartButton->OnClicked.AddDynamic(this, &UStillInventoryWidget::OnStartClicked);
-	StartButton->AddChild(MakeLabel(WidgetTree, TEXT("Start Distilling"), 20, FLinearColor::White));
+	StartButton->AddChild(SiMakeLabel(WidgetTree, TEXT("Start Distilling"), 20, FLinearColor::White));
 	UVerticalBoxSlot* StartS = VBox->AddChildToVerticalBox(StartButton);
 	StartS->SetHorizontalAlignment(HAlign_Fill);
 	StartS->SetPadding(FMargin(0.0f, 6.0f, 0.0f, 4.0f));
@@ -122,13 +122,13 @@ TSharedRef<SWidget> UStillInventoryWidget::RebuildWidget()
 	UButton* CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
 	{
 		FButtonStyle S = CloseButton->GetStyle();
-		S.Normal = MakeRounded(FLinearColor(0.20f, 0.15f, 0.09f, 0.95f), 4.0f);
-		S.Hovered = MakeRounded(FLinearColor(0.32f, 0.24f, 0.12f, 0.95f), 4.0f);
-		S.Pressed = MakeRounded(FLinearColor(0.40f, 0.30f, 0.15f, 0.95f), 4.0f);
+		S.Normal = SiMakeRounded(FLinearColor(0.20f, 0.15f, 0.09f, 0.95f), 4.0f);
+		S.Hovered = SiMakeRounded(FLinearColor(0.32f, 0.24f, 0.12f, 0.95f), 4.0f);
+		S.Pressed = SiMakeRounded(FLinearColor(0.40f, 0.30f, 0.15f, 0.95f), 4.0f);
 		CloseButton->SetStyle(S);
 	}
 	CloseButton->OnClicked.AddDynamic(this, &UStillInventoryWidget::OnCloseClicked);
-	CloseButton->AddChild(MakeLabel(WidgetTree, TEXT("Close"), 14, TextCream));
+	CloseButton->AddChild(SiMakeLabel(WidgetTree, TEXT("Close"), 14, SiTextCream));
 	UVerticalBoxSlot* CloseS = VBox->AddChildToVerticalBox(CloseButton);
 	CloseS->SetHorizontalAlignment(HAlign_Center);
 	CloseS->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 0.0f));
@@ -193,7 +193,7 @@ void UStillInventoryWidget::Refresh()
 			StorageInv->GetItemCount(FName(TEXT("Water")))    >= Owner->GetIngredientReq(FName(TEXT("Water")))    &&
 			StorageInv->GetItemCount(FName(TEXT("Mash")))     >= Owner->GetIngredientReq(FName(TEXT("Mash")))     &&
 			StorageInv->GetItemCount(FName(TEXT("Firewood"))) >= Owner->GetIngredientReq(FName(TEXT("Firewood")));
-		RequirementText->SetColorAndOpacity(FSlateColor(bMet ? MetGreen : ShortRed));
+		RequirementText->SetColorAndOpacity(FSlateColor(bMet ? SiMetGreen : SiShortRed));
 	}
 
 	if (StatusText)

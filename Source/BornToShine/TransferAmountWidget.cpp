@@ -16,10 +16,10 @@
 
 namespace
 {
-	const FLinearColor PanelDark(0.08f, 0.06f, 0.04f, 0.97f);
-	const FLinearColor TextCream(1.0f, 0.95f, 0.8f, 1.0f);
+	const FLinearColor TaPanelDark(0.08f, 0.06f, 0.04f, 0.97f);
+	const FLinearColor TaTextCream(1.0f, 0.95f, 0.8f, 1.0f);
 
-	FSlateBrush MakeRounded(const FLinearColor& Color, float Radius)
+	FSlateBrush TaMakeRounded(const FLinearColor& Color, float Radius)
 	{
 		FSlateBrush Brush;
 		Brush.DrawAs = ESlateBrushDrawType::RoundedBox;
@@ -29,13 +29,13 @@ namespace
 		return Brush;
 	}
 
-	UButton* MakeButton(UWidgetTree* Tree, const FString& Label, const FLinearColor& Color)
+	UButton* TaMakeButton(UWidgetTree* Tree, const FString& Label, const FLinearColor& Color)
 	{
 		UButton* B = Tree->ConstructWidget<UButton>(UButton::StaticClass());
 		FButtonStyle S = B->GetStyle();
-		S.Normal = MakeRounded(Color, 5.0f);
-		S.Hovered = MakeRounded(Color * 1.25f, 5.0f);
-		S.Pressed = MakeRounded(Color * 0.8f, 5.0f);
+		S.Normal = TaMakeRounded(Color, 5.0f);
+		S.Hovered = TaMakeRounded(Color * 1.25f, 5.0f);
+		S.Pressed = TaMakeRounded(Color * 0.8f, 5.0f);
 		B->SetStyle(S);
 		UTextBlock* T = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		T->SetText(FText::FromString(Label));
@@ -65,7 +65,7 @@ TSharedRef<SWidget> UTransferAmountWidget::RebuildWidget()
 	BackSlot->SetOffsets(FMargin(0.0f));
 
 	UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-	Panel->SetBrush(MakeRounded(PanelDark, 8.0f));
+	Panel->SetBrush(TaMakeRounded(TaPanelDark, 8.0f));
 	Panel->SetPadding(FMargin(22.0f, 18.0f));
 	UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(Panel);
 	PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
@@ -77,7 +77,7 @@ TSharedRef<SWidget> UTransferAmountWidget::RebuildWidget()
 
 	UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 	Title->SetText(FText::FromString(TEXT("Transfer how many?")));
-	Title->SetColorAndOpacity(FSlateColor(TextCream));
+	Title->SetColorAndOpacity(FSlateColor(TaTextCream));
 	Title->SetJustification(ETextJustify::Center);
 	UVerticalBoxSlot* TS = VBox->AddChildToVerticalBox(Title);
 	TS->SetHorizontalAlignment(HAlign_Center);
@@ -105,12 +105,12 @@ TSharedRef<SWidget> UTransferAmountWidget::RebuildWidget()
 
 	UHorizontalBox* Buttons = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass());
 
-	UButton* ConfirmBtn = MakeButton(WidgetTree, TEXT("Confirm"), FLinearColor(0.15f, 0.55f, 0.15f, 0.95f));
+	UButton* ConfirmBtn = TaMakeButton(WidgetTree, TEXT("Confirm"), FLinearColor(0.15f, 0.55f, 0.15f, 0.95f));
 	ConfirmBtn->OnClicked.AddDynamic(this, &UTransferAmountWidget::OnConfirm);
 	UHorizontalBoxSlot* CB = Buttons->AddChildToHorizontalBox(ConfirmBtn);
 	CB->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
 
-	UButton* CancelBtn = MakeButton(WidgetTree, TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.15f, 0.95f));
+	UButton* CancelBtn = TaMakeButton(WidgetTree, TEXT("Cancel"), FLinearColor(0.45f, 0.18f, 0.15f, 0.95f));
 	CancelBtn->OnClicked.AddDynamic(this, &UTransferAmountWidget::OnCancel);
 	Buttons->AddChildToHorizontalBox(CancelBtn);
 
