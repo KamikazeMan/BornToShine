@@ -55,17 +55,8 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 	QtySlot->SetVerticalAlignment(VAlign_Top);
 	QtySlot->SetPadding(FMargin(0.0f, 4.0f, 6.0f, 0.0f));
 
-	ClickButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ClickButton"));
-	FButtonStyle TransparentStyle = ClickButton->GetStyle();
-	TransparentStyle.Normal.TintColor = FSlateColor(FLinearColor(1, 1, 1, 0));
-	TransparentStyle.Hovered.TintColor = FSlateColor(FLinearColor(1, 0.9f, 0.5f, 0.15f));
-	TransparentStyle.Pressed.TintColor = FSlateColor(FLinearColor(1, 0.8f, 0.3f, 0.3f));
-	ClickButton->SetStyle(TransparentStyle);
-	ClickButton->OnClicked.AddDynamic(this, &UInventorySlotWidget::HandleClicked);
-	UOverlaySlot* BtnSlot = Overlay->AddChildToOverlay(ClickButton);
-	BtnSlot->SetHorizontalAlignment(HAlign_Fill);
-	BtnSlot->SetVerticalAlignment(VAlign_Fill);
-
+	// No click button: the slot handles mouse + drag directly (a button would swallow the mouse-down
+	// and prevent drag detection). Clicks fall through to NativeOnMouseButtonUp.
 	SelectionBorder->SetContent(Overlay);
 
 	WidgetTree->RootWidget = SelectionBorder;
@@ -76,6 +67,8 @@ TSharedRef<SWidget> UInventorySlotWidget::RebuildWidget()
 void UInventorySlotWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	// Hit-testable so the slot receives mouse-down (drag detection), clicks, and drops.
+	SetVisibility(ESlateVisibility::Visible);
 	SetSelected(false);
 	ClearSlot();
 }
@@ -92,6 +85,9 @@ FLinearColor UInventorySlotWidget::GetCategoryColor(const FString& Category) con
 void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInventoryComponent* InInventoryRef)
 {
 	CurrentItemID = InItemID;
+	CurrentQuantity = InQuantity;
+	SlotInventory = InInventoryRef;
+	SetRenderOpacity(1.0f); // a refresh always clears any leftover drag-dim
 
 	if (InItemID == NAME_None || InQuantity <= 0 || !InInventoryRef)
 	{
@@ -141,6 +137,8 @@ void UInventorySlotWidget::SetSlotData(FName InItemID, int32 InQuantity, UInvent
 void UInventorySlotWidget::ClearSlot()
 {
 	CurrentItemID = NAME_None;
+	CurrentQuantity = 0;
+	SetRenderOpacity(1.0f);
 	FSlateBrush EmptyBrush;
 	EmptyBrush.TintColor = FSlateColor(FLinearColor::White);
 	EmptyBrush.DrawAs = ESlateBrushDrawType::Image;
@@ -158,7 +156,72 @@ void UInventorySlotWidget::SetSelected(bool bSelected)
 	SelectionBorder->SetBrushColor(FLinearColor(0.1f, 0.07f, 0.04f, 0.15f));
 }
 
-void UInventorySlotWidget::HandleClicked()
+FReply UInventorySlotWidget::NativeOnMouseButtonDown(const FGeometry& Geo, const FPointerEvent& Event)
 {
-	OnSlotClicked.Broadcast(SlotIndex);
+	// Press on a filled slot arms drag detection; a release without movement is treated as a click.
+	if (Event.GetEffectingButton() == EKeys::LeftMouseButton && CurrentItemID != NAME_None)
+	{
+		return FReply::Handled().DetectDrag(TakeWidget(), EKeys::LeftMouseButton);
+	}
+	return Super::NativeOnMouseButtonDown(Geo, Event);
+}
+
+FReply UInventorySlotWidget::NativeOnMouseButtonUp(const FGeometry& Geo, const FPointerEvent& Event)
+{
+	// Reached only when no drag was detected => a plain click (e.g. select a still part to place).
+	if (Event.GetEffectingButton() == EKeys::LeftMouseButton && CurrentItemID != NAME_None)
+	{
+		OnSlotClicked.Broadcast(SlotIndex);
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonUp(Geo, Event);
+}
+
+void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& Geo, const FPointerEvent& Event, UDragDropOperation*& OutOperation)
+{
+	if (CurrentItemID == NAME_None || CurrentQuantity <= 0) return;
+
+	UInventoryDragDropOperation* Op = NewObject<UInventoryDragDropOperation>(GetTransientPackage());
+	Op->ItemID = CurrentItemID;
+	Op->Count = CurrentQuantity;
+	Op->SourceIndex = SlotIndex;
+	Op->Pivot = EDragPivot::MouseDown;
+
+	// Drag visual: the item's icon following the cursor.
+	if (SlotInventory)
+	{
+		if (const FItemDataRow* Data = SlotInventory->GetItemDataRaw(CurrentItemID))
+		{
+			if (Data->Icon)
+			{
+				UImage* DragImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
+				DragImage->SetBrushFromTexture(Data->Icon);
+				DragImage->SetDesiredSizeOverride(FVector2D(64.0f, 64.0f));
+				Op->DefaultDragVisual = DragImage;
+			}
+		}
+	}
+
+	SetRenderOpacity(0.4f); // dim the source while dragging
+	OutOperation = Op;
+}
+
+bool UInventorySlotWidget::NativeOnDrop(const FGeometry& Geo, const FDragDropEvent& Event, UDragDropOperation* InOperation)
+{
+	if (UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation))
+	{
+		OnSlotDropped.Broadcast(Op->SourceIndex, SlotIndex);
+		return true;
+	}
+	return Super::NativeOnDrop(Geo, Event, InOperation);
+}
+
+void UInventorySlotWidget::NativeOnDragCancelled(const FDragDropEvent& Event, UDragDropOperation* InOperation)
+{
+	SetRenderOpacity(1.0f); // un-dim (covers inside-panel cancels that don't trigger a refresh)
+	if (UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation))
+	{
+		OnSlotDragCancelled.Broadcast(Op->SourceIndex, Event.GetScreenSpacePosition());
+	}
+	Super::NativeOnDragCancelled(Event, InOperation);
 }

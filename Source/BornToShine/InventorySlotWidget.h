@@ -1,16 +1,29 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/DragDropOperation.h"
 #include "InventoryItemTypes.h"
 #include "InventorySlotWidget.generated.h"
 
 class UBorder;
 class UTextBlock;
 class UImage;
-class UButton;
 class UInventoryComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSlotClicked, int32, SlotIndex);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotDropped, int32, FromIndex, int32, ToIndex);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotDragCancelled, int32, SourceIndex, FVector2D, ScreenPos);
+
+/** Payload carried while dragging an inventory stack. */
+UCLASS()
+class BORNTOSHINE_API UInventoryDragDropOperation : public UDragDropOperation
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY() FName ItemID;
+	UPROPERTY() int32 Count = 0;
+	UPROPERTY() int32 SourceIndex = -1;
+};
 
 UCLASS()
 class BORNTOSHINE_API UInventorySlotWidget : public UUserWidget
@@ -21,23 +34,33 @@ public:
 	virtual void NativeConstruct() override;
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 
+	// Input: clicks (placement) and drag-and-drop (move/swap/world-drop).
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& Geo, const FPointerEvent& Event) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& Geo, const FPointerEvent& Event) override;
+	virtual void NativeOnDragDetected(const FGeometry& Geo, const FPointerEvent& Event, UDragDropOperation*& OutOperation) override;
+	virtual bool NativeOnDrop(const FGeometry& Geo, const FDragDropEvent& Event, UDragDropOperation* InOperation) override;
+	virtual void NativeOnDragCancelled(const FDragDropEvent& Event, UDragDropOperation* InOperation) override;
+
 	void SetSlotData(FName InItemID, int32 InQuantity, UInventoryComponent* InInventoryRef);
 	void ClearSlot();
 	void SetSelected(bool bSelected);
 
 	int32 SlotIndex = -1;
 	FOnSlotClicked OnSlotClicked;
+	FOnSlotDropped OnSlotDropped;             // (FromIndex, ToIndex) — dropped onto this slot
+	FOnSlotDragCancelled OnSlotDragCancelled; // (SourceIndex, ScreenPos) — released off any slot
 
 protected:
 	UPROPERTY() UBorder* SelectionBorder;
 	UPROPERTY() UImage* ColorRect;
 	UPROPERTY() UTextBlock* NameText;
 	UPROPERTY() UTextBlock* QuantityText;
-	UPROPERTY() UButton* ClickButton;
+
+	UPROPERTY() UInventoryComponent* SlotInventory = nullptr;
 
 	FName CurrentItemID;
+	int32 CurrentQuantity = 0;
 	bool bIsSelected = false;
 
-	UFUNCTION() void HandleClicked();
 	FLinearColor GetCategoryColor(const FString& Category) const;
 };

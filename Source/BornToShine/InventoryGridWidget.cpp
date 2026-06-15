@@ -76,6 +76,8 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		UInventorySlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass(), *FString::Printf(TEXT("Slot_%d"), i));
 		SlotWidget->SlotIndex = i;
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
+		SlotWidget->OnSlotDropped.AddDynamic(this, &UInventoryGridWidget::HandleSlotDropped);
+		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UInventoryGridWidget::HandleSlotDragCancelled);
 
 		USizeBox* SlotSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("SlotSizeBox_%d"), i));
 		SlotSizeBox->SetWidthOverride(200.0f);
@@ -180,4 +182,37 @@ void UInventoryGridWidget::HandleSlotClicked(int32 SlotIndex)
 void UInventoryGridWidget::HandleInventoryChanged()
 {
 	RefreshGrid();
+}
+
+void UInventoryGridWidget::HandleSlotDropped(int32 FromIndex, int32 ToIndex)
+{
+	if (InventoryRef && FromIndex != ToIndex)
+	{
+		// MoveOrMergeStack broadcasts OnInventoryChanged -> RefreshGrid (clears drag-dim).
+		InventoryRef->MoveOrMergeStack(FromIndex, ToIndex);
+	}
+}
+
+void UInventoryGridWidget::HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos)
+{
+	// Released inside the visible panel (but not on a slot) => cancel; the source un-dims itself.
+	// Only a release CLEARLY outside the panel bounds drops the stack to the world.
+	if (BackgroundImage && BackgroundImage->GetCachedGeometry().IsUnderLocation(ScreenPos))
+	{
+		return;
+	}
+
+	if (!InventoryRef || !InventoryRef->GetItems().IsValidIndex(SourceIndex)) return;
+
+	const FInventoryItem Item = InventoryRef->GetItems()[SourceIndex];
+	if (Item.ItemID == NAME_None || Item.Quantity <= 0) return;
+
+	// World-drop is gated to the MAIN inventory grid (the still loading UI doesn't use these slots).
+	if (APawn* Pawn = GetOwningPlayerPawn())
+	{
+		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
+		{
+			Character->DropItemToWorld(Item.ItemID, Item.Quantity);
+		}
+	}
 }

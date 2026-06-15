@@ -20,6 +20,8 @@
 #include "BornToShineSaveGame.h"
 #include "InteractionHUDWidget.h"
 #include "StillInventoryWidget.h"
+#include "WorldPickupActor.h"
+#include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
@@ -1178,6 +1180,81 @@ ABuyerActor* AMoonshineCharacter_Simple::GetAimedBuyer() const
 	return Cast<ABuyerActor>(GetAimedActor());
 }
 
+AWorldPickupActor* AMoonshineCharacter_Simple::GetAimedPickup() const
+{
+	return Cast<AWorldPickupActor>(GetAimedActor());
+}
+
+UStaticMesh* AMoonshineCharacter_Simple::ResolveItemMesh(FName ItemId) const
+{
+	if (Inventory)
+	{
+		FItemDataRow Row;
+		if (Inventory->GetItemData(ItemId, Row) && Row.Mesh)
+		{
+			return Row.Mesh;
+		}
+	}
+	return DefaultPickupMesh;
+}
+
+void AMoonshineCharacter_Simple::DropItemToWorld(FName ItemId, int32 Count)
+{
+	if (Count <= 0 || ItemId == NAME_None || !Inventory) return;
+
+	const int32 ToDrop = FMath::Min(Count, Inventory->GetItemCount(ItemId));
+	if (ToDrop <= 0) return;
+
+	Inventory->RemoveItem(ItemId, ToDrop);
+
+	const FVector Fwd = GetActorForwardVector();
+	const FVector SpawnLoc = GetActorLocation() + Fwd * DropForwardDistance + FVector(0.0f, 0.0f, DropUpOffset);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	SpawnParams.Owner = this;
+	AWorldPickupActor* Pickup = GetWorld()->SpawnActor<AWorldPickupActor>(
+		AWorldPickupActor::StaticClass(), SpawnLoc, GetActorRotation(), SpawnParams);
+	if (Pickup)
+	{
+		Pickup->Init(ItemId, ToDrop, ResolveItemMesh(ItemId), true);
+		Pickup->TossForward(Fwd, DropTossStrength);
+		UE_LOG(LogTemp, Warning, TEXT("Dropped %d %s into the world"), ToDrop, *ItemId.ToString());
+	}
+
+	RequestAutosaveDebounced(); // world pickups persist (debounced)
+}
+
+bool AMoonshineCharacter_Simple::TryPickup(AWorldPickupActor* Pickup)
+{
+	if (!IsValid(Pickup) || !Inventory) return false;
+
+	const int32 Added = Inventory->AddItem(Pickup->ItemId, Pickup->Count);
+	if (Added <= 0) return false; // inventory full — leave it in the world
+
+	PlaySfxAt(PickupSound, TEXT("PickupSound"), Pickup->GetActorLocation());
+
+	if (Added >= Pickup->Count)
+	{
+		Pickup->Destroy();
+	}
+	else
+	{
+		Pickup->Count -= Added; // partial pickup — remainder stays in the world
+	}
+
+	RequestAutosaveDebounced();
+	return true;
+}
+
+void AMoonshineCharacter_Simple::NotifyPickupOverlap(AWorldPickupActor* Pickup)
+{
+	if (bAutoPickupOnOverlap)
+	{
+		TryPickup(Pickup);
+	}
+}
+
 AStillPartActor* AMoonshineCharacter_Simple::GetAimedPot() const
 {
 	// Each pot routes to ITS OWN stand's state machine — valid when that stand's still is complete.
@@ -1225,6 +1302,13 @@ void AMoonshineCharacter_Simple::InteractWithStill()
 	if (AStillPartActor* SealedJar = GetAimedSealedJar())
 	{
 		CollectMoonshine(SealedJar);
+		return;
+	}
+
+	// Picking up a dropped world item.
+	if (AWorldPickupActor* Pickup = GetAimedPickup())
+	{
+		TryPickup(Pickup);
 		return;
 	}
 
@@ -1623,9 +1707,21 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		Save->StillParts.Add(SavedPart);
 	}
 
+	// v5: snapshot every dropped world pickup.
+	for (TActorIterator<AWorldPickupActor> It(GetWorld()); It; ++It)
+	{
+		AWorldPickupActor* Pickup = *It;
+		if (!IsValid(Pickup) || Pickup->Count <= 0) continue;
+		FSavedWorldPickup SavedPickup;
+		SavedPickup.ItemId = Pickup->ItemId;
+		SavedPickup.Count = Pickup->Count;
+		SavedPickup.Transform = Pickup->GetActorTransform();
+		Save->WorldPickups.Add(SavedPickup);
+	}
+
 	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
-	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts"),
-		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts, %d pickups"),
+		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num());
 }
 
 void AMoonshineCharacter_Simple::LoadGame()
@@ -1663,6 +1759,15 @@ void AMoonshineCharacter_Simple::LoadGame()
 		}
 	}
 	PlacedStillParts.Empty();
+
+	// Remove any existing world pickups before restoring the saved set.
+	for (TActorIterator<AWorldPickupActor> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			It->Destroy();
+		}
+	}
 
 	// Restore inventory stacks and money.
 	if (Inventory)
@@ -1752,13 +1857,27 @@ void AMoonshineCharacter_Simple::LoadGame()
 		}
 	}
 
+	// v5: respawn dropped world pickups at their saved transforms.
+	for (const FSavedWorldPickup& SavedPickup : Save->WorldPickups)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		SpawnParams.Owner = this;
+		AWorldPickupActor* Pickup = GetWorld()->SpawnActor<AWorldPickupActor>(
+			AWorldPickupActor::StaticClass(), SavedPickup.Transform.GetLocation(), SavedPickup.Transform.Rotator(), SpawnParams);
+		if (Pickup)
+		{
+			Pickup->Init(SavedPickup.ItemId, SavedPickup.Count, ResolveItemMesh(SavedPickup.ItemId), true);
+		}
+	}
+
 	// Recompute readiness per stand. Completion tracking restarts from scratch; audio loops
 	// reconcile on the next tick. Mid-batch state was not saved (per-stand limitation).
 	CompletedStands.Empty();
 	CheckStillCompletion();
 
-	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts"),
-		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num());
+	UE_LOG(LogTemp, Warning, TEXT("Game loaded: %d items, $%d, %d still parts, %d pickups"),
+		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num());
 	ShowToast(TEXT("Game loaded"), true);
 }
 
@@ -1852,6 +1971,16 @@ void AMoonshineCharacter_Simple::UpdateStillPrompt()
 	{
 		const int32 ToCollect = (SealedJar->RemainingJars > 0) ? SealedJar->RemainingJars : JarsPerRun;
 		Prompt = FString::Printf(TEXT("Collect moonshine (%d jars)"), ToCollect);
+	}
+	else if (AWorldPickupActor* Pickup = GetAimedPickup())
+	{
+		FString Name = Pickup->ItemId.ToString();
+		FItemDataRow Row;
+		if (Inventory && Inventory->GetItemData(Pickup->ItemId, Row) && !Row.DisplayName.IsEmpty())
+		{
+			Name = Row.DisplayName.ToString();
+		}
+		Prompt = FString::Printf(TEXT("Pick up %d %s"), Pickup->Count, *Name);
 	}
 	else if (AStillPartActor* Pot = GetAimedPot())
 	{

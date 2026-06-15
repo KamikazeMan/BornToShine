@@ -59,6 +59,22 @@ struct FSavedStillPart
 	int32 StoredFirewood = 0;
 };
 
+/** One dropped item sitting in the world (v5). */
+USTRUCT()
+struct FSavedWorldPickup
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName ItemId = NAME_None;
+
+	UPROPERTY()
+	int32 Count = 0;
+
+	UPROPERTY()
+	FTransform Transform;
+};
+
 /**
  * v1 save: inventory stacks, money, placed still parts.
  * Mid-batch brew state is intentionally NOT saved (still reloads as Empty; consumed
@@ -79,8 +95,12 @@ public:
 	UPROPERTY()
 	TArray<FSavedStillPart> StillParts;
 
-	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
-	// v4: per-stand ingredient stash (StoredWater/Mash/Firewood).
+	// v5: dropped world pickups.
 	UPROPERTY()
-	int32 SaveVersion = 4;
+	TArray<FSavedWorldPickup> WorldPickups;
+
+	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
+	// v4: per-stand ingredient stash. v5: world pickups.
+	UPROPERTY()
+	int32 SaveVersion = 5;
 };

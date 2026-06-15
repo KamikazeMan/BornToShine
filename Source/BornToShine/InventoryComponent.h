@@ -39,6 +39,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void ClearInventory();
 
+	// Drag-and-drop foundation: move/swap stack at FromIndex onto ToIndex. Merges when both hold
+	// the same item under MaxStack, otherwise swaps. No-op for invalid/empty targets.
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void MoveOrMergeStack(int32 FromIndex, int32 ToIndex);
+
 	// Check if inventory has at least Quantity of ItemID.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool HasItem(FName ItemID, int32 Quantity = 1) const;

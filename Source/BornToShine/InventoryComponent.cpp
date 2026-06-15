@@ -85,6 +85,46 @@ void UInventoryComponent::ClearInventory()
 	OnInventoryChanged.Broadcast();
 }
 
+void UInventoryComponent::MoveOrMergeStack(int32 FromIndex, int32 ToIndex)
+{
+	if (FromIndex == ToIndex) return;
+	if (!Items.IsValidIndex(FromIndex)) return;
+
+	// Empty target slot (index past the dense item list): no-op in the drag foundation.
+	if (!Items.IsValidIndex(ToIndex)) return;
+
+	FInventoryItem& From = Items[FromIndex];
+	FInventoryItem& To = Items[ToIndex];
+
+	if (From.ItemID == To.ItemID)
+	{
+		// Same item: merge what fits under MaxStack, otherwise swap (both full).
+		FItemDataRow* Data = GetItemDataRaw(To.ItemID);
+		const int32 MaxStack = Data ? Data->MaxStack : 99;
+		const int32 Space = MaxStack - To.Quantity;
+		const int32 Moved = FMath::Min(From.Quantity, FMath::Max(0, Space));
+		if (Moved > 0)
+		{
+			To.Quantity += Moved;
+			From.Quantity -= Moved;
+			if (From.Quantity <= 0)
+			{
+				Items.RemoveAt(FromIndex);
+			}
+		}
+		else
+		{
+			Items.Swap(FromIndex, ToIndex);
+		}
+	}
+	else
+	{
+		Items.Swap(FromIndex, ToIndex);
+	}
+
+	OnInventoryChanged.Broadcast();
+}
+
 bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
 {
 	return GetItemCount(ItemID) >= Quantity;

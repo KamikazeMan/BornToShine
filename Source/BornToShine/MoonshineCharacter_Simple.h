@@ -13,6 +13,7 @@
 class UMaterialInterface;
 class UMaterialInstanceDynamic;
 class UInteractionHUDWidget;
+class AWorldPickupActor;
 
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
@@ -168,6 +169,17 @@ public:
 
 	// Close the still loading UI if open (mouse/input restored to gameplay).
 	void CloseStillInventory();
+
+	// --- World item drop / pickup (called by the inventory grid and pickup actors) ---
+
+	// Remove Count of ItemId from the main inventory and spawn a physical pickup in front of the player.
+	void DropItemToWorld(FName ItemId, int32 Count);
+
+	// Add a pickup's contents back to the inventory; destroys it on a full pickup, leaves a partial.
+	bool TryPickup(class AWorldPickupActor* Pickup);
+
+	// Walk-over hook from a pickup's proximity sphere (only acts if bAutoPickupOnOverlap).
+	void NotifyPickupOverlap(class AWorldPickupActor* Pickup);
 
 protected:
 	virtual void BeginPlay() override;
@@ -388,6 +400,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
 	class USoundBase* PartPlaceSound = nullptr;
 
+	// Played when a world pickup is collected (and reused as the drop clink). Null = silent.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
+	class USoundBase* PickupSound = nullptr;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
 	class USoundBase* ToastSound = nullptr;
 
@@ -412,6 +428,36 @@ protected:
 	// Sphere radius for the E-interaction sweep — forgiveness when aiming at the pot/jar/buyer.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	float InteractTraceRadiusCm = 12.0f;
+
+	// --- World drop / pickup tuning ---
+
+	// Fallback mesh for dropped items whose DT_Items row has no Mesh (so a pickup is always visible).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	UStaticMesh* DefaultPickupMesh = nullptr;
+
+	// Walk over a pickup to collect it (default: aim + interact instead).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	bool bAutoPickupOnOverlap = false;
+
+	// Optional "Drop <N>?" confirm before dropping a stack (off by default — drops are recoverable).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	bool bConfirmStackDrop = false;
+
+	// Spawn placement + toss for a dropped pickup.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	float DropForwardDistance = 80.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	float DropUpOffset = 60.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Pickup")
+	float DropTossStrength = 250.0f;
+
+	// The pickup the player is currently aiming at (camera-forward sweep), or nullptr.
+	class AWorldPickupActor* GetAimedPickup() const;
+
+	// Resolve the world mesh for an item: its DT_Items Mesh, else DefaultPickupMesh.
+	class UStaticMesh* ResolveItemMesh(FName ItemId) const;
 
 	// Optional attenuation override for the still loops; a default (~15 m audible) is built lazily.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")
