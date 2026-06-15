@@ -1,4 +1,5 @@
-// Born To Shine - Per-still loading UI: store ingredients in a still, then Start Distilling.
+// Born To Shine - Per-still loading UI: a split view of the player inventory and the still's own
+// drag-fed storage container, plus a Start Distilling button.
 
 #pragma once
 
@@ -6,16 +7,20 @@
 #include "Blueprint/UserWidget.h"
 #include "StillInventoryWidget.generated.h"
 
+class UBorder;
 class UTextBlock;
 class UButton;
+class UUniformGridPanel;
+class UInventorySlotWidget;
+class UInventoryComponent;
 class AMoonshineCharacter_Simple;
 class AStillPartActor;
 
 /**
- * Code-built loading UI (same style as the inventory widgets). Opened by E on a complete still's
- * pot; operates on THAT pot's OwningStand. Click to transfer ingredients between the player and
- * the still's own stash in both directions, then Start Distilling to consume the required amounts
- * and begin that stand's batch.
+ * Opened by E on a complete still's pot; operates on THAT pot's OwningStand. Shows the player's
+ * inventory on the left and the still's storage container on the right. Drag items between them
+ * (cross-container via the shared drag foundation); click-transfer works as a fallback. Start
+ * Distilling consumes the required ingredients from the still storage.
  */
 UCLASS()
 class BORNTOSHINE_API UStillInventoryWidget : public UUserWidget
@@ -24,44 +29,45 @@ class BORNTOSHINE_API UStillInventoryWidget : public UUserWidget
 
 public:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeDestruct() override;
 
-	// Point the widget at a specific still and refresh the display.
+	// Point the widget at a still and refresh. Player/storage slot counts must be set first.
 	void SetupForStand(AMoonshineCharacter_Simple* InOwner, AStillPartActor* InStand);
 
-	// Re-read counts and recolor (called after every transfer).
 	void Refresh();
 
-protected:
-	UPROPERTY() UTextBlock* TitleText = nullptr;
-	UPROPERTY() UTextBlock* WaterRowText = nullptr;
-	UPROPERTY() UTextBlock* MashRowText = nullptr;
-	UPROPERTY() UTextBlock* FirewoodRowText = nullptr;
-	UPROPERTY() UTextBlock* StatusText = nullptr;
+	// True when a screen point lies within the panel (drag-release bounds test).
+	bool IsScreenInsidePanel(const FVector2D& ScreenPos) const;
 
+	// Built-grid sizing — set by the character before the widget is constructed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI") int32 PlayerSlots = 24;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI") int32 PlayerColumns = 6;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI") int32 StorageSlots = 8;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="UI") int32 StorageColumns = 4;
+
+protected:
+	UPROPERTY() UBorder* Panel = nullptr;
+	UPROPERTY() UTextBlock* TitleText = nullptr;
+	UPROPERTY() UTextBlock* RequirementText = nullptr;
+	UPROPERTY() UTextBlock* StatusText = nullptr;
 	UPROPERTY() UButton* StartButton = nullptr;
+
+	UPROPERTY() TArray<UInventorySlotWidget*> PlayerSlotWidgets;
+	UPROPERTY() TArray<UInventorySlotWidget*> StorageSlotWidgets;
 
 	TWeakObjectPtr<AMoonshineCharacter_Simple> Owner;
 	TWeakObjectPtr<AStillPartActor> Stand;
+	UPROPERTY() UInventoryComponent* PlayerInv = nullptr;
+	UPROPERTY() UInventoryComponent* StorageInv = nullptr;
 
 	bool bShowShortWarning = false;
 
-	// Transfer click handlers (player -> still, and still -> player) per ingredient.
-	UFUNCTION() void OnAddWater();
-	UFUNCTION() void OnTakeWater();
-	UFUNCTION() void OnAddMash();
-	UFUNCTION() void OnTakeMash();
-	UFUNCTION() void OnAddFirewood();
-	UFUNCTION() void OnTakeFirewood();
+	UUniformGridPanel* BuildGrid(int32 NumSlots, int32 Columns, bool bStorageSide, TArray<UInventorySlotWidget*>& OutSlots);
 
+	UFUNCTION() void HandlePlayerSlotClicked(int32 Index);
+	UFUNCTION() void HandleStorageSlotClicked(int32 Index);
+	UFUNCTION() void HandleSlotDragCancelled(UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
+	UFUNCTION() void HandleInventoryChanged();
 	UFUNCTION() void OnStartClicked();
 	UFUNCTION() void OnCloseClicked();
-
-	// Creates a small styled button with a centered text label.
-	UButton* MakeButton(const FString& Label, const FString& WidgetTag);
-
-	// Creates a styled count TextBlock for an ingredient row.
-	UTextBlock* MakeRowText(const FString& WidgetTag);
-
-	// Updates one row's "<name>: stored / req   (you: N)" text and red/green color.
-	void RefreshRow(UTextBlock* RowText, FName Ingredient, const FString& DisplayName);
 };

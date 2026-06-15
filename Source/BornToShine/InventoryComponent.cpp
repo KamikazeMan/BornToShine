@@ -125,6 +125,63 @@ void UInventoryComponent::MoveOrMergeStack(int32 FromIndex, int32 ToIndex)
 	OnInventoryChanged.Broadcast();
 }
 
+void UInventoryComponent::TransferFrom(UInventoryComponent* Source, int32 FromIndex, int32 ToIndex)
+{
+	if (!Source) return;
+	if (Source == this)
+	{
+		MoveOrMergeStack(FromIndex, ToIndex);
+		return;
+	}
+	if (!Source->Items.IsValidIndex(FromIndex)) return;
+
+	const FInventoryItem Moving = Source->Items[FromIndex];
+
+	if (Items.IsValidIndex(ToIndex))
+	{
+		FInventoryItem& Target = Items[ToIndex];
+		if (Target.ItemID == Moving.ItemID)
+		{
+			// Merge what fits under MaxStack; if the target is full, swap the two stacks.
+			FItemDataRow* Data = GetItemDataRaw(Target.ItemID);
+			const int32 MaxStack = Data ? Data->MaxStack : 99;
+			const int32 Moved = FMath::Min(Moving.Quantity, FMath::Max(0, MaxStack - Target.Quantity));
+			if (Moved > 0)
+			{
+				Target.Quantity += Moved;
+				Source->Items[FromIndex].Quantity -= Moved;
+				if (Source->Items[FromIndex].Quantity <= 0)
+				{
+					Source->Items.RemoveAt(FromIndex);
+				}
+			}
+			else
+			{
+				Source->Items[FromIndex] = Target;
+				Target = Moving;
+			}
+		}
+		else
+		{
+			// Different items: 1-for-1 swap across the two containers.
+			Source->Items[FromIndex] = Target;
+			Target = Moving;
+		}
+	}
+	else
+	{
+		// Empty target slot: pull the whole source stack into this container if there's room.
+		if (Items.Num() < MaxSlots)
+		{
+			Items.Add(Moving);
+			Source->Items.RemoveAt(FromIndex);
+		}
+	}
+
+	Source->OnInventoryChanged.Broadcast();
+	OnInventoryChanged.Broadcast();
+}
+
 bool UInventoryComponent::HasItem(FName ItemID, int32 Quantity) const
 {
 	return GetItemCount(ItemID) >= Quantity;

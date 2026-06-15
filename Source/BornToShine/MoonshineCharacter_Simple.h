@@ -151,21 +151,17 @@ public:
 
 	// --- Per-still loading UI API (called by UStillInventoryWidget) ---
 
+	// The player's main inventory component (the loading UI shows it alongside the still storage).
+	UInventoryComponent* GetInventoryComponent() const { return Inventory; }
+
 	// Required amount of an ingredient for one batch (Water/Mash/Firewood).
 	int32 GetIngredientReq(FName Ingredient) const;
-
-	// How many of an ingredient the player carries in the main inventory.
-	int32 GetPlayerIngredientCount(FName Ingredient) const;
 
 	// 1-based display number of a stand by placement order.
 	int32 GetStandNumber(class AStillPartActor* Stand) const;
 
-	// Move one ingredient between the player and a stand's stash (respects available counts).
-	bool TransferIngredientToStill(class AStillPartActor* Stand, FName Ingredient);
-	bool TransferIngredientToPlayer(class AStillPartActor* Stand, FName Ingredient);
-
-	// Consume the required amounts from the stand's stash and begin its batch. Returns false
-	// (consuming nothing) when the stash is short.
+	// Consume the required amounts from the stand's STORAGE and begin its batch. Returns false
+	// (consuming nothing) when storage is short.
 	bool TryStartDistilling(class AStillPartActor* Stand);
 
 	// Close the still loading UI if open (mouse/input restored to gameplay).
@@ -188,8 +184,8 @@ public:
 	void SelectHotbarSlot(int32 Index);
 
 	// Decide cancel-vs-world-drop for an inventory drag released off all slots, tested against
-	// every open inventory panel (main grid + hotbar). Called by both widgets' cancel handlers.
-	void HandleInventoryDragRelease(int32 SourceIndex, FVector2D ScreenPos);
+	// every open inventory panel (main grid + hotbar + still UI). Drops from the SOURCE container.
+	void HandleInventoryDragRelease(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
 
 protected:
 	virtual void BeginPlay() override;
@@ -276,6 +272,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
 	int32 ReqFirewood = 3;
 
+	// Slot count of each still's storage container.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Moonshine")
+	int32 StillStorageSlots = 8;
+
 	// E-key interaction: routes to the aimed part's OWN stand (opens the loading UI on the pot).
 	void InteractWithStill();
 
@@ -283,11 +283,14 @@ protected:
 	UPROPERTY()
 	class UStillInventoryWidget* StillInventoryWidgetInstance = nullptr;
 
-	// Stand whose stash the open loading UI is editing.
+	// Stand whose storage the open loading UI is editing.
 	TWeakObjectPtr<class AStillPartActor> ActiveStillUIStand;
 
 	// Open the loading UI for a stand (closes the main inventory if it is open).
 	void OpenStillInventory(class AStillPartActor* Stand);
+
+	// Point a stand's storage container at the item data table and the configured slot count.
+	void ConfigureStillStorage(class AStillPartActor* Stand);
 
 	// Per-frame batch timers: every running stand accumulates BatchElapsed independently.
 	void TickStillBatches(float DeltaTime);
@@ -494,6 +497,9 @@ protected:
 
 	// Resolve the world mesh for an item: its DT_Items Mesh, else DefaultPickupMesh.
 	class UStaticMesh* ResolveItemMesh(FName ItemId) const;
+
+	// Spawn a physical pickup of ItemId x Count in front of the player (does NOT touch inventory).
+	void SpawnWorldPickup(FName ItemId, int32 Count);
 
 	// Optional attenuation override for the still loops; a default (~15 m audible) is built lazily.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Audio")

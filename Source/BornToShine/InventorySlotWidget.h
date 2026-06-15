@@ -11,10 +11,9 @@ class UImage;
 class UInventoryComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSlotClicked, int32, SlotIndex);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotDropped, int32, FromIndex, int32, ToIndex);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSlotDragCancelled, int32, SourceIndex, FVector2D, ScreenPos);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnSlotDragCancelled, UInventoryComponent*, SourceInventory, int32, SourceIndex, FVector2D, ScreenPos);
 
-/** Payload carried while dragging an inventory stack. */
+/** Payload carried while dragging an inventory stack (container-aware for cross-container drops). */
 UCLASS()
 class BORNTOSHINE_API UInventoryDragDropOperation : public UDragDropOperation
 {
@@ -23,6 +22,7 @@ public:
 	UPROPERTY() FName ItemID;
 	UPROPERTY() int32 Count = 0;
 	UPROPERTY() int32 SourceIndex = -1;
+	UPROPERTY() TWeakObjectPtr<UInventoryComponent> SourceInventory;
 };
 
 UCLASS()
@@ -47,8 +47,9 @@ public:
 
 	int32 SlotIndex = -1;
 	FOnSlotClicked OnSlotClicked;
-	FOnSlotDropped OnSlotDropped;             // (FromIndex, ToIndex) — dropped onto this slot
-	FOnSlotDragCancelled OnSlotDragCancelled; // (SourceIndex, ScreenPos) — released off any slot
+	FOnSlotDragCancelled OnSlotDragCancelled; // (SourceInventory, SourceIndex, ScreenPos) — released off any slot
+
+	UInventoryComponent* GetSlotInventory() const { return SlotInventory; }
 
 protected:
 	UPROPERTY() UBorder* SelectionBorder;

@@ -48,7 +48,8 @@ struct FSavedStillPart
 	UPROPERTY()
 	uint8 StillState = 0;
 
-	// v4: per-stand ingredient stash (meaningful on stands only). 0 for older saves.
+	// v4 (LEGACY, read-only for migration): per-stand ingredient counters. Replaced by StorageItems
+	// in v6; still loaded from old saves to migrate them into the storage container.
 	UPROPERTY()
 	int32 StoredWater = 0;
 
@@ -57,6 +58,10 @@ struct FSavedStillPart
 
 	UPROPERTY()
 	int32 StoredFirewood = 0;
+
+	// v6: full still storage container contents (any items, not just ingredients).
+	UPROPERTY()
+	TArray<FSavedInventoryItem> StorageItems;
 };
 
 /** One dropped item sitting in the world (v5). */
@@ -100,7 +105,7 @@ public:
 	TArray<FSavedWorldPickup> WorldPickups;
 
 	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
-	// v4: per-stand ingredient stash. v5: world pickups.
+	// v4: per-stand ingredient counters. v5: world pickups. v6: still storage container contents.
 	UPROPERTY()
-	int32 SaveVersion = 5;
+	int32 SaveVersion = 6;
 };

@@ -45,7 +45,6 @@ protected:
 	int32 ActiveSlot = 0;
 
 	UFUNCTION() void HandleSlotClicked(int32 SlotIndex);
-	UFUNCTION() void HandleSlotDropped(int32 FromIndex, int32 ToIndex);
-	UFUNCTION() void HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos);
+	UFUNCTION() void HandleSlotDragCancelled(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
 	UFUNCTION() void HandleInventoryChanged();
 };

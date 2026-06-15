@@ -48,10 +48,6 @@ protected:
 	UFUNCTION() void HandleSlotClicked(int32 SlotIndex);
 	UFUNCTION() void HandleInventoryChanged();
 
-	// Drag-and-drop: a stack dropped onto another slot (move/swap/merge).
-	UFUNCTION() void HandleSlotDropped(int32 FromIndex, int32 ToIndex);
-
-	// Drag-and-drop: a stack released off any slot. Clearly outside the panel => drop to world;
-	// inside the panel (but not on a slot) => cancel.
-	UFUNCTION() void HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos);
+	// Drag-and-drop: a stack released off any slot. The character decides cancel vs world-drop.
+	UFUNCTION() void HandleSlotDragCancelled(class UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos);
 };

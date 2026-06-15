@@ -187,6 +187,7 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& Geo, const FPoi
 	Op->ItemID = CurrentItemID;
 	Op->Count = CurrentQuantity;
 	Op->SourceIndex = SlotIndex;
+	Op->SourceInventory = SlotInventory;
 	Op->Pivot = EDragPivot::MouseDown;
 
 	// Drag visual: the item's icon following the cursor.
@@ -210,9 +211,11 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& Geo, const FPoi
 
 bool UInventorySlotWidget::NativeOnDrop(const FGeometry& Geo, const FDragDropEvent& Event, UDragDropOperation* InOperation)
 {
-	if (UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation))
+	UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation);
+	if (Op && SlotInventory)
 	{
-		OnSlotDropped.Broadcast(Op->SourceIndex, SlotIndex);
+		// The target slot owns the move: works within one container or across two (player <-> still).
+		SlotInventory->TransferFrom(Op->SourceInventory.Get(), Op->SourceIndex, SlotIndex);
 		return true;
 	}
 	return Super::NativeOnDrop(Geo, Event, InOperation);
@@ -223,7 +226,7 @@ void UInventorySlotWidget::NativeOnDragCancelled(const FDragDropEvent& Event, UD
 	SetRenderOpacity(1.0f); // un-dim (covers inside-panel cancels that don't trigger a refresh)
 	if (UInventoryDragDropOperation* Op = Cast<UInventoryDragDropOperation>(InOperation))
 	{
-		OnSlotDragCancelled.Broadcast(Op->SourceIndex, Event.GetScreenSpacePosition());
+		OnSlotDragCancelled.Broadcast(Op->SourceInventory.Get(), Op->SourceIndex, Event.GetScreenSpacePosition());
 	}
 	Super::NativeOnDragCancelled(Event, InOperation);
 }

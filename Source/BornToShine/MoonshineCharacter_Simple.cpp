@@ -1225,14 +1225,9 @@ UStaticMesh* AMoonshineCharacter_Simple::ResolveItemMesh(FName ItemId) const
 	return DefaultPickupMesh;
 }
 
-void AMoonshineCharacter_Simple::DropItemToWorld(FName ItemId, int32 Count)
+void AMoonshineCharacter_Simple::SpawnWorldPickup(FName ItemId, int32 Count)
 {
-	if (Count <= 0 || ItemId == NAME_None || !Inventory) return;
-
-	const int32 ToDrop = FMath::Min(Count, Inventory->GetItemCount(ItemId));
-	if (ToDrop <= 0) return;
-
-	Inventory->RemoveItem(ItemId, ToDrop);
+	if (Count <= 0 || ItemId == NAME_None) return;
 
 	const FVector Fwd = GetActorForwardVector();
 	const FVector SpawnLoc = GetActorLocation() + Fwd * DropForwardDistance + FVector(0.0f, 0.0f, DropUpOffset);
@@ -1244,12 +1239,23 @@ void AMoonshineCharacter_Simple::DropItemToWorld(FName ItemId, int32 Count)
 		AWorldPickupActor::StaticClass(), SpawnLoc, GetActorRotation(), SpawnParams);
 	if (Pickup)
 	{
-		Pickup->Init(ItemId, ToDrop, ResolveItemMesh(ItemId), true);
+		Pickup->Init(ItemId, Count, ResolveItemMesh(ItemId), true);
 		Pickup->TossForward(Fwd, DropTossStrength);
-		UE_LOG(LogTemp, Warning, TEXT("Dropped %d %s into the world"), ToDrop, *ItemId.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("Dropped %d %s into the world"), Count, *ItemId.ToString());
 	}
 
 	RequestAutosaveDebounced(); // world pickups persist (debounced)
+}
+
+void AMoonshineCharacter_Simple::DropItemToWorld(FName ItemId, int32 Count)
+{
+	if (Count <= 0 || ItemId == NAME_None || !Inventory) return;
+
+	const int32 ToDrop = FMath::Min(Count, Inventory->GetItemCount(ItemId));
+	if (ToDrop <= 0) return;
+
+	Inventory->RemoveItem(ItemId, ToDrop);
+	SpawnWorldPickup(ItemId, ToDrop);
 }
 
 bool AMoonshineCharacter_Simple::TryPickup(AWorldPickupActor* Pickup)
@@ -1319,9 +1325,11 @@ void AMoonshineCharacter_Simple::OnHotbar6() { SelectHotbarSlot(5); }
 void AMoonshineCharacter_Simple::OnHotbarScrollUp()   { CycleHotbarSlot(-1); }
 void AMoonshineCharacter_Simple::OnHotbarScrollDown() { CycleHotbarSlot(1); }
 
-void AMoonshineCharacter_Simple::HandleInventoryDragRelease(int32 SourceIndex, FVector2D ScreenPos)
+void AMoonshineCharacter_Simple::HandleInventoryDragRelease(UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos)
 {
-	// Released over any open inventory panel (main grid or hotbar) = cancel (return to source).
+	if (!SourceInventory) return;
+
+	// Released over any open inventory panel (main grid, hotbar, or still UI) = cancel (return to source).
 	if (InventoryWidgetInstance && InventoryWidgetInstance->IsInViewport() &&
 		InventoryWidgetInstance->IsScreenInsidePanel(ScreenPos))
 	{
@@ -1331,13 +1339,19 @@ void AMoonshineCharacter_Simple::HandleInventoryDragRelease(int32 SourceIndex, F
 	{
 		return;
 	}
+	if (StillInventoryWidgetInstance && StillInventoryWidgetInstance->IsInViewport() &&
+		StillInventoryWidgetInstance->IsScreenInsidePanel(ScreenPos))
+	{
+		return;
+	}
 
-	// Clearly outside all inventory UI -> drop the whole stack into the world.
-	if (!Inventory || !Inventory->GetItems().IsValidIndex(SourceIndex)) return;
-	const FInventoryItem Item = Inventory->GetItems()[SourceIndex];
+	// Clearly outside all inventory UI -> drop the whole stack into the world FROM ITS SOURCE container.
+	if (!SourceInventory->GetItems().IsValidIndex(SourceIndex)) return;
+	const FInventoryItem Item = SourceInventory->GetItems()[SourceIndex];
 	if (Item.ItemID != NAME_None && Item.Quantity > 0)
 	{
-		DropItemToWorld(Item.ItemID, Item.Quantity);
+		SourceInventory->RemoveItem(Item.ItemID, Item.Quantity);
+		SpawnWorldPickup(Item.ItemID, Item.Quantity);
 	}
 }
 
@@ -1424,54 +1438,38 @@ int32 AMoonshineCharacter_Simple::GetIngredientReq(FName Ingredient) const
 	return 0;
 }
 
-int32 AMoonshineCharacter_Simple::GetPlayerIngredientCount(FName Ingredient) const
-{
-	return Inventory ? Inventory->GetItemCount(Ingredient) : 0;
-}
-
 int32 AMoonshineCharacter_Simple::GetStandNumber(AStillPartActor* Stand) const
 {
 	return StandNumber(Stand);
 }
 
-bool AMoonshineCharacter_Simple::TransferIngredientToStill(AStillPartActor* Stand, FName Ingredient)
+void AMoonshineCharacter_Simple::ConfigureStillStorage(AStillPartActor* Stand)
 {
-	if (!IsValid(Stand) || !Inventory) return false;
-	if (Inventory->GetItemCount(Ingredient) < 1) return false;
-
-	Inventory->RemoveItem(Ingredient, 1);
-	Stand->AddStored(Ingredient, 1);
-	RequestAutosaveDebounced(); // stored ingredients persist (debounced; cheap)
-	return true;
-}
-
-bool AMoonshineCharacter_Simple::TransferIngredientToPlayer(AStillPartActor* Stand, FName Ingredient)
-{
-	if (!IsValid(Stand) || !Inventory) return false;
-	if (Stand->GetStored(Ingredient) < 1) return false;
-
-	Stand->AddStored(Ingredient, -1);
-	Inventory->AddItem(Ingredient, 1);
-	RequestAutosaveDebounced();
-	return true;
+	if (!IsValid(Stand) || !Stand->StillStorage) return;
+	if (Inventory)
+	{
+		Stand->StillStorage->ItemDataTable = Inventory->ItemDataTable; // share the item data
+	}
+	Stand->StillStorage->MaxSlots = StillStorageSlots;
 }
 
 bool AMoonshineCharacter_Simple::TryStartDistilling(AStillPartActor* Stand)
 {
-	if (!IsValid(Stand)) return false;
+	if (!IsValid(Stand) || !Stand->StillStorage) return false;
+	UInventoryComponent* Storage = Stand->StillStorage;
 
-	// Require the full batch cost in the still's OWN stash.
-	if (Stand->GetStored(FName(TEXT("Water")))    < ReqWater   ||
-		Stand->GetStored(FName(TEXT("Mash")))     < ReqMash    ||
-		Stand->GetStored(FName(TEXT("Firewood"))) < ReqFirewood)
+	// Require the full batch cost in the still's OWN storage container.
+	if (Storage->GetItemCount(FName(TEXT("Water")))    < ReqWater   ||
+		Storage->GetItemCount(FName(TEXT("Mash")))     < ReqMash    ||
+		Storage->GetItemCount(FName(TEXT("Firewood"))) < ReqFirewood)
 	{
 		return false;
 	}
 
-	// Consume the required amounts; leftovers stay in the still for next time.
-	Stand->AddStored(FName(TEXT("Water")),    -ReqWater);
-	Stand->AddStored(FName(TEXT("Mash")),     -ReqMash);
-	Stand->AddStored(FName(TEXT("Firewood")), -ReqFirewood);
+	// Consume the required amounts; leftovers stay in storage for the next batch.
+	Storage->RemoveItem(FName(TEXT("Water")),    ReqWater);
+	Storage->RemoveItem(FName(TEXT("Mash")),     ReqMash);
+	Storage->RemoveItem(FName(TEXT("Firewood")), ReqFirewood);
 
 	// Same start path the old Mash->Lit transition used: Running + kick the per-stand timer.
 	SetStandState(Stand, EStillState::Lit);
@@ -1504,9 +1502,18 @@ void AMoonshineCharacter_Simple::OpenStillInventory(AStillPartActor* Stand)
 		InventoryWidgetInstance = nullptr;
 	}
 
+	// Make sure this stand's storage knows the data table + slot count before the UI reads it.
+	ConfigureStillStorage(Stand);
+
 	if (!StillInventoryWidgetInstance)
 	{
 		StillInventoryWidgetInstance = CreateWidget<UStillInventoryWidget>(PC, UStillInventoryWidget::StaticClass());
+		if (StillInventoryWidgetInstance)
+		{
+			// Sizing must be set before the slots are built (first AddToViewport).
+			StillInventoryWidgetInstance->PlayerSlots = Inventory ? Inventory->MaxSlots : 24;
+			StillInventoryWidgetInstance->StorageSlots = StillStorageSlots;
+		}
 	}
 	if (!StillInventoryWidgetInstance) return;
 
@@ -1516,6 +1523,9 @@ void AMoonshineCharacter_Simple::OpenStillInventory(AStillPartActor* Stand)
 	{
 		StillInventoryWidgetInstance->AddToViewport(10);
 	}
+	// Refresh after AddToViewport so the first-build case (slots not yet constructed during
+	// SetupForStand) is populated.
+	StillInventoryWidgetInstance->Refresh();
 
 	// Show the cursor for clicking, but DON'T grab keyboard focus — so the E key still routes to
 	// InteractWithStill (toggle close) while mouse clicks reach the buttons.
@@ -1785,10 +1795,17 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		}
 		SavedPart.StillState = (uint8)SavedState;
 
-		// v4: per-stand ingredient stash.
-		SavedPart.StoredWater = Part->StoredWater;
-		SavedPart.StoredMash = Part->StoredMash;
-		SavedPart.StoredFirewood = Part->StoredFirewood;
+		// v6: snapshot the still storage container (legacy StoredWater/Mash/Firewood left at 0).
+		if (Part->StillStorage)
+		{
+			for (const FInventoryItem& Item : Part->StillStorage->GetItems())
+			{
+				FSavedInventoryItem Saved;
+				Saved.ItemID = Item.ItemID;
+				Saved.Count = Item.Quantity;
+				SavedPart.StorageItems.Add(Saved);
+			}
+		}
 
 		Save->StillParts.Add(SavedPart);
 	}
@@ -1897,12 +1914,26 @@ void AMoonshineCharacter_Simple::LoadGame()
 				Part->StillState = (Save->SaveVersion >= 3) ? (EStillState)SavedPart.StillState : EStillState::Empty;
 				Part->bBatchRunning = false;
 				Part->BatchElapsed = 0.0f;
-				// v4 restores the ingredient stash (0 for older saves).
-				if (Save->SaveVersion >= 4)
+
+				// Restore the still storage container. v6 = full contents; v4/v5 = migrate the old
+				// Water/Mash/Firewood counters into the container.
+				ConfigureStillStorage(Part);
+				if (Part->StillStorage)
 				{
-					Part->StoredWater = SavedPart.StoredWater;
-					Part->StoredMash = SavedPart.StoredMash;
-					Part->StoredFirewood = SavedPart.StoredFirewood;
+					Part->StillStorage->ClearInventory();
+					if (Save->SaveVersion >= 6)
+					{
+						for (const FSavedInventoryItem& Item : SavedPart.StorageItems)
+						{
+							Part->StillStorage->AddItem(Item.ItemID, Item.Count);
+						}
+					}
+					else if (Save->SaveVersion >= 4)
+					{
+						if (SavedPart.StoredWater > 0)    Part->StillStorage->AddItem(FName(TEXT("Water")),    SavedPart.StoredWater);
+						if (SavedPart.StoredMash > 0)     Part->StillStorage->AddItem(FName(TEXT("Mash")),     SavedPart.StoredMash);
+						if (SavedPart.StoredFirewood > 0) Part->StillStorage->AddItem(FName(TEXT("Firewood")), SavedPart.StoredFirewood);
+					}
 				}
 				SpawnedStands.Add(Part);
 			}

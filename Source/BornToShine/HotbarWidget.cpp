@@ -43,7 +43,6 @@ TSharedRef<SWidget> UHotbarWidget::RebuildWidget()
 			UInventorySlotWidget::StaticClass(), *FString::Printf(TEXT("HotbarSlot_%d"), i));
 		SlotWidget->SlotIndex = i; // hotbar slot i == inventory slot i
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UHotbarWidget::HandleSlotClicked);
-		SlotWidget->OnSlotDropped.AddDynamic(this, &UHotbarWidget::HandleSlotDropped);
 		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UHotbarWidget::HandleSlotDragCancelled);
 
 		USizeBox* SlotSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("HotbarSlotSize_%d"), i));
@@ -101,13 +100,14 @@ void UHotbarWidget::RefreshSlots()
 	const TArray<FInventoryItem>& Items = InventoryRef->GetItems();
 	for (int32 i = 0; i < SlotWidgets.Num(); ++i)
 	{
+		// Always pass the inventory ref (even when empty) so every slot is a valid drop target.
 		if (Items.IsValidIndex(i) && Items[i].Quantity > 0)
 		{
 			SlotWidgets[i]->SetSlotData(Items[i].ItemID, Items[i].Quantity, InventoryRef);
 		}
 		else
 		{
-			SlotWidgets[i]->ClearSlot();
+			SlotWidgets[i]->SetSlotData(NAME_None, 0, InventoryRef);
 		}
 	}
 	SetActiveSlot(ActiveSlot); // re-apply highlight after a refresh
@@ -139,21 +139,13 @@ void UHotbarWidget::HandleSlotClicked(int32 SlotIndex)
 	}
 }
 
-void UHotbarWidget::HandleSlotDropped(int32 FromIndex, int32 ToIndex)
-{
-	if (InventoryRef && FromIndex != ToIndex)
-	{
-		InventoryRef->MoveOrMergeStack(FromIndex, ToIndex);
-	}
-}
-
-void UHotbarWidget::HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos)
+void UHotbarWidget::HandleSlotDragCancelled(UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos)
 {
 	if (APawn* Pawn = GetOwningPlayerPawn())
 	{
 		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
 		{
-			Character->HandleInventoryDragRelease(SourceIndex, ScreenPos);
+			Character->HandleInventoryDragRelease(SourceInventory, SourceIndex, ScreenPos);
 		}
 	}
 }

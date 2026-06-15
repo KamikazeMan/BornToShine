@@ -8,6 +8,7 @@
 
 class UStaticMesh;
 class UStaticMeshComponent;
+class UInventoryComponent;
 
 /** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
 UENUM(BlueprintType)
@@ -75,21 +76,11 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="StillPart")
 	int32 RemainingJars = 0;
 
-	// --- Per-still ingredient stash (meaningful on the CinderBlockStand only). The player loads
-	// ingredients into the still via the loading UI; a batch consumes the required amounts from
-	// here. Each stand has its OWN stash. ---
-	UPROPERTY(VisibleAnywhere, Category="StillPart")
-	int32 StoredWater = 0;
-
-	UPROPERTY(VisibleAnywhere, Category="StillPart")
-	int32 StoredMash = 0;
-
-	UPROPERTY(VisibleAnywhere, Category="StillPart")
-	int32 StoredFirewood = 0;
-
-	// FName-keyed access to the three stored counts (keeps the Water/Mash/Firewood mapping here).
-	int32 GetStored(FName Ingredient) const;
-	void AddStored(FName Ingredient, int32 Delta); // clamps at >= 0
+	// --- Per-still ingredient storage (meaningful on the CinderBlockStand only). A real grid
+	// container the player drag-feeds; a batch consumes the required amounts from here. Each stand
+	// has its OWN storage. Configured (data table + slot count) by the character on first use. ---
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
+	UInventoryComponent* StillStorage;
 
 	// Assign the part identity and mesh after spawning.
 	void InitFromItemData(FName InPartID, UStaticMesh* InMesh);

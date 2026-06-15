@@ -76,7 +76,6 @@ TSharedRef<SWidget> UInventoryGridWidget::RebuildWidget()
 		UInventorySlotWidget* SlotWidget = WidgetTree->ConstructWidget<UInventorySlotWidget>(UInventorySlotWidget::StaticClass(), *FString::Printf(TEXT("Slot_%d"), i));
 		SlotWidget->SlotIndex = i;
 		SlotWidget->OnSlotClicked.AddDynamic(this, &UInventoryGridWidget::HandleSlotClicked);
-		SlotWidget->OnSlotDropped.AddDynamic(this, &UInventoryGridWidget::HandleSlotDropped);
 		SlotWidget->OnSlotDragCancelled.AddDynamic(this, &UInventoryGridWidget::HandleSlotDragCancelled);
 
 		USizeBox* SlotSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *FString::Printf(TEXT("SlotSizeBox_%d"), i));
@@ -144,13 +143,14 @@ void UInventoryGridWidget::RefreshGrid()
 
 	for (int32 i = 0; i < TotalSlots; i++)
 	{
+		// Always pass the inventory ref (even when empty) so every slot is a valid drop target.
 		if (i < Items.Num() && Items[i].Quantity > 0)
 		{
 			SlotWidgets[i]->SetSlotData(Items[i].ItemID, Items[i].Quantity, InventoryRef);
 		}
 		else
 		{
-			SlotWidgets[i]->ClearSlot();
+			SlotWidgets[i]->SetSlotData(NAME_None, 0, InventoryRef);
 		}
 	}
 
@@ -184,29 +184,20 @@ void UInventoryGridWidget::HandleInventoryChanged()
 	RefreshGrid();
 }
 
-void UInventoryGridWidget::HandleSlotDropped(int32 FromIndex, int32 ToIndex)
-{
-	if (InventoryRef && FromIndex != ToIndex)
-	{
-		// MoveOrMergeStack broadcasts OnInventoryChanged -> RefreshGrid (clears drag-dim).
-		InventoryRef->MoveOrMergeStack(FromIndex, ToIndex);
-	}
-}
-
 bool UInventoryGridWidget::IsScreenInsidePanel(const FVector2D& ScreenPos) const
 {
 	return BackgroundImage && BackgroundImage->GetCachedGeometry().IsUnderLocation(ScreenPos);
 }
 
-void UInventoryGridWidget::HandleSlotDragCancelled(int32 SourceIndex, FVector2D ScreenPos)
+void UInventoryGridWidget::HandleSlotDragCancelled(UInventoryComponent* SourceInventory, int32 SourceIndex, FVector2D ScreenPos)
 {
-	// The character decides cancel-vs-world-drop against ALL open inventory panels (grid + hotbar),
-	// so releasing over the hotbar while the grid is open cancels rather than dropping to world.
+	// The character decides cancel-vs-world-drop against ALL open inventory panels (grid + hotbar +
+	// still UI), so releasing over another panel cancels rather than dropping to world.
 	if (APawn* Pawn = GetOwningPlayerPawn())
 	{
 		if (AMoonshineCharacter_Simple* Character = Cast<AMoonshineCharacter_Simple>(Pawn))
 		{
-			Character->HandleInventoryDragRelease(SourceIndex, ScreenPos);
+			Character->HandleInventoryDragRelease(SourceInventory, SourceIndex, ScreenPos);
 		}
 	}
 }

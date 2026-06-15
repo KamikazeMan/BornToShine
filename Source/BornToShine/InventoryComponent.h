@@ -44,6 +44,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	void MoveOrMergeStack(int32 FromIndex, int32 ToIndex);
 
+	// Cross-container drag: move/merge/swap the stack at Source[FromIndex] onto this[ToIndex].
+	// When Source == this it behaves like MoveOrMergeStack. An empty target slot pulls the whole
+	// source stack into this container (capacity permitting).
+	UFUNCTION(BlueprintCallable, Category="Inventory")
+	void TransferFrom(UInventoryComponent* Source, int32 FromIndex, int32 ToIndex);
+
 	// Check if inventory has at least Quantity of ItemID.
 	UFUNCTION(BlueprintCallable, Category="Inventory")
 	bool HasItem(FName ItemID, int32 Quantity = 1) const;
