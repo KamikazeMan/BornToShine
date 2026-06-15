@@ -352,8 +352,8 @@ protected:
 	// (Re)starts the debounce timer; the save fires once placements stop.
 	void RequestAutosaveDebounced();
 
-	// Shared snapshot-and-write core used by both save paths.
-	void DoSaveGame();
+	// Shared snapshot-and-write core used by both save paths. Returns SaveGameToSlot's success.
+	bool DoSaveGame();
 
 	FTimerHandle AutosaveDebounceHandle;
 

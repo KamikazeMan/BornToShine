@@ -38,9 +38,11 @@
 
 namespace
 {
-	// Save slot identity.
+	// Save slot identity — the SINGLE source of truth used by save, load, existence check, and the
+	// BeginPlay auto-load, so the slot name/index can never drift between them.
 	const TCHAR* SaveSlotName = TEXT("BornToShineSlot");
 	constexpr int32 SaveUserIndex = 0;
+	constexpr int32 CurrentSaveVersion = 7; // keep in sync with UBornToShineSaveGame::SaveVersion
 }
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
@@ -150,12 +152,9 @@ void AMoonshineCharacter_Simple::BeginPlay()
 		}
 	}
 
-	// Resume from the save slot if one exists. LoadGame clears current inventory first, so the
-	// default starting grants are never duplicated; with no save, nothing happens here.
-	if (UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
-	{
-		LoadGame();
-	}
+	// Resume from the save slot. LoadGame self-guards (no-op + log when no save exists) and clears
+	// current inventory first, so default starting grants are never duplicated.
+	LoadGame();
 }
 
 void AMoonshineCharacter_Simple::ShowToast(const FString& Text, bool bSuccess)
@@ -578,9 +577,9 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 	// Still operation: E interacts with the Pot of a completed still.
 	PlayerInputComponent->BindKey(EKeys::E, IE_Pressed, this, &AMoonshineCharacter_Simple::InteractWithStill);
 
-	// Save/Load debug keys.
-	PlayerInputComponent->BindKey(EKeys::F5, IE_Pressed, this, &AMoonshineCharacter_Simple::SaveGame);
-	PlayerInputComponent->BindKey(EKeys::F9, IE_Pressed, this, &AMoonshineCharacter_Simple::LoadGame);
+	// Save/Load debug keys (F6 save, F7 load — F5 collides with the engine high-res screenshot).
+	PlayerInputComponent->BindKey(EKeys::F6, IE_Pressed, this, &AMoonshineCharacter_Simple::SaveGame);
+	PlayerInputComponent->BindKey(EKeys::F7, IE_Pressed, this, &AMoonshineCharacter_Simple::LoadGame);
 
 	// Hotbar: number keys 1..6 select the active slot (each handler clamps to HotbarSlots).
 	PlayerInputComponent->BindKey(EKeys::One,   IE_Pressed, this, &AMoonshineCharacter_Simple::OnHotbar1);
@@ -1820,20 +1819,32 @@ bool AMoonshineCharacter_Simple::CheckStillPartPrereqs(FName PartID, FString& Ou
 
 void AMoonshineCharacter_Simple::SaveGame()
 {
-	// Manual save: the player asked for it — confirm loudly.
-	DoSaveGame();
-	ShowToast(TEXT("Game saved"), true);
+	// Manual save: confirm only on a real write; surface failures in red.
+	if (DoSaveGame())
+	{
+		ShowToast(TEXT("Game saved"), true);
+	}
+	else
+	{
+		ShowToast(TEXT("SAVE FAILED"), false);
+	}
 }
 
 void AMoonshineCharacter_Simple::AutoSave()
 {
 	if (!bAutosaveEnabled) return;
 
-	// Silent: no toast, no sound — just the fading corner indicator.
-	DoSaveGame();
-	if (InteractionHUD)
+	// Silent: no toast, no sound — just the fading corner indicator (only on a real write).
+	if (DoSaveGame())
 	{
-		InteractionHUD->ShowSaveIndicator();
+		if (InteractionHUD)
+		{
+			InteractionHUD->ShowSaveIndicator();
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("AUTOSAVE FAILED"));
 	}
 }
 
@@ -1846,11 +1857,15 @@ void AMoonshineCharacter_Simple::RequestAutosaveDebounced()
 		&AMoonshineCharacter_Simple::AutoSave, FMath::Max(AutosaveDebounceSeconds, 0.1f), false);
 }
 
-void AMoonshineCharacter_Simple::DoSaveGame()
+bool AMoonshineCharacter_Simple::DoSaveGame()
 {
 	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(
 		UGameplayStatics::CreateSaveGameObject(UBornToShineSaveGame::StaticClass()));
-	if (!Save) return;
+	if (!Save)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SAVE FAILED: could not create UBornToShineSaveGame object"));
+		return false;
+	}
 
 	if (Inventory)
 	{
@@ -1934,25 +1949,54 @@ void AMoonshineCharacter_Simple::DoSaveGame()
 		Save->WorldPickups.Add(SavedPickup);
 	}
 
-	UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
-	UE_LOG(LogTemp, Warning, TEXT("Game saved: %d items, $%d, %d still parts, %d pickups"),
-		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num());
+	Save->SaveVersion = CurrentSaveVersion;
+
+	// SaveGameToSlot writes to <Project>/Saved/SaveGames/<Slot>.sav via the platform save system —
+	// works in PIE, standalone, and packaged builds (no editor-only path assumed).
+	const bool bWritten = UGameplayStatics::SaveGameToSlot(Save, SaveSlotName, SaveUserIndex);
+	UE_LOG(LogTemp, Warning, TEXT("Saved to slot '%s' idx %d: success=%s  (%d items, $%d, %d still parts, %d pickups, ver %d)"),
+		SaveSlotName, SaveUserIndex, bWritten ? TEXT("true") : TEXT("false"),
+		Save->InventoryItems.Num(), Save->Money, Save->StillParts.Num(), Save->WorldPickups.Num(), Save->SaveVersion);
+
+	if (!bWritten)
+	{
+		UE_LOG(LogTemp, Error, TEXT("SAVE FAILED: SaveGameToSlot returned false for slot '%s' idx %d"), SaveSlotName, SaveUserIndex);
+	}
+	return bWritten;
 }
 
 void AMoonshineCharacter_Simple::LoadGame()
 {
-	if (!UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex))
+	const bool bExists = UGameplayStatics::DoesSaveGameExist(SaveSlotName, SaveUserIndex);
+	UE_LOG(LogTemp, Warning, TEXT("Loading slot '%s' idx %d: exists=%s"),
+		SaveSlotName, SaveUserIndex, bExists ? TEXT("true") : TEXT("false"));
+
+	if (!bExists)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No save found"));
+		UE_LOG(LogTemp, Warning, TEXT("No save file at slot '%s' idx %d — nothing to load"), SaveSlotName, SaveUserIndex);
 		return;
 	}
 
-	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(
-		UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex));
+	USaveGame* Loaded = UGameplayStatics::LoadGameFromSlot(SaveSlotName, SaveUserIndex);
+	if (!Loaded)
+	{
+		UE_LOG(LogTemp, Error, TEXT("LOAD FAILED: slot exists but LoadGameFromSlot returned null (corrupt/unreadable .sav)"));
+		return;
+	}
+
+	UBornToShineSaveGame* Save = Cast<UBornToShineSaveGame>(Loaded);
 	if (!Save)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No save found"));
+		UE_LOG(LogTemp, Error, TEXT("LOAD FAILED: save object is %s, not UBornToShineSaveGame (class mismatch)"), *Loaded->GetClass()->GetName());
 		return;
+	}
+
+	// Version gate: best-effort load. Older versions are handled by the per-version field guards
+	// below; just log any mismatch so version invalidation is visible rather than silent.
+	if (Save->SaveVersion != CurrentSaveVersion)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Save version mismatch: file=%d current=%d — loading best-effort"),
+			Save->SaveVersion, CurrentSaveVersion);
 	}
 
 	// Close the loading UI first — its target stand is about to be destroyed/respawned.
