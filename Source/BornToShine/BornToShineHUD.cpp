@@ -67,8 +67,10 @@ void ABornToShineHUD::DrawHeatMeter()
 	const FLinearColor EmptyTint(0.15f, 0.15f, 0.15f, 0.6f);
 
 	const float TotalWidth = 5 * StarSize + 4 * StarSpacing;
-	const float StartX = Canvas->SizeX * 0.5f - TotalWidth * 0.5f;
-	const float Y = StarTopMargin;
+	const float StartX = (HeatMeterScreenPos.X < 0.0f)
+		? (Canvas->SizeX * 0.5f - TotalWidth * 0.5f)
+		: HeatMeterScreenPos.X;
+	const float Y = HeatMeterScreenPos.Y;
 
 	for (int32 i = 0; i < 5; ++i)
 	{
@@ -81,19 +83,11 @@ void ABornToShineHUD::DrawHeatMeter()
 		{
 			DrawTexture(Tex, X, Y, StarSize, StarSize, 0.0f, 0.0f, 1.0f, 1.0f, Tint);
 		}
-		else if (bFilled)
-		{
-			// Fallback: solid colored square (flashing tint).
-			DrawRect(Tint, X, Y, StarSize, StarSize);
-		}
 		else
 		{
-			// Fallback: dark outline (thin frame) for an empty slot.
-			const float T = FMath::Max(2.0f, StarSize * 0.06f);
-			DrawRect(EmptyTint, X, Y, StarSize, T);                       // top
-			DrawRect(EmptyTint, X, Y + StarSize - T, StarSize, T);        // bottom
-			DrawRect(EmptyTint, X, Y, T, StarSize);                       // left
-			DrawRect(EmptyTint, X + StarSize - T, Y, T, StarSize);        // right
+			const float CX = X + StarSize * 0.5f;
+			const float CY = Y + StarSize * 0.5f;
+			DrawStarPolygon(CX, CY, StarSize * 0.5f, StarSize * 0.2f, Tint, bFilled);
 		}
 	}
 }
@@ -198,4 +192,45 @@ void ABornToShineHUD::DrawDeleteCrosshair()
 
 	// Center dot
 	DrawRect(DeleteCrosshairColor, CenterX - 2, CenterY - 2, 4, 4);
+}
+
+void ABornToShineHUD::DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR, const FLinearColor& Color, bool bFilled)
+{
+	if (!Canvas) return;
+
+	// 10 vertices: alternating outer/inner, starting at top (-90 deg).
+	TArray<FVector2D> Verts;
+	Verts.SetNum(10);
+	for (int32 i = 0; i < 10; ++i)
+	{
+		const float AngleDeg = -90.0f + i * 36.0f;
+		const float AngleRad = FMath::DegreesToRadians(AngleDeg);
+		const float R = (i % 2 == 0) ? OuterR : InnerR;
+		Verts[i] = FVector2D(CenterX + R * FMath::Cos(AngleRad), CenterY + R * FMath::Sin(AngleRad));
+	}
+
+	if (bFilled)
+	{
+		// Fill by drawing thick lines from center to each outer vertex + connecting edges.
+		const float FillThickness = InnerR * 1.4f;
+		for (int32 i = 0; i < 10; i += 2)
+		{
+			DrawLine(CenterX, CenterY, Verts[i].X, Verts[i].Y, Color, FillThickness);
+		}
+		for (int32 i = 0; i < 10; ++i)
+		{
+			const FVector2D& A = Verts[i];
+			const FVector2D& B = Verts[(i + 1) % 10];
+			DrawLine(A.X, A.Y, B.X, B.Y, Color, 2.0f);
+		}
+	}
+	else
+	{
+		for (int32 i = 0; i < 10; ++i)
+		{
+			const FVector2D& A = Verts[i];
+			const FVector2D& B = Verts[(i + 1) % 10];
+			DrawLine(A.X, A.Y, B.X, B.Y, Color, 2.0f);
+		}
+	}
 }

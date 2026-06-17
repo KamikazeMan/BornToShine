@@ -497,32 +497,49 @@ int32 AMoonshineCharacter_Simple::GetSuspicionStars() const
 
 void AMoonshineCharacter_Simple::AddSuspicionHeat(float Amount)
 {
-	SuspicionHeat = FMath::Clamp(SuspicionHeat + Amount, 0.0f, 100.0f);
+	const float SpeedMul = bDebugFastHeat ? 10.0f : 1.0f;
+	SuspicionHeat = FMath::Clamp(SuspicionHeat + Amount * SpeedMul, 0.0f, 100.0f);
+	if (Amount > 0.0f && GetWorld())
+	{
+		LastHeatGainTime = GetWorld()->GetTimeSeconds();
+	}
 }
 
 void AMoonshineCharacter_Simple::TickSuspicion(float DeltaTime)
 {
-	// Always decay; sources add on top.
-	float Delta = -HeatDecayPerSecond;
+	const float SpeedMul = bDebugFastHeat ? 10.0f : 1.0f;
+	const float WorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 
-	// Each RUNNING still adds heat (more stills = faster gain).
+	// Accumulate heat from running stills.
+	float GainRate = 0.0f;
 	for (AStillPartActor* Stand : PlacedStillParts)
 	{
 		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
 		if (Stand->StillState == EStillState::Running)
 		{
-			Delta += HeatPerStillPerSecond;
+			GainRate += HeatPerStillPerSecond;
 		}
 	}
 
-	SuspicionHeat = FMath::Clamp(SuspicionHeat + Delta * DeltaTime, 0.0f, 100.0f);
+	if (GainRate > 0.0f)
+	{
+		SuspicionHeat = FMath::Clamp(SuspicionHeat + GainRate * SpeedMul * DeltaTime, 0.0f, 100.0f);
+		LastHeatGainTime = WorldTime;
+	}
+
+	// Decay only after the grace window expires with no new heat gain.
+	const float GraceElapsed = WorldTime - LastHeatGainTime;
+	if (GraceElapsed >= (HeatDecayGraceSeconds / SpeedMul) && SuspicionHeat > 0.0f)
+	{
+		SuspicionHeat = FMath::Clamp(SuspicionHeat - HeatDecayPerSecond * SpeedMul * DeltaTime, 0.0f, 100.0f);
+	}
 
 	// Log only on star transitions (not per tick).
 	const int32 Stars = GetSuspicionStars();
 	if (Stars != LastLoggedStars)
 	{
 		LastLoggedStars = Stars;
-		UE_LOG(LogTemp, Warning, TEXT("Suspicion: %d star%s"), Stars, Stars == 1 ? TEXT("") : TEXT("s"));
+		UE_LOG(LogTemp, Warning, TEXT("Suspicion: %d star%s  (heat=%.1f)"), Stars, Stars == 1 ? TEXT("") : TEXT("s"), SuspicionHeat);
 	}
 }
 

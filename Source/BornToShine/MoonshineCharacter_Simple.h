@@ -395,15 +395,26 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
 	float HeatPerStillPerSecond = 0.2f;
 
-	// Heat shed per second (always applied; sources add on top).
+	// Heat shed per second (only after the grace window expires with no new heat gain).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
-	float HeatDecayPerSecond = 0.5f;
+	float HeatDecayPerSecond = 0.1f;
 
-	// Per-tick heat reconciliation: always decay, add per running still, clamp, log star changes.
+	// Seconds after the last heat gain before decay kicks in.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	float HeatDecayGraceSeconds = 5.0f;
+
+	// x10 multiplier on all heat gain/decay for testing (toggle in details panel).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	bool bDebugFastHeat = false;
+
+	// Per-tick heat reconciliation: grace-window decay, add per running still, clamp, log star changes.
 	void TickSuspicion(float DeltaTime);
 
 	// Last star count we logged, so transitions log once (not per tick). -1 = never logged.
 	int32 LastLoggedStars = -1;
+
+	// World time of the last heat gain (for grace-window decay).
+	float LastHeatGainTime = 0.0f;
 
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 

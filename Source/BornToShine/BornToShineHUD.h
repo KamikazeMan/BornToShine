@@ -73,9 +73,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	float StarSpacing = 8.0f;
 
-	// Distance from the top of the screen for the star row.
+	// Screen-space position for the heat meter (top-left corner of the star row).
+	// X < 0 means "center horizontally"; Y is distance from top of screen.
 	UPROPERTY(EditAnywhere, Category = "HUD")
-	float StarTopMargin = 20.0f;
+	FVector2D HeatMeterScreenPos = FVector2D(-1.0f, 60.0f);
 
 	// Police-light flash: red/blue toggles per second at 1 star, plus per-extra-star.
 	UPROPERTY(EditAnywhere, Category = "HUD")
@@ -106,6 +107,9 @@ protected:
 	// Draw the small always-on center dot.
 	void DrawCenterDot();
 
-	// Draw the 5-star suspicion meter (top-center), with police-light flash on filled stars.
+	// Draw the 5-star suspicion meter, with police-light flash on filled stars.
 	void DrawHeatMeter();
+
+	// Draw a 5-pointed star polygon at the given center via Canvas lines.
+	void DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR, const FLinearColor& Color, bool bFilled);
 };
