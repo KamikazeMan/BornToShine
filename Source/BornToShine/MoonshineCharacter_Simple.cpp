@@ -153,12 +153,18 @@ void AMoonshineCharacter_Simple::BeginPlay()
 		}
 	}
 
-	// Only auto-load when the GameInstance says so (Continue / Load Game from the menu).
-	// New Game leaves bShouldLoadSave = false, so we start with empty state.
+	// Continue / Load Game: the menu sets bShouldLoadSave before OpenLevel.
+	// New Game (and direct PIE launch) default to fresh start — no save loaded.
 	UBornToShineGameInstance* GI = Cast<UBornToShineGameInstance>(GetGameInstance());
-	if (!GI || GI->bShouldLoadSave)
+	if (GI && GI->bShouldLoadSave)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("CONTINUE — loading slot '%s'"),
+			GI->PendingLoadSlot.IsEmpty() ? SaveSlotName : *GI->PendingLoadSlot);
 		LoadGame();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FRESH START — no save loaded"));
 	}
 }
 
