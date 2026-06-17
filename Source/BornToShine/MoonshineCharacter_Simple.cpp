@@ -2112,8 +2112,15 @@ void AMoonshineCharacter_Simple::LoadGame()
 
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		FRotator SpawnRot = SavedPart.Transform.Rotator();
+		if (SavedPart.PartID == FName(TEXT("CinderBlockStand")))
+		{
+			SpawnRot.Yaw += 180.0f;
+		}
+
 		AStillPartActor* Part = GetWorld()->SpawnActor<AStillPartActor>(AStillPartActor::StaticClass(),
-			SavedPart.Transform.GetLocation(), SavedPart.Transform.Rotator(), SpawnParams);
+			SavedPart.Transform.GetLocation(), SpawnRot, SpawnParams);
 		if (Part)
 		{
 			Part->InitFromItemData(SavedPart.PartID, PartMesh);

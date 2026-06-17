@@ -206,20 +206,32 @@ void UInventorySlotWidget::NativeOnDragDetected(const FGeometry& Geo, const FPoi
 	Op->Count = CurrentQuantity;
 	Op->SourceIndex = SlotIndex;
 	Op->SourceInventory = SlotInventory;
-	Op->Pivot = EDragPivot::MouseDown;
+	Op->Pivot = EDragPivot::CenterCenter;
 
-	// Drag visual: the item's icon following the cursor.
+	// Drag visual: standalone icon widget (not parented to the slot's WidgetTree) so it
+	// follows the cursor without inheriting the slot's layout offset.
 	if (SlotInventory)
 	{
-		if (const FItemDataRow* Data = SlotInventory->GetItemDataRaw(CurrentItemID))
+		const FItemDataRow* Data = SlotInventory->GetItemDataRaw(CurrentItemID);
+		if (!Data)
 		{
-			if (Data->Icon)
+			if (APawn* P = GetOwningPlayerPawn())
 			{
-				UImage* DragImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass());
-				DragImage->SetBrushFromTexture(Data->Icon);
-				DragImage->SetDesiredSizeOverride(FVector2D(64.0f, 64.0f));
-				Op->DefaultDragVisual = DragImage;
+				if (AMoonshineCharacter_Simple* C = Cast<AMoonshineCharacter_Simple>(P))
+				{
+					if (UInventoryComponent* PlayerInv = C->GetInventoryComponent())
+					{
+						Data = PlayerInv->GetItemDataRaw(CurrentItemID);
+					}
+				}
 			}
+		}
+		if (Data && Data->Icon)
+		{
+			UImage* DragImage = NewObject<UImage>(GetTransientPackage());
+			DragImage->SetBrushFromTexture(Data->Icon);
+			DragImage->SetDesiredSizeOverride(FVector2D(64.0f, 64.0f));
+			Op->DefaultDragVisual = DragImage;
 		}
 	}
 
