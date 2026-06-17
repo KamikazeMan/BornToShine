@@ -43,7 +43,7 @@ namespace
 	// BeginPlay auto-load, so the slot name/index can never drift between them.
 	const TCHAR* SaveSlotName = TEXT("BornToShineSlot");
 	constexpr int32 SaveUserIndex = 0;
-	constexpr int32 CurrentSaveVersion = 7; // keep in sync with UBornToShineSaveGame::SaveVersion
+	constexpr int32 CurrentSaveVersion = 8; // keep in sync with UBornToShineSaveGame::SaveVersion
 }
 
 AMoonshineCharacter_Simple::AMoonshineCharacter_Simple()
@@ -460,6 +460,9 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 	// Advance every running still's batch timer independently.
 	TickStillBatches(DeltaTime);
 
+	// Reconcile suspicion heat (decay + running-still contributions).
+	TickSuspicion(DeltaTime);
+
 	// Show the operation prompt when aiming at the Pot of a completed still.
 	UpdateStillPrompt();
 
@@ -483,6 +486,43 @@ void AMoonshineCharacter_Simple::TickStillBatches(float DeltaTime)
 			Stand->bBatchRunning = false;
 			OnBatchComplete(Stand);
 		}
+	}
+}
+
+int32 AMoonshineCharacter_Simple::GetSuspicionStars() const
+{
+	const float PerStar = FMath::Max(HeatPerStar, 0.01f);
+	return FMath::Clamp(FMath::FloorToInt(SuspicionHeat / PerStar), 0, 5);
+}
+
+void AMoonshineCharacter_Simple::AddSuspicionHeat(float Amount)
+{
+	SuspicionHeat = FMath::Clamp(SuspicionHeat + Amount, 0.0f, 100.0f);
+}
+
+void AMoonshineCharacter_Simple::TickSuspicion(float DeltaTime)
+{
+	// Always decay; sources add on top.
+	float Delta = -HeatDecayPerSecond;
+
+	// Each RUNNING still adds heat (more stills = faster gain).
+	for (AStillPartActor* Stand : PlacedStillParts)
+	{
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+		if (Stand->StillState == EStillState::Running)
+		{
+			Delta += HeatPerStillPerSecond;
+		}
+	}
+
+	SuspicionHeat = FMath::Clamp(SuspicionHeat + Delta * DeltaTime, 0.0f, 100.0f);
+
+	// Log only on star transitions (not per tick).
+	const int32 Stars = GetSuspicionStars();
+	if (Stars != LastLoggedStars)
+	{
+		LastLoggedStars = Stars;
+		UE_LOG(LogTemp, Warning, TEXT("Suspicion: %d star%s"), Stars, Stars == 1 ? TEXT("") : TEXT("s"));
 	}
 }
 
@@ -1905,6 +1945,7 @@ bool AMoonshineCharacter_Simple::DoSaveGame()
 		}
 	}
 	Save->Money = Money;
+	Save->SuspicionHeat = SuspicionHeat; // v8
 
 	// v7: the hotbar's own container.
 	if (HotbarInventory)
@@ -2083,6 +2124,11 @@ void AMoonshineCharacter_Simple::LoadGame()
 	}
 	Money = Save->Money;
 
+	// v8: restore suspicion heat (older saves default to 0). Reset the log gate so the next tick
+	// logs the restored star count.
+	SuspicionHeat = (Save->SaveVersion >= 8) ? FMath::Clamp(Save->SuspicionHeat, 0.0f, 100.0f) : 0.0f;
+	LastLoggedStars = -1;
+
 	// v7: restore the hotbar's own container (older saves: stays empty).
 	if (HotbarInventory)
 	{
@@ -2245,6 +2291,9 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 	UE_LOG(LogTemp, Warning, TEXT("Sold %d jars for $%d"), JarCount, Total);
 	ShowToast(FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money), true);
 	PlaySfx2D(SellSound, TEXT("SellSound"));
+
+	// Selling raises suspicion (proportional to the size of the sale).
+	AddSuspicionHeat(HeatPerJarSold * JarCount);
 
 	bHasPlayerProgressed = true;
 	AutoSave(); // immediate autosave: sale is a high-value moment

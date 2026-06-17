@@ -149,6 +149,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Selling")
 	int32 GetMoney() const { return Money; }
 
+	// Raw suspicion heat (0..100); read by the HUD meter.
+	UFUNCTION(BlueprintCallable, Category = "Suspicion")
+	float GetSuspicionHeat() const { return SuspicionHeat; }
+
+	// Current "star" count (0..5) = floor(SuspicionHeat / HeatPerStar), clamped.
+	UFUNCTION(BlueprintCallable, Category = "Suspicion")
+	int32 GetSuspicionStars() const;
+
+	// Adds (or subtracts) suspicion heat, clamped 0..100.
+	UFUNCTION(BlueprintCallable, Category = "Suspicion")
+	void AddSuspicionHeat(float Amount);
+
 	// --- Per-still loading UI API (called by UStillInventoryWidget) ---
 
 	// The player's main inventory component (the loading UI shows it alongside the still storage).
@@ -364,6 +376,34 @@ protected:
 	bool DoSaveGame();
 
 	FTimerHandle AutosaveDebounceHandle;
+
+	// --- Suspicion / heat (foundation + HUD; no police AI yet) ---
+
+	// Accumulated heat (0..100). Raised by selling and by running stills; decays over time.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Suspicion")
+	float SuspicionHeat = 0.0f;
+
+	// Heat per "star"; star count = floor(SuspicionHeat / HeatPerStar), clamped 0..5.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	float HeatPerStar = 20.0f;
+
+	// Heat added per jar sold (multiplied by the number of jars in a sale).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	float HeatPerJarSold = 0.5f;
+
+	// Heat added per RUNNING still per second (summed across all running stills).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	float HeatPerStillPerSecond = 0.2f;
+
+	// Heat shed per second (always applied; sources add on top).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion")
+	float HeatDecayPerSecond = 0.5f;
+
+	// Per-tick heat reconciliation: always decay, add per running still, clamp, log star changes.
+	void TickSuspicion(float DeltaTime);
+
+	// Last star count we logged, so transitions log once (not per tick). -1 = never logged.
+	int32 LastLoggedStars = -1;
 
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 

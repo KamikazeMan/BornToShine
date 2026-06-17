@@ -58,6 +58,32 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	class UTexture2D* MoneyIcon = nullptr;
 
+	// --- Suspicion 5-star heat meter (top-center) ---
+
+	// Star icons; if unset, draws colored-shape fallbacks (filled = flashing, empty = dark outline).
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	class UTexture2D* StarFilled = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	class UTexture2D* StarEmpty = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float StarSize = 40.0f;
+
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float StarSpacing = 8.0f;
+
+	// Distance from the top of the screen for the star row.
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float StarTopMargin = 20.0f;
+
+	// Police-light flash: red/blue toggles per second at 1 star, plus per-extra-star.
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float HeatFlashBaseRate = 2.0f;
+
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float HeatFlashRatePerStar = 1.0f;
+
 	// Always-on aiming dot at screen center (hidden while a build/delete crosshair is active).
 	UPROPERTY(EditAnywhere, Category = "Crosshair")
 	bool bShowCenterDot = true;
@@ -79,4 +105,7 @@ protected:
 
 	// Draw the small always-on center dot.
 	void DrawCenterDot();
+
+	// Draw the 5-star suspicion meter (top-center), with police-light flash on filled stars.
+	void DrawHeatMeter();
 };

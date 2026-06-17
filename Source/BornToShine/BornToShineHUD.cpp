@@ -41,6 +41,61 @@ void ABornToShineHUD::DrawHUD()
 	}
 
 	DrawMoney();
+
+	DrawHeatMeter();
+}
+
+void ABornToShineHUD::DrawHeatMeter()
+{
+	if (!Canvas) return;
+
+	const AMoonshineCharacter_Simple* Player = Cast<AMoonshineCharacter_Simple>(GetOwningPawn());
+	if (!Player) return;
+
+	const int32 Stars = Player->GetSuspicionStars();
+
+	// Police-light flash color for filled stars (only when at least 1 star).
+	FLinearColor FilledTint(0.85f, 0.1f, 0.1f, 1.0f); // steady red baseline
+	if (Stars >= 1)
+	{
+		const float Rate = HeatFlashBaseRate + (Stars - 1) * HeatFlashRatePerStar;
+		const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+		const bool bBlue = (FMath::FloorToInt(Time * FMath::Max(Rate, 0.1f)) % 2) != 0;
+		FilledTint = bBlue ? FLinearColor(0.1f, 0.25f, 1.0f, 1.0f) : FLinearColor(1.0f, 0.1f, 0.1f, 1.0f);
+	}
+
+	const FLinearColor EmptyTint(0.15f, 0.15f, 0.15f, 0.6f);
+
+	const float TotalWidth = 5 * StarSize + 4 * StarSpacing;
+	const float StartX = Canvas->SizeX * 0.5f - TotalWidth * 0.5f;
+	const float Y = StarTopMargin;
+
+	for (int32 i = 0; i < 5; ++i)
+	{
+		const float X = StartX + i * (StarSize + StarSpacing);
+		const bool bFilled = i < Stars;
+		const FLinearColor Tint = bFilled ? FilledTint : EmptyTint;
+		UTexture2D* Tex = bFilled ? StarFilled : StarEmpty;
+
+		if (Tex)
+		{
+			DrawTexture(Tex, X, Y, StarSize, StarSize, 0.0f, 0.0f, 1.0f, 1.0f, Tint);
+		}
+		else if (bFilled)
+		{
+			// Fallback: solid colored square (flashing tint).
+			DrawRect(Tint, X, Y, StarSize, StarSize);
+		}
+		else
+		{
+			// Fallback: dark outline (thin frame) for an empty slot.
+			const float T = FMath::Max(2.0f, StarSize * 0.06f);
+			DrawRect(EmptyTint, X, Y, StarSize, T);                       // top
+			DrawRect(EmptyTint, X, Y + StarSize - T, StarSize, T);        // bottom
+			DrawRect(EmptyTint, X, Y, T, StarSize);                       // left
+			DrawRect(EmptyTint, X + StarSize - T, Y, T, StarSize);        // right
+		}
+	}
 }
 
 void ABornToShineHUD::DrawCenterDot()

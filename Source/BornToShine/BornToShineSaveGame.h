@@ -97,6 +97,10 @@ public:
 	UPROPERTY()
 	int32 Money = 0;
 
+	// v8: accumulated suspicion heat (0..100).
+	UPROPERTY()
+	float SuspicionHeat = 0.0f;
+
 	UPROPERTY()
 	TArray<FSavedStillPart> StillParts;
 
@@ -110,6 +114,7 @@ public:
 
 	// v1: no part ownership. v2: per-part StandIndex. v3: per-stand StillState.
 	// v4: per-stand ingredient counters. v5: world pickups. v6: still storage. v7: hotbar container.
+	// v8: suspicion heat.
 	UPROPERTY()
-	int32 SaveVersion = 7;
+	int32 SaveVersion = 8;
 };
