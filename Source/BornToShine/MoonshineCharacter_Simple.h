@@ -118,7 +118,7 @@ public:
 
 	// Fixed yaw applied to the CinderBlockStand when placed (tune in PIE; try 90 or -90).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
-	float StandPlacementYaw = 90.0f;
+	float StandPlacementYaw = 270.0f;
 
 	// Max distance (cm) the player can aim to reach a snap point; also the trace length.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
