@@ -20,7 +20,7 @@ void AMainMenuGameMode::BeginPlay()
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC) return;
 
-	TSubclassOf<UMainMenuWidget> WidgetClass = MenuWidgetClass ? MenuWidgetClass : UMainMenuWidget::StaticClass();
+	TSubclassOf<UMainMenuWidget> WidgetClass = MenuWidgetClass ? MenuWidgetClass : TSubclassOf<UMainMenuWidget>(UMainMenuWidget::StaticClass());
 	MenuWidget = CreateWidget<UMainMenuWidget>(PC, WidgetClass);
 	if (MenuWidget)
 	{
