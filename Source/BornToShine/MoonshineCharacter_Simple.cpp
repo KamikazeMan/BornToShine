@@ -2193,7 +2193,7 @@ void AMoonshineCharacter_Simple::LoadGame()
 void AMoonshineCharacter_Simple::ReturnToMainMenu()
 {
 	AutoSave();
-	UGameplayStatics::OpenLevel(this, TEXT("MainMenuLevel"));
+	UGameplayStatics::OpenLevel(this, TEXT("L_MainMenu"));
 }
 
 void AMoonshineCharacter_Simple::AddMoney(int32 Amount)

@@ -18,41 +18,31 @@
 
 namespace
 {
-	const FLinearColor MmPanelDark(0.06f, 0.04f, 0.02f, 0.92f);
 	const FLinearColor MmGold(0.95f, 0.8f, 0.2f, 1.0f);
 	const FLinearColor MmCream(0.9f, 0.85f, 0.7f, 1.0f);
-	const FLinearColor MmButtonNormal(0.15f, 0.12f, 0.08f, 1.0f);
-	const FLinearColor MmButtonHover(0.25f, 0.2f, 0.12f, 1.0f);
-	const FLinearColor MmButtonDisabled(0.1f, 0.08f, 0.06f, 0.6f);
+	const FLinearColor MmButtonNormal(0.15f, 0.12f, 0.08f, 0.95f);
+	const FLinearColor MmButtonHover(0.25f, 0.2f, 0.12f, 0.95f);
+	const FLinearColor MmButtonDisabled(0.1f, 0.08f, 0.06f, 0.5f);
+
+	FSlateBrush MmMakeRounded(const FLinearColor& Color, float Radius)
+	{
+		FSlateBrush B;
+		B.DrawAs = ESlateBrushDrawType::RoundedBox;
+		B.TintColor = FSlateColor(Color);
+		B.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
+		B.OutlineSettings.CornerRadii = FVector4(Radius, Radius, Radius, Radius);
+		return B;
+	}
 
 	UButton* MmMakeMenuButton(UWidgetTree* Tree, const FString& Label, const FName& WidgetName)
 	{
 		UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass(), WidgetName);
 		{
 			FButtonStyle Style = Btn->GetStyle();
-
-			FSlateBrush Normal;
-			Normal.DrawAs = ESlateBrushDrawType::RoundedBox;
-			Normal.TintColor = FSlateColor(MmButtonNormal);
-			Normal.OutlineSettings.RoundingType = ESlateBrushRoundingType::FixedRadius;
-			Normal.OutlineSettings.CornerRadii = FVector4(6.0f, 6.0f, 6.0f, 6.0f);
-			Normal.OutlineSettings.Color = FSlateColor(MmGold);
-			Normal.OutlineSettings.Width = 1.5f;
-
-			FSlateBrush Hovered = Normal;
-			Hovered.TintColor = FSlateColor(MmButtonHover);
-
-			FSlateBrush Pressed = Normal;
-			Pressed.TintColor = FSlateColor(FLinearColor(0.3f, 0.25f, 0.15f, 1.0f));
-
-			FSlateBrush Disabled = Normal;
-			Disabled.TintColor = FSlateColor(MmButtonDisabled);
-			Disabled.OutlineSettings.Color = FSlateColor(FLinearColor(0.4f, 0.35f, 0.25f, 0.5f));
-
-			Style.SetNormal(Normal);
-			Style.SetHovered(Hovered);
-			Style.SetPressed(Pressed);
-			Style.SetDisabled(Disabled);
+			Style.SetNormal(MmMakeRounded(MmButtonNormal, 6.0f));
+			Style.SetHovered(MmMakeRounded(MmButtonHover, 6.0f));
+			Style.SetPressed(MmMakeRounded(FLinearColor(0.3f, 0.25f, 0.15f, 0.95f), 6.0f));
+			Style.SetDisabled(MmMakeRounded(MmButtonDisabled, 6.0f));
 			Btn->SetStyle(Style);
 		}
 
@@ -74,13 +64,7 @@ TSharedRef<SWidget> UMainMenuWidget::RebuildWidget()
 {
 	UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("MmRootCanvas"));
 
-	// Full-screen overlay
-	UOverlay* MainOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MmOverlay"));
-	UCanvasPanelSlot* OverlaySlot = RootCanvas->AddChildToCanvas(MainOverlay);
-	OverlaySlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
-	OverlaySlot->SetOffsets(FMargin(0));
-
-	// Background image (or solid dark fallback)
+	// Full-screen background image (or solid dark fallback)
 	BackgroundImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("MmBgImage"));
 	{
 		FSlateBrush Brush;
@@ -89,66 +73,44 @@ TSharedRef<SWidget> UMainMenuWidget::RebuildWidget()
 		BackgroundImage->SetBrush(Brush);
 		BackgroundImage->SetColorAndOpacity(FLinearColor(0.05f, 0.03f, 0.01f, 1.0f));
 	}
-	UOverlaySlot* BgSlot = MainOverlay->AddChildToOverlay(BackgroundImage);
-	BgSlot->SetHorizontalAlignment(HAlign_Fill);
-	BgSlot->SetVerticalAlignment(VAlign_Fill);
+	UCanvasPanelSlot* BgSlot = RootCanvas->AddChildToCanvas(BackgroundImage);
+	BgSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+	BgSlot->SetOffsets(FMargin(0));
 
-	// Center column with title + buttons
-	UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MmVBox"));
+	// Button column — anchored lower-left so it sits over the dark forest area of the splash
+	UVerticalBox* BtnBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MmBtnBox"));
 
-	// Top spacer pushes content to upper-center
-	USizeBox* TopSpacer = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("MmTopSpacer"));
-	TopSpacer->SetHeightOverride(1.0f);
-	UVerticalBoxSlot* TopSpacerSlot = VBox->AddChildToVerticalBox(TopSpacer);
-	TopSpacerSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-
-	// Title
-	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MmTitle"));
-	TitleText->SetText(FText::FromString(TEXT("BORN TO SHINE")));
-	{
-		FSlateFontInfo Font = TitleText->GetFont();
-		Font.Size = 72;
-		TitleText->SetFont(Font);
-	}
-	TitleText->SetColorAndOpacity(FSlateColor(MmGold));
-	TitleText->SetJustification(ETextJustify::Center);
-	UVerticalBoxSlot* TitleSlot = VBox->AddChildToVerticalBox(TitleText);
-	TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 60.0f));
-	TitleSlot->SetHorizontalAlignment(HAlign_Center);
-
-	// Buttons — wrapped in SizeBoxes for consistent width
-	auto AddButton = [&](UButton* Btn, float TopPad) -> UVerticalBoxSlot*
+	auto AddButton = [&](UButton* Btn, float TopPad)
 	{
 		USizeBox* SizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(),
 			*FString::Printf(TEXT("MmSizeBox_%s"), *Btn->GetName()));
-		SizeBox->SetWidthOverride(320.0f);
-		SizeBox->SetHeightOverride(56.0f);
+		SizeBox->SetWidthOverride(280.0f);
+		SizeBox->SetHeightOverride(52.0f);
 		SizeBox->AddChild(Btn);
-		UVerticalBoxSlot* Slot = VBox->AddChildToVerticalBox(SizeBox);
+		UVerticalBoxSlot* Slot = BtnBox->AddChildToVerticalBox(SizeBox);
 		Slot->SetPadding(FMargin(0.0f, TopPad, 0.0f, 0.0f));
-		Slot->SetHorizontalAlignment(HAlign_Center);
-		return Slot;
+		Slot->SetHorizontalAlignment(HAlign_Left);
 	};
 
 	ContinueButton = MmMakeMenuButton(WidgetTree, TEXT("Continue"), TEXT("MmContinueBtn"));
 	AddButton(ContinueButton, 0.0f);
 
 	NewGameButton = MmMakeMenuButton(WidgetTree, TEXT("New Game"), TEXT("MmNewGameBtn"));
-	AddButton(NewGameButton, 16.0f);
+	AddButton(NewGameButton, 12.0f);
 
 	LoadGameButton = MmMakeMenuButton(WidgetTree, TEXT("Load Game"), TEXT("MmLoadGameBtn"));
-	AddButton(LoadGameButton, 16.0f);
+	AddButton(LoadGameButton, 12.0f);
 
 	QuitButton = MmMakeMenuButton(WidgetTree, TEXT("Quit"), TEXT("MmQuitBtn"));
-	AddButton(QuitButton, 32.0f);
+	AddButton(QuitButton, 28.0f);
 
-	// Bottom spacer
-	USizeBox* BotSpacer = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("MmBotSpacer"));
-	BotSpacer->SetHeightOverride(1.0f);
-	UVerticalBoxSlot* BotSpacerSlot = VBox->AddChildToVerticalBox(BotSpacer);
-	BotSpacerSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	UCanvasPanelSlot* BtnSlot = RootCanvas->AddChildToCanvas(BtnBox);
+	BtnSlot->SetAnchors(FAnchors(0.0f, 1.0f, 0.0f, 1.0f));
+	BtnSlot->SetAlignment(FVector2D(0.0f, 1.0f));
+	BtnSlot->SetAutoSize(true);
+	BtnSlot->SetPosition(FVector2D(80.0f, -100.0f));
 
-	// Version label at the bottom
+	// Version label — bottom-right corner
 	VersionText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("MmVersion"));
 	VersionText->SetText(FText::FromString(TEXT("Early Access")));
 	{
@@ -157,14 +119,11 @@ TSharedRef<SWidget> UMainMenuWidget::RebuildWidget()
 		VersionText->SetFont(Font);
 	}
 	VersionText->SetColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f, 0.6f)));
-	VersionText->SetJustification(ETextJustify::Center);
-	UVerticalBoxSlot* VerSlot = VBox->AddChildToVerticalBox(VersionText);
-	VerSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 20.0f));
-	VerSlot->SetHorizontalAlignment(HAlign_Center);
-
-	UOverlaySlot* VBoxSlot = MainOverlay->AddChildToOverlay(VBox);
-	VBoxSlot->SetHorizontalAlignment(HAlign_Fill);
-	VBoxSlot->SetVerticalAlignment(VAlign_Fill);
+	UCanvasPanelSlot* VerSlot = RootCanvas->AddChildToCanvas(VersionText);
+	VerSlot->SetAnchors(FAnchors(1.0f, 1.0f, 1.0f, 1.0f));
+	VerSlot->SetAlignment(FVector2D(1.0f, 1.0f));
+	VerSlot->SetAutoSize(true);
+	VerSlot->SetPosition(FVector2D(-20.0f, -16.0f));
 
 	WidgetTree->RootWidget = RootCanvas;
 	return Super::RebuildWidget();
@@ -181,10 +140,10 @@ void UMainMenuWidget::NativeConstruct()
 	if (QuitButton)      QuitButton->OnClicked.AddDynamic(this, &UMainMenuWidget::OnQuitClicked);
 
 	// Apply background texture if assigned
-	if (BackgroundTexture && BackgroundImage)
+	if (TitleBackground && BackgroundImage)
 	{
 		FSlateBrush Brush;
-		Brush.SetResourceObject(BackgroundTexture);
+		Brush.SetResourceObject(TitleBackground);
 		Brush.ImageSize = FVector2D(1920.0f, 1080.0f);
 		Brush.DrawAs = ESlateBrushDrawType::Image;
 		BackgroundImage->SetBrush(Brush);
@@ -198,7 +157,7 @@ void UMainMenuWidget::NativeConstruct()
 	if (ContinueButton) ContinueButton->SetIsEnabled(bSaveExists);
 	if (LoadGameButton) LoadGameButton->SetIsEnabled(bSaveExists);
 
-	// Show mouse cursor
+	// Show mouse cursor + UI input mode
 	if (APlayerController* PC = GetOwningPlayer())
 	{
 		PC->SetShowMouseCursor(true);

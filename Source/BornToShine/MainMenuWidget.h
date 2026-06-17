@@ -20,10 +20,10 @@ public:
 	virtual void NativeConstruct() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Menu")
-	UTexture2D* BackgroundTexture = nullptr;
+	UTexture2D* TitleBackground = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Menu")
-	FName GameplayMapName = TEXT("MainLevel");
+	FName GameplayMapName = TEXT("L_Gameplay");
 
 protected:
 	UPROPERTY() UImage* BackgroundImage = nullptr;
