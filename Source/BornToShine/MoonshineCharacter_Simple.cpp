@@ -23,6 +23,7 @@
 #include "HotbarWidget.h"
 #include "TransferAmountWidget.h"
 #include "WorldPickupActor.h"
+#include "BornToShineGameInstance.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/AudioComponent.h"
@@ -152,9 +153,13 @@ void AMoonshineCharacter_Simple::BeginPlay()
 		}
 	}
 
-	// Resume from the save slot. LoadGame self-guards (no-op + log when no save exists) and clears
-	// current inventory first, so default starting grants are never duplicated.
-	LoadGame();
+	// Only auto-load when the GameInstance says so (Continue / Load Game from the menu).
+	// New Game leaves bShouldLoadSave = false, so we start with empty state.
+	UBornToShineGameInstance* GI = Cast<UBornToShineGameInstance>(GetGameInstance());
+	if (!GI || GI->bShouldLoadSave)
+	{
+		LoadGame();
+	}
 }
 
 void AMoonshineCharacter_Simple::ShowToast(const FString& Text, bool bSuccess)
@@ -595,6 +600,9 @@ void AMoonshineCharacter_Simple::SetupPlayerInputComponent(UInputComponent* Play
 
 	// "Use" the active hotbar item (stub for now).
 	PlayerInputComponent->BindKey(EKeys::G, IE_Pressed, this, &AMoonshineCharacter_Simple::UseActiveHotbarItem);
+
+	// Return to main menu (ESC).
+	PlayerInputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AMoonshineCharacter_Simple::ReturnToMainMenu);
 }
 
 void AMoonshineCharacter_Simple::Move(const FInputActionValue& Value)
@@ -2180,6 +2188,12 @@ void AMoonshineCharacter_Simple::LoadGame()
 	UE_LOG(LogTemp, Warning, TEXT("Game loaded from slot '%s': %d pieces restored, %d items, $%d, %d pickups (PlacedStillParts.Num()=%d)"),
 		SaveSlotName, Save->StillParts.Num(), Save->InventoryItems.Num(), Save->Money, Save->WorldPickups.Num(), PlacedStillParts.Num());
 	ShowToast(TEXT("Game loaded"), true);
+}
+
+void AMoonshineCharacter_Simple::ReturnToMainMenu()
+{
+	AutoSave();
+	UGameplayStatics::OpenLevel(this, TEXT("MainMenuLevel"));
 }
 
 void AMoonshineCharacter_Simple::AddMoney(int32 Amount)

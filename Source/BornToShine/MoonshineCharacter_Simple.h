@@ -338,6 +338,10 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="SaveLoad")
 	void LoadGame();
 
+	// Return to the main menu level (use from pause menu / ESC).
+	UFUNCTION(BlueprintCallable, Category="Menu")
+	void ReturnToMainMenu();
+
 	// Kill switch for all autosaving (testing sessions).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Save")
 	bool bAutosaveEnabled = true;
