@@ -53,18 +53,32 @@ void ABornToShineHUD::DrawHeatMeter()
 	if (!Player) return;
 
 	const int32 Stars = Player->GetSuspicionStars();
+	const float Heat = Player->GetSuspicionHeat();
+	const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
 
-	// Police-light flash color for filled stars (only when at least 1 star).
-	FLinearColor FilledTint(0.85f, 0.1f, 0.1f, 1.0f); // steady red baseline
-	if (Stars >= 1)
+	// Heat-trend detection (frame-to-frame): are we cooling down (about to lose a star)?
+	if (PrevHeat >= 0.0f)
 	{
-		const float Rate = HeatFlashBaseRate + (Stars - 1) * HeatFlashRatePerStar;
-		const float Time = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
-		const bool bBlue = (FMath::FloorToInt(Time * FMath::Max(Rate, 0.1f)) % 2) != 0;
-		FilledTint = bBlue ? FLinearColor(0.1f, 0.25f, 1.0f, 1.0f) : FLinearColor(1.0f, 0.1f, 0.1f, 1.0f);
+		const float Delta = Heat - PrevHeat;
+		if (Delta < -0.0005f)      bHeatCoolingDown = true;   // dropping -> cooling off
+		else if (Delta > 0.0005f)  bHeatCoolingDown = false;  // rising -> wanted
+		// steady (grace window): keep solid, treat as not cooling.
+		else                       bHeatCoolingDown = false;
 	}
+	PrevHeat = Heat;
 
-	const FLinearColor EmptyTint(0.15f, 0.15f, 0.15f, 0.6f);
+	// Brief brighten when a new star is earned.
+	if (Stars > PrevStars)
+	{
+		NewStarFlashUntil = Time + NewStarFlashDuration;
+	}
+	PrevStars = Stars;
+
+	// Soft "wanted" brightness pulse (sine), brightness oscillates (1-Depth)..1.0.
+	const float IdlePulse = 1.0f - StarPulseDepth * (0.5f + 0.5f * FMath::Sin(Time * StarPulseSpeed));
+
+	const FLinearColor EmptyTint(0.25f, 0.25f, 0.25f, 0.6f); // dim gray outline for unearned
+	const FLinearColor GrayTint(0.35f, 0.35f, 0.35f, 0.85f);
 
 	const float TotalWidth = 5 * StarSize + 4 * StarSpacing;
 	const float StartX = (HeatMeterScreenPos.X < 0.0f)
@@ -72,13 +86,47 @@ void ABornToShineHUD::DrawHeatMeter()
 		: HeatMeterScreenPos.X;
 	const float Y = HeatMeterScreenPos.Y;
 
+	const int32 TopEarnedIndex = Stars - 1; // about-to-be-lost star when cooling
+
 	for (int32 i = 0; i < 5; ++i)
 	{
 		const float X = StartX + i * (StarSize + StarSpacing);
-		const bool bFilled = i < Stars;
-		const FLinearColor Tint = bFilled ? FilledTint : EmptyTint;
-		UTexture2D* Tex = bFilled ? StarFilled : StarEmpty;
+		const bool bEarned = i < Stars;
 
+		FLinearColor Tint;
+		if (bEarned)
+		{
+			// Base: solid earned color with the gentle idle pulse.
+			Tint = StarColor * IdlePulse;
+			Tint.A = StarColor.A;
+
+			// Cooling-down: flash the top earned star between its color and gray.
+			if (bShowCoolingFlash && bHeatCoolingDown && i == TopEarnedIndex)
+			{
+				const float CoolMix = 0.5f + 0.5f * FMath::Sin(Time * StarCoolFlashSpeed);
+				Tint = FLinearColor(
+					FMath::Lerp(StarColor.R, GrayTint.R, CoolMix),
+					FMath::Lerp(StarColor.G, GrayTint.G, CoolMix),
+					FMath::Lerp(StarColor.B, GrayTint.B, CoolMix),
+					FMath::Lerp(StarColor.A, GrayTint.A, CoolMix));
+			}
+
+			// Freshly-gained: brighten the newest star briefly, then settle.
+			if (Time < NewStarFlashUntil && i == TopEarnedIndex)
+			{
+				Tint = FLinearColor(
+					FMath::Min(1.0f, StarColor.R * 1.6f),
+					FMath::Min(1.0f, StarColor.G * 1.6f),
+					FMath::Min(1.0f, StarColor.B * 1.6f),
+					StarColor.A);
+			}
+		}
+		else
+		{
+			Tint = EmptyTint;
+		}
+
+		UTexture2D* Tex = bEarned ? StarFilled : StarEmpty;
 		if (Tex)
 		{
 			DrawTexture(Tex, X, Y, StarSize, StarSize, 0.0f, 0.0f, 1.0f, 1.0f, Tint);
@@ -87,7 +135,7 @@ void ABornToShineHUD::DrawHeatMeter()
 		{
 			const float CX = X + StarSize * 0.5f;
 			const float CY = Y + StarSize * 0.5f;
-			DrawStarPolygon(CX, CY, StarSize * 0.5f, StarSize * 0.2f, Tint, bFilled);
+			DrawStarPolygon(CX, CY, StarSize * 0.5f, StarSize * 0.2f, Tint, bEarned);
 		}
 	}
 }

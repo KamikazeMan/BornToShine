@@ -43,6 +43,11 @@ public:
 	// Flashes the small bottom-right "Saving…" indicator (fades out over ~1.5s). Silent.
 	void ShowSaveIndicator();
 
+	// Top-center distill-timer block start-Y (px from top). Pushed below the suspicion star
+	// meter so the two never overlap.
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float TimerListTopOffset = 64.0f;
+
 protected:
 	UPROPERTY() UBorder* PromptPanel = nullptr;
 	UPROPERTY() UTextBlock* PromptText = nullptr;

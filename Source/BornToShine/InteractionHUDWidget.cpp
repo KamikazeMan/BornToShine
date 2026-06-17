@@ -102,7 +102,7 @@ TSharedRef<SWidget> UInteractionHUDWidget::RebuildWidget()
 	TimerSlot->SetAnchors(FAnchors(0.5f, 0.0f, 0.5f, 0.0f));
 	TimerSlot->SetAlignment(FVector2D(0.5f, 0.0f));
 	TimerSlot->SetAutoSize(true);
-	TimerSlot->SetPosition(FVector2D(0.0f, 40.0f));
+	TimerSlot->SetPosition(FVector2D(0.0f, TimerListTopOffset)); // below the suspicion star meter
 	TimerBox->SetVisibility(ESlateVisibility::Collapsed);
 
 	// --- Autosave indicator: bottom-right, faded in/out from code ---

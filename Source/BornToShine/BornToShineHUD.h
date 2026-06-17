@@ -58,9 +58,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	class UTexture2D* MoneyIcon = nullptr;
 
-	// --- Suspicion 5-star heat meter (top-center) ---
+	// --- Suspicion 5-star heat meter (GTA-style wanted level) ---
 
-	// Star icons; if unset, draws colored-shape fallbacks (filled = flashing, empty = dark outline).
+	// Star icons; if unset, draws star-shaped polygon fallbacks (earned = solid, empty = dim outline).
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	class UTexture2D* StarFilled = nullptr;
 
@@ -76,14 +76,31 @@ protected:
 	// Screen-space position for the heat meter (top-left corner of the star row).
 	// X < 0 means "center horizontally"; Y is distance from top of screen.
 	UPROPERTY(EditAnywhere, Category = "HUD")
-	FVector2D HeatMeterScreenPos = FVector2D(-1.0f, 60.0f);
+	FVector2D HeatMeterScreenPos = FVector2D(-1.0f, 12.0f);
 
-	// Police-light flash: red/blue toggles per second at 1 star, plus per-extra-star.
+	// Earned-star color (single consistent color — warm white/gold like GTA, no red/blue strobe).
 	UPROPERTY(EditAnywhere, Category = "HUD")
-	float HeatFlashBaseRate = 2.0f;
+	FLinearColor StarColor = FLinearColor(1.0f, 0.9f, 0.6f, 1.0f);
 
+	// Soft "you're wanted" brightness pulse on earned stars (sine). Speed in radians/sec-ish.
 	UPROPERTY(EditAnywhere, Category = "HUD")
-	float HeatFlashRatePerStar = 1.0f;
+	float StarPulseSpeed = 2.0f;
+
+	// How deep the pulse dims (0 = none, 0.3 = brightness oscillates ~0.7..1.0).
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float StarPulseDepth = 0.3f;
+
+	// When heat is cooling down, flash the about-to-be-lost (top earned) star toward gray.
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	bool bShowCoolingFlash = true;
+
+	// Cooling-flash speed (faster than the idle pulse so it reads as "about to drop").
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float StarCoolFlashSpeed = 6.0f;
+
+	// Brief brighten on a freshly-gained star before it settles (seconds).
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	float NewStarFlashDuration = 0.4f;
 
 	// Always-on aiming dot at screen center (hidden while a build/delete crosshair is active).
 	UPROPERTY(EditAnywhere, Category = "Crosshair")
@@ -107,9 +124,16 @@ protected:
 	// Draw the small always-on center dot.
 	void DrawCenterDot();
 
-	// Draw the 5-star suspicion meter, with police-light flash on filled stars.
+	// Draw the GTA-style 5-star suspicion meter (solid earned stars, subtle pulse, cooling flash).
 	void DrawHeatMeter();
 
 	// Draw a 5-pointed star polygon at the given center via Canvas lines.
 	void DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR, const FLinearColor& Color, bool bFilled);
+
+	// --- Heat-trend tracking (HUD-local; does not touch accrual logic) ---
+	// Compares heat frame-to-frame to tell "rising" from "cooling down" for the cooling flash.
+	float PrevHeat = -1.0f;
+	bool bHeatCoolingDown = false;
+	int32 PrevStars = 0;
+	float NewStarFlashUntil = 0.0f;
 };
