@@ -10,6 +10,7 @@ AMainMenuGameMode::AMainMenuGameMode()
 	DefaultPawnClass = ADefaultPawn::StaticClass();
 	PlayerControllerClass = APlayerController::StaticClass();
 	HUDClass = nullptr;
+	MenuWidgetClass = UMainMenuWidget::StaticClass();
 }
 
 void AMainMenuGameMode::BeginPlay()
@@ -19,7 +20,8 @@ void AMainMenuGameMode::BeginPlay()
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (!PC) return;
 
-	MenuWidget = CreateWidget<UMainMenuWidget>(PC, UMainMenuWidget::StaticClass());
+	TSubclassOf<UMainMenuWidget> WidgetClass = MenuWidgetClass ? MenuWidgetClass : UMainMenuWidget::StaticClass();
+	MenuWidget = CreateWidget<UMainMenuWidget>(PC, WidgetClass);
 	if (MenuWidget)
 	{
 		MenuWidget->AddToViewport(100);

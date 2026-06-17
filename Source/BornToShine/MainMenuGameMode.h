@@ -6,6 +6,8 @@
 #include "GameFramework/GameModeBase.h"
 #include "MainMenuGameMode.generated.h"
 
+class UMainMenuWidget;
+
 UCLASS()
 class BORNTOSHINE_API AMainMenuGameMode : public AGameModeBase
 {
@@ -15,7 +17,10 @@ public:
 	AMainMenuGameMode();
 	virtual void BeginPlay() override;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Menu")
+	TSubclassOf<UMainMenuWidget> MenuWidgetClass;
+
 protected:
 	UPROPERTY()
-	class UMainMenuWidget* MenuWidget = nullptr;
+	UMainMenuWidget* MenuWidget = nullptr;
 };
