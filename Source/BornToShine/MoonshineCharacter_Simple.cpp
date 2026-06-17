@@ -156,15 +156,22 @@ void AMoonshineCharacter_Simple::BeginPlay()
 	// Continue / Load Game: the menu sets bShouldLoadSave before OpenLevel.
 	// New Game (and direct PIE launch) default to fresh start — no save loaded.
 	UBornToShineGameInstance* GI = Cast<UBornToShineGameInstance>(GetGameInstance());
+	UE_LOG(LogTemp, Warning, TEXT("BeginPlay: GameInstance class=%s, cast=%s, bShouldLoadSave=%s"),
+		GetGameInstance() ? *GetGameInstance()->GetClass()->GetName() : TEXT("null"),
+		GI ? TEXT("OK") : TEXT("FAILED"),
+		GI ? (GI->bShouldLoadSave ? TEXT("TRUE") : TEXT("FALSE")) : TEXT("N/A"));
+
 	if (GI && GI->bShouldLoadSave)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("CONTINUE — loading slot '%s'"),
 			GI->PendingLoadSlot.IsEmpty() ? SaveSlotName : *GI->PendingLoadSlot);
 		LoadGame();
+		bHasPlayerProgressed = true;
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("FRESH START — no save loaded"));
+		bHasPlayerProgressed = false;
 	}
 }
 
@@ -1017,6 +1024,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 				PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), SpawnLocation);
 				SpawnVfxAt(PlacePuffVFX, TEXT("PlacePuffVFX"), SpawnLocation);
 
+				bHasPlayerProgressed = true;
 				RequestAutosaveDebounced(); // autosave: part placed (debounced)
 			}
 		}
@@ -1266,6 +1274,7 @@ void AMoonshineCharacter_Simple::SpawnWorldPickup(FName ItemId, int32 Count)
 		UE_LOG(LogTemp, Warning, TEXT("Dropped %d %s into the world"), Count, *ItemId.ToString());
 	}
 
+	bHasPlayerProgressed = true;
 	RequestAutosaveDebounced(); // world pickups persist (debounced)
 }
 
@@ -1298,6 +1307,7 @@ bool AMoonshineCharacter_Simple::TryPickup(AWorldPickupActor* Pickup)
 		Pickup->Count -= Added; // partial pickup — remainder stays in the world
 	}
 
+	bHasPlayerProgressed = true;
 	RequestAutosaveDebounced();
 	return true;
 }
@@ -1598,6 +1608,7 @@ bool AMoonshineCharacter_Simple::TryStartDistilling(AStillPartActor* Stand)
 		SpawnVfxAt(IgniteBurstVFX, TEXT("IgniteBurstVFX"), Pot->GetActorLocation());
 	}
 
+	bHasPlayerProgressed = true;
 	AutoSave(); // starting a batch is a meaningful moment (consumed stash persists)
 	return true;
 }
@@ -1745,6 +1756,7 @@ void AMoonshineCharacter_Simple::CollectMoonshine(AStillPartActor* Jar)
 	UE_LOG(LogTemp, Warning, TEXT("Collected %d MoonshineJar; still reset to Empty"), JarsPerRun);
 	ShowToast(FString::Printf(TEXT("Collected %d jars of moonshine!"), JarsPerRun), true);
 
+	bHasPlayerProgressed = true;
 	AutoSave(); // immediate autosave: collection is a high-value moment
 }
 
@@ -1847,6 +1859,7 @@ void AMoonshineCharacter_Simple::SaveGame()
 void AMoonshineCharacter_Simple::AutoSave()
 {
 	if (!bAutosaveEnabled) return;
+	if (!bHasPlayerProgressed) return;
 
 	// Silent: no toast, no sound — just the fading corner indicator (only on a real write).
 	if (DoSaveGame())
@@ -2198,7 +2211,10 @@ void AMoonshineCharacter_Simple::LoadGame()
 
 void AMoonshineCharacter_Simple::ReturnToMainMenu()
 {
-	AutoSave();
+	if (bHasPlayerProgressed)
+	{
+		AutoSave();
+	}
 	UGameplayStatics::OpenLevel(this, TEXT("L_MainMenu"));
 }
 
@@ -2223,6 +2239,7 @@ void AMoonshineCharacter_Simple::SellMoonshine(ABuyerActor* Buyer)
 	ShowToast(FString::Printf(TEXT("Sold %d jars — $%d! (Total: $%d)"), JarCount, Total, Money), true);
 	PlaySfx2D(SellSound, TEXT("SellSound"));
 
+	bHasPlayerProgressed = true;
 	AutoSave(); // immediate autosave: sale is a high-value moment
 }
 
@@ -2731,6 +2748,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		// Detection only: re-evaluate whether the full Tier 2 still is now assembled.
 		CheckStillCompletion();
 
+		bHasPlayerProgressed = true;
 		RequestAutosaveDebounced(); // autosave: part placed (debounced)
 	}
 

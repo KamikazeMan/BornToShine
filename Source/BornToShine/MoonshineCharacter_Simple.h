@@ -346,6 +346,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Save")
 	bool bAutosaveEnabled = true;
 
+	// True once the player has taken a meaningful action (placed a part, sold, started distilling).
+	// Prevents a fresh-start empty world from autosaving over an existing save slot.
+	bool bHasPlayerProgressed = false;
+
 	// Part placements debounce into one save this many seconds after the last placement.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Save")
 	float AutosaveDebounceSeconds = 10.0f;

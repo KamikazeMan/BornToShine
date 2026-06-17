@@ -192,6 +192,13 @@ void UMainMenuWidget::OpenGameplayLevel(bool bLoadExistingSave)
 	{
 		GI->bShouldLoadSave = bLoadExistingSave;
 		GI->PendingLoadSlot.Empty();
+		UE_LOG(LogTemp, Warning, TEXT("Menu: set bShouldLoadSave=%s before OpenLevel"),
+			bLoadExistingSave ? TEXT("TRUE") : TEXT("FALSE"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Menu: GetGameInstance() is NOT BornToShineGameInstance — load flag will be lost! Class=%s"),
+			GetGameInstance() ? *GetGameInstance()->GetClass()->GetName() : TEXT("null"));
 	}
 
 	UGameplayStatics::OpenLevel(this, GameplayMapName);
