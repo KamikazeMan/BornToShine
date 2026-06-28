@@ -19,7 +19,8 @@ public class BornToShine : ModuleRules
 			"SlateCore",
 			"Json",
 			"ProceduralMeshComponent",
-			"Niagara"
+			"Niagara",
+			"RenderCore"  // GWhiteTexture for the HUD's untextured triangle fills
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
