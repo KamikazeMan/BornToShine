@@ -78,9 +78,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	FVector2D HeatMeterScreenPos = FVector2D(-1.0f, 12.0f);
 
-	// Earned-star color (single consistent color — warm white/gold like GTA, no red/blue strobe).
+	// Earned-star OUTLINE color (the crisp 5-point star border; matches the empty-star outline).
 	UPROPERTY(EditAnywhere, Category = "HUD")
 	FLinearColor StarColor = FLinearColor(1.0f, 0.9f, 0.6f, 1.0f);
+
+	// Earned-star FILL color (solid). Default red; the pulse modulates its OPACITY only.
+	UPROPERTY(EditAnywhere, Category = "HUD")
+	FLinearColor StarFillColor = FLinearColor(0.9f, 0.1f, 0.1f, 1.0f);
 
 	// Soft "you're wanted" brightness pulse on earned stars (sine). Speed in radians/sec-ish.
 	UPROPERTY(EditAnywhere, Category = "HUD")
@@ -127,8 +131,11 @@ protected:
 	// Draw the GTA-style 5-star suspicion meter (solid earned stars, subtle pulse, cooling flash).
 	void DrawHeatMeter();
 
-	// Draw a 5-pointed star polygon at the given center via Canvas lines.
-	void DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR, const FLinearColor& Color, bool bFilled);
+	// Draw a 5-pointed star: always the OutlineColor border (10-vertex path); when bFilled,
+	// also a solid FillColor interior using an inset (0.9x) triangle fan from the star's center —
+	// identical geometry to the outline, so the fill never spills outside it.
+	void DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR,
+		const FLinearColor& OutlineColor, bool bFilled, const FLinearColor& FillColor);
 
 	// --- Heat-trend tracking (HUD-local; does not touch accrual logic) ---
 	// Compares heat frame-to-frame to tell "rising" from "cooling down" for the cooling flash.

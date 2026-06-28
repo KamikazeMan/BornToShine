@@ -6,6 +6,22 @@
 #include "Engine/Font.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "CanvasItem.h"
+#include "RenderResource.h" // GWhiteTexture (untextured triangle fill)
+
+namespace
+{
+	// Build the 10-vertex 5-point star path (alternating outer/inner radius), starting at the top.
+	void BuildStarVerts(float CenterX, float CenterY, float OuterR, float InnerR, FVector2D OutVerts[10])
+	{
+		for (int32 i = 0; i < 10; ++i)
+		{
+			const float AngleRad = FMath::DegreesToRadians(-90.0f + i * 36.0f);
+			const float R = (i % 2 == 0) ? OuterR : InnerR;
+			OutVerts[i] = FVector2D(CenterX + R * FMath::Cos(AngleRad), CenterY + R * FMath::Sin(AngleRad));
+		}
+	}
+}
 
 ABornToShineHUD::ABornToShineHUD()
 {
@@ -93,49 +109,42 @@ void ABornToShineHUD::DrawHeatMeter()
 		const float X = StartX + i * (StarSize + StarSpacing);
 		const bool bEarned = i < Stars;
 
-		FLinearColor Tint;
+		// Solid red fill; the pulse modulates OPACITY only (geometry is fixed — never scaled).
+		FLinearColor FillColor = StarFillColor;
+		FLinearColor OutlineColor = bEarned ? StarColor : EmptyTint;
+
 		if (bEarned)
 		{
-			// Base: solid earned color with the gentle idle pulse.
-			Tint = StarColor * IdlePulse;
-			Tint.A = StarColor.A;
+			FillColor.A = StarFillColor.A * IdlePulse;
 
-			// Cooling-down: flash the top earned star between its color and gray.
+			// Cooling-down: flash the top (about-to-be-lost) star's fill toward gray.
 			if (bShowCoolingFlash && bHeatCoolingDown && i == TopEarnedIndex)
 			{
 				const float CoolMix = 0.5f + 0.5f * FMath::Sin(Time * StarCoolFlashSpeed);
-				Tint = FLinearColor(
-					FMath::Lerp(StarColor.R, GrayTint.R, CoolMix),
-					FMath::Lerp(StarColor.G, GrayTint.G, CoolMix),
-					FMath::Lerp(StarColor.B, GrayTint.B, CoolMix),
-					FMath::Lerp(StarColor.A, GrayTint.A, CoolMix));
+				FillColor = FLinearColor(
+					FMath::Lerp(StarFillColor.R, GrayTint.R, CoolMix),
+					FMath::Lerp(StarFillColor.G, GrayTint.G, CoolMix),
+					FMath::Lerp(StarFillColor.B, GrayTint.B, CoolMix),
+					StarFillColor.A);
 			}
 
-			// Freshly-gained: brighten the newest star briefly, then settle.
+			// Freshly-gained: pop the newest star to full opacity briefly, then settle.
 			if (Time < NewStarFlashUntil && i == TopEarnedIndex)
 			{
-				Tint = FLinearColor(
-					FMath::Min(1.0f, StarColor.R * 1.6f),
-					FMath::Min(1.0f, StarColor.G * 1.6f),
-					FMath::Min(1.0f, StarColor.B * 1.6f),
-					StarColor.A);
+				FillColor.A = StarFillColor.A;
 			}
-		}
-		else
-		{
-			Tint = EmptyTint;
 		}
 
 		UTexture2D* Tex = bEarned ? StarFilled : StarEmpty;
 		if (Tex)
 		{
-			DrawTexture(Tex, X, Y, StarSize, StarSize, 0.0f, 0.0f, 1.0f, 1.0f, Tint);
+			DrawTexture(Tex, X, Y, StarSize, StarSize, 0.0f, 0.0f, 1.0f, 1.0f, bEarned ? FillColor : EmptyTint);
 		}
 		else
 		{
 			const float CX = X + StarSize * 0.5f;
 			const float CY = Y + StarSize * 0.5f;
-			DrawStarPolygon(CX, CY, StarSize * 0.5f, StarSize * 0.2f, Tint, bEarned);
+			DrawStarPolygon(CX, CY, StarSize * 0.5f, StarSize * 0.2f, OutlineColor, bEarned, FillColor);
 		}
 	}
 }
@@ -242,43 +251,34 @@ void ABornToShineHUD::DrawDeleteCrosshair()
 	DrawRect(DeleteCrosshairColor, CenterX - 2, CenterY - 2, 4, 4);
 }
 
-void ABornToShineHUD::DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR, const FLinearColor& Color, bool bFilled)
+void ABornToShineHUD::DrawStarPolygon(float CenterX, float CenterY, float OuterR, float InnerR,
+	const FLinearColor& OutlineColor, bool bFilled, const FLinearColor& FillColor)
 {
 	if (!Canvas) return;
 
-	// 10 vertices: alternating outer/inner, starting at top (-90 deg).
-	TArray<FVector2D> Verts;
-	Verts.SetNum(10);
-	for (int32 i = 0; i < 10; ++i)
-	{
-		const float AngleDeg = -90.0f + i * 36.0f;
-		const float AngleRad = FMath::DegreesToRadians(AngleDeg);
-		const float R = (i % 2 == 0) ? OuterR : InnerR;
-		Verts[i] = FVector2D(CenterX + R * FMath::Cos(AngleRad), CenterY + R * FMath::Sin(AngleRad));
-	}
-
+	// SOLID FILL FIRST (so the crisp outline sits on top of its edge).
+	// Same 10-vertex star path, inset to 0.9x so it sits just INSIDE the outline — never outside.
+	// Triangle fan from the center: center -> vertex[i] -> vertex[i+1] across all 10 perimeter verts.
 	if (bFilled)
 	{
-		// Fill by drawing thick lines from center to each outer vertex + connecting edges.
-		const float FillThickness = InnerR * 1.4f;
-		for (int32 i = 0; i < 10; i += 2)
-		{
-			DrawLine(CenterX, CenterY, Verts[i].X, Verts[i].Y, Color, FillThickness);
-		}
+		FVector2D Fill[10];
+		BuildStarVerts(CenterX, CenterY, OuterR * 0.9f, InnerR * 0.9f, Fill);
+		const FVector2D Center(CenterX, CenterY);
 		for (int32 i = 0; i < 10; ++i)
 		{
-			const FVector2D& A = Verts[i];
-			const FVector2D& B = Verts[(i + 1) % 10];
-			DrawLine(A.X, A.Y, B.X, B.Y, Color, 2.0f);
+			FCanvasTriangleItem Tri(Center, Fill[i], Fill[(i + 1) % 10], GWhiteTexture);
+			Tri.SetColor(FillColor);
+			Canvas->DrawItem(Tri);
 		}
 	}
-	else
+
+	// OUTLINE: the 10-vertex star path drawn as a closed line loop (full radius).
+	FVector2D Edge[10];
+	BuildStarVerts(CenterX, CenterY, OuterR, InnerR, Edge);
+	for (int32 i = 0; i < 10; ++i)
 	{
-		for (int32 i = 0; i < 10; ++i)
-		{
-			const FVector2D& A = Verts[i];
-			const FVector2D& B = Verts[(i + 1) % 10];
-			DrawLine(A.X, A.Y, B.X, B.Y, Color, 2.0f);
-		}
+		const FVector2D& A = Edge[i];
+		const FVector2D& B = Edge[(i + 1) % 10];
+		DrawLine(A.X, A.Y, B.X, B.Y, OutlineColor, 2.0f);
 	}
 }
