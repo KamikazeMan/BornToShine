@@ -2501,6 +2501,37 @@ void AMoonshineCharacter_Simple::BeginStillGhostPlacement(FName PartID)
 		*PartID.ToString(), bGhostFloorGridMode ? TEXT("floor-grid") : TEXT("mount-snap"));
 }
 
+bool AMoonshineCharacter_Simple::TraceGroundZ(float WorldX, float WorldY, float& OutGroundZ) const
+{
+	const UWorld* World = GetWorld();
+	if (!World) return false;
+
+	// Trace straight DOWN through the placement column. Start well above and end well below the
+	// player so we find the terrain surface regardless of slope. Ignore the player and the ghost
+	// so we only hit the actual ground (landscape / WorldStatic).
+	const float StartZ = GetActorLocation().Z + 100000.0f;
+	const float EndZ = GetActorLocation().Z - 100000.0f;
+	const FVector TraceStart(WorldX, WorldY, StartZ);
+	const FVector TraceEnd(WorldX, WorldY, EndZ);
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+	if (IsValid(GhostStillPart)) Params.AddIgnoredActor(GhostStillPart);
+	// Ignore already-placed still parts so the column lands on the terrain, not on another vessel.
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part)) Params.AddIgnoredActor(Part);
+	}
+
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, Params))
+	{
+		OutGroundZ = Hit.ImpactPoint.Z;
+		return true;
+	}
+	return false;
+}
+
 FVector AMoonshineCharacter_Simple::GhostVisualCenter(const FTransform& CandidateXform, const FVector& PivotFallback) const
 {
 	if (IsValid(GhostStillPart) && GhostStillPart->MeshComponent)
@@ -2550,7 +2581,13 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		FVector GridLoc;
 		GridLoc.X = FMath::RoundToFloat(AimPoint.X / GridSize) * GridSize;
 		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
-		GridLoc.Z = AimPoint.Z + FloorSpawnZOffset;
+
+		// Rest the stand's BASE on the actual terrain at the SNAPPED cell, not at the aim Z (which is
+		// the ground under the un-snapped aim point). A straight-down raycast keeps the stand upright
+		// (yaw only) and level on slopes; on flat ground it returns the same Z, so nothing changes.
+		float GroundZ = AimPoint.Z; // fallback if the column misses (e.g. over a hole)
+		TraceGroundZ(GridLoc.X, GridLoc.Y, GroundZ);
+		GridLoc.Z = GroundZ + FloorSpawnZOffset;
 
 		const FRotator GridRot(0.0f, StandPlacementYaw, 0.0f);
 
@@ -2672,6 +2709,33 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 		if (BestTarget && BestRayDist <= SnapRadius)
 		{
+			// MasonJar hangs below the WormBarrel at a fixed offset; on a slope the ground can rise
+			// into it. Keep its snapped X/Y/rotation (the part-to-part relationship), but raise its Z
+			// so its BASE rests on the actual ground beneath it. Clamp UP only — on flat ground the
+			// ground sits below the jar base, so nothing changes there.
+			if (GhostPartID == FName(TEXT("MasonJar")))
+			{
+				const FVector JarLoc = BestXform.GetLocation();
+				float JarBaseLocalZ = 0.0f; // pivot-to-lowest-point (mesh local), scaled below
+				if (IsValid(GhostStillPart) && GhostStillPart->MeshComponent)
+				{
+					if (const UStaticMesh* JarMesh = GhostStillPart->MeshComponent->GetStaticMesh())
+					{
+						JarBaseLocalZ = JarMesh->GetBoundingBox().Min.Z;
+					}
+				}
+				const float Scale = GhostStillPart->GetActorScale3D().Z;
+				const float JarBaseWorldZ = JarLoc.Z + JarBaseLocalZ * Scale;
+
+				float GroundZ = 0.0f;
+				if (TraceGroundZ(JarLoc.X, JarLoc.Y, GroundZ) && GroundZ > JarBaseWorldZ)
+				{
+					FVector Raised = JarLoc;
+					Raised.Z += (GroundZ - JarBaseWorldZ); // lift so the base sits on the surface
+					BestXform.SetLocation(Raised);
+				}
+			}
+
 			GhostSnapTransform = BestXform;
 			GhostSnapOwningStand = StandOfPart(BestTarget);
 			GhostStillPart->SetActorLocationAndRotation(BestXform.GetLocation(), BestXform.Rotator());
@@ -2804,6 +2868,17 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		}
 
 		UE_LOG(LogTemp, Log, TEXT("Placed %s (snapped) at %s"), *GhostPartID.ToString(), *GhostSnapTransform.GetLocation().ToString());
+
+		// Terrain-fit diagnostics for the two ground-resting parts.
+		if (GhostPartID == FName(TEXT("CinderBlockStand")))
+		{
+			UE_LOG(LogTemp, Log, TEXT("CinderBlockStand ground Z=%.2f"), GhostSnapTransform.GetLocation().Z);
+		}
+		else if (GhostPartID == FName(TEXT("MasonJar")))
+		{
+			UE_LOG(LogTemp, Log, TEXT("MasonJar resting Z=%.2f"), GhostSnapTransform.GetLocation().Z);
+		}
+
 		PlaySfxAt(PartPlaceSound, TEXT("PartPlaceSound"), GhostSnapTransform.GetLocation());
 		SpawnVfxAt(PlacePuffVFX, TEXT("PlacePuffVFX"), GhostSnapTransform.GetLocation());
 

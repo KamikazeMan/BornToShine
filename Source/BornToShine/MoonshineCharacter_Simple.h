@@ -691,6 +691,12 @@ protected:
 	// back to PivotFallback when the ghost has no mesh.
 	FVector GhostVisualCenter(const FTransform& CandidateXform, const FVector& PivotFallback) const;
 
+	// Straight-down raycast onto the world surface (landscape / WorldStatic) at the given XY.
+	// Used so ground-placed parts rest on uneven terrain instead of a flat Z. Ignores the player
+	// and the ghost actor; returns true and writes OutGroundZ on a hit. On flat ground this returns
+	// the same Z everywhere, so flat placement is unchanged.
+	bool TraceGroundZ(float WorldX, float WorldY, float& OutGroundZ) const;
+
 	// Input callbacks - Movement
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
