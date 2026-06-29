@@ -2582,12 +2582,30 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GridLoc.X = FMath::RoundToFloat(AimPoint.X / GridSize) * GridSize;
 		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
 
-		// Rest the stand's BASE on the actual terrain at the SNAPPED cell, not at the aim Z (which is
-		// the ground under the un-snapped aim point). A straight-down raycast keeps the stand upright
-		// (yaw only) and level on slopes; on flat ground it returns the same Z, so nothing changes.
+		// Rest the stand's mesh BOTTOM on the actual terrain at the SNAPPED cell, not its pivot
+		// (the stand pivot is NOT at its base, so a pivot-on-ground placement buries the mesh).
+		// Same bbox-min approach as the MasonJar: actorZ = groundZ - bbox.Min.Z * scale puts the
+		// mesh's lowest point exactly on the surface, wherever the pivot sits. A straight-down
+		// raycast keeps the stand upright (yaw only) and level on slopes; on flat ground it returns
+		// the same Z everywhere, so placement is unchanged. StandGroundZTweak (default 0) is an
+		// optional fine-tune on top.
 		float GroundZ = AimPoint.Z; // fallback if the column misses (e.g. over a hole)
 		TraceGroundZ(GridLoc.X, GridLoc.Y, GroundZ);
-		GridLoc.Z = GroundZ + FloorSpawnZOffset;
+
+		float StandBaseLocalZ = 0.0f; // pivot-to-lowest-point (mesh local), scaled below
+		if (GhostStillPart->MeshComponent)
+		{
+			if (const UStaticMesh* StandMesh = GhostStillPart->MeshComponent->GetStaticMesh())
+			{
+				StandBaseLocalZ = StandMesh->GetBoundingBox().Min.Z;
+			}
+		}
+		const float StandScale = GhostStillPart->GetActorScale3D().Z;
+		GridLoc.Z = GroundZ - StandBaseLocalZ * StandScale + StandGroundZTweak;
+
+		// Stash the components so placement can log the math once (not per ghost frame).
+		DbgStandGroundZ = GroundZ;
+		DbgStandBboxMinScaledZ = StandBaseLocalZ * StandScale;
 
 		const FRotator GridRot(0.0f, StandPlacementYaw, 0.0f);
 
@@ -2872,7 +2890,8 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 		// Terrain-fit diagnostics for the two ground-resting parts.
 		if (GhostPartID == FName(TEXT("CinderBlockStand")))
 		{
-			UE_LOG(LogTemp, Log, TEXT("CinderBlockStand ground Z=%.2f"), GhostSnapTransform.GetLocation().Z);
+			UE_LOG(LogTemp, Log, TEXT("Stand: groundZ=%.2f, bboxMinZ=%.2f, finalActorZ=%.2f"),
+				DbgStandGroundZ, DbgStandBboxMinScaledZ, GhostSnapTransform.GetLocation().Z);
 		}
 		else if (GhostPartID == FName(TEXT("MasonJar")))
 		{
