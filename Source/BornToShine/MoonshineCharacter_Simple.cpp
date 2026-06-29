@@ -2610,6 +2610,7 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 
 		float MinCornerZ = TNumericLimits<float>::Max();
 		float MaxCornerZ = -TNumericLimits<float>::Max();
+		float SumCornerZ = 0.0f;
 		const float CornerLX[4] = { LocalBox.Min.X, LocalBox.Max.X, LocalBox.Min.X, LocalBox.Max.X };
 		const float CornerLY[4] = { LocalBox.Min.Y, LocalBox.Min.Y, LocalBox.Max.Y, LocalBox.Max.Y };
 		for (int32 c = 0; c < 4; ++c)
@@ -2622,17 +2623,20 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			TraceGroundZ(WX, WY, CornerZ);
 			MinCornerZ = FMath::Min(MinCornerZ, CornerZ);
 			MaxCornerZ = FMath::Max(MaxCornerZ, CornerZ);
+			SumCornerZ += CornerZ;
 		}
 		const float SlopeDelta = MaxCornerZ - MinCornerZ;
 		const bool bTooUneven = SlopeDelta > MaxPlacementSlopeDelta;
 
-		// Rest the mesh BOTTOM on the HIGHEST corner so no terrain pokes through (the gate keeps the
-		// low-side gap tiny). Same bbox-min math as before: actorZ = groundZ - bbox.Min.Z * scale.
-		const float RestGroundZ = (MaxCornerZ > -TNumericLimits<float>::Max()) ? MaxCornerZ : CenterGroundZ;
-		GridLoc.Z = RestGroundZ - StandBaseLocalZ * StandScale + StandGroundZTweak;
+		// Rest the mesh BOTTOM on the AVERAGE corner Z so the base settles INTO contact with the
+		// ground instead of floating on the high corner. StandGroundSinkOffset (small negative)
+		// beds it in slightly so the base touches dirt rather than hovering. Same bbox-min math:
+		// actorZ = groundZ - bbox.Min.Z * scale.
+		const float AvgCornerZ = SumCornerZ * 0.25f;
+		GridLoc.Z = AvgCornerZ - StandBaseLocalZ * StandScale + StandGroundZTweak + StandGroundSinkOffset;
 
 		// Stash for the placement log.
-		DbgStandGroundZ = RestGroundZ;
+		DbgStandGroundZ = AvgCornerZ;
 		DbgStandBboxMinScaledZ = StandBaseLocalZ * StandScale;
 
 		// Calibration log, throttled to block-state flips / >1cm delta changes (not every frame).
@@ -2642,6 +2646,8 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 			UE_LOG(LogTemp, Log, TEXT("Stand slope: cornerDelta=%.2f (min=%.2f max=%.2f), threshold=%.2f -> %s"),
 				SlopeDelta, MinCornerZ, MaxCornerZ, MaxPlacementSlopeDelta,
 				bTooUneven ? TEXT("BLOCKED") : TEXT("OK"));
+			UE_LOG(LogTemp, Log, TEXT("Stand rest: avgCornerZ=%.2f, sinkOffset=%.2f, finalZ=%.2f"),
+				AvgCornerZ, StandGroundSinkOffset, GridLoc.Z);
 		}
 
 		GhostSnapTransform = FTransform(GridRot, GridLoc);

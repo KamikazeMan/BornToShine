@@ -117,6 +117,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandGroundZTweak = 0.0f;
 
+	// Small negative bed-in for the CinderBlockStand: lowers it slightly so its base CONTACTS the
+	// dirt rather than hovering on uneven ground. Tune live in PIE (a tiny sink beats any gap).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float StandGroundSinkOffset = -3.0f;
+
 	// Slope gate for the CinderBlockStand: max allowed height delta (cm) between its 4 footprint
 	// corners. Flat/gentle ground stays under this; steep/bumpy ground exceeds it and is rejected.
 	// Tune live in PIE; corner deltas are logged on preview for calibration.
