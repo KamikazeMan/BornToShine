@@ -2582,38 +2582,82 @@ void AMoonshineCharacter_Simple::UpdateStillGhost()
 		GridLoc.X = FMath::RoundToFloat(AimPoint.X / GridSize) * GridSize;
 		GridLoc.Y = FMath::RoundToFloat(AimPoint.Y / GridSize) * GridSize;
 
-		// Rest the stand's mesh BOTTOM on the actual terrain at the SNAPPED cell, not its pivot
-		// (the stand pivot is NOT at its base, so a pivot-on-ground placement buries the mesh).
-		// Same bbox-min approach as the MasonJar: actorZ = groundZ - bbox.Min.Z * scale puts the
-		// mesh's lowest point exactly on the surface, wherever the pivot sits. A straight-down
-		// raycast keeps the stand upright (yaw only) and level on slopes; on flat ground it returns
-		// the same Z everywhere, so placement is unchanged. StandGroundZTweak (default 0) is an
-		// optional fine-tune on top.
-		float GroundZ = AimPoint.Z; // fallback if the column misses (e.g. over a hole)
-		TraceGroundZ(GridLoc.X, GridLoc.Y, GroundZ);
+		const FRotator GridRot(0.0f, StandPlacementYaw, 0.0f);
 
-		float StandBaseLocalZ = 0.0f; // pivot-to-lowest-point (mesh local), scaled below
+		// Mesh local bounds: footprint extents (X/Y) for corner sampling, Min.Z for the bbox-min rest.
+		FBox LocalBox(ForceInit);
 		if (GhostStillPart->MeshComponent)
 		{
 			if (const UStaticMesh* StandMesh = GhostStillPart->MeshComponent->GetStaticMesh())
 			{
-				StandBaseLocalZ = StandMesh->GetBoundingBox().Min.Z;
+				LocalBox = StandMesh->GetBoundingBox();
 			}
 		}
-		const float StandScale = GhostStillPart->GetActorScale3D().Z;
-		GridLoc.Z = GroundZ - StandBaseLocalZ * StandScale + StandGroundZTweak;
+		const FVector StandScale3D = GhostStillPart->GetActorScale3D();
+		const float StandScale = StandScale3D.Z;
+		const float StandBaseLocalZ = LocalBox.Min.Z; // pivot-to-lowest-point (mesh local)
 
-		// Stash the components so placement can log the math once (not per ghost frame).
-		DbgStandGroundZ = GroundZ;
+		// SLOPE GATE: raycast at the stand's 4 footprint CORNERS and measure how uneven the ground is.
+		// Use the mesh's actual XY bbox corners (scaled), yaw-rotated about the snapped pivot — this
+		// handles an off-center pivot correctly. GridLoc.X/Y is the pivot, so local corners add to it.
+		const float YawRad = FMath::DegreesToRadians(StandPlacementYaw);
+		const float CosY = FMath::Cos(YawRad);
+		const float SinY = FMath::Sin(YawRad);
+
+		// Center ground Z as the per-corner fallback (a corner over a hole/edge won't false-block).
+		float CenterGroundZ = AimPoint.Z;
+		TraceGroundZ(GridLoc.X, GridLoc.Y, CenterGroundZ);
+
+		float MinCornerZ = TNumericLimits<float>::Max();
+		float MaxCornerZ = -TNumericLimits<float>::Max();
+		const float CornerLX[4] = { LocalBox.Min.X, LocalBox.Max.X, LocalBox.Min.X, LocalBox.Max.X };
+		const float CornerLY[4] = { LocalBox.Min.Y, LocalBox.Min.Y, LocalBox.Max.Y, LocalBox.Max.Y };
+		for (int32 c = 0; c < 4; ++c)
+		{
+			const float LX = CornerLX[c] * StandScale3D.X;
+			const float LY = CornerLY[c] * StandScale3D.Y;
+			const float WX = GridLoc.X + (LX * CosY - LY * SinY);
+			const float WY = GridLoc.Y + (LX * SinY + LY * CosY);
+			float CornerZ = CenterGroundZ;
+			TraceGroundZ(WX, WY, CornerZ);
+			MinCornerZ = FMath::Min(MinCornerZ, CornerZ);
+			MaxCornerZ = FMath::Max(MaxCornerZ, CornerZ);
+		}
+		const float SlopeDelta = MaxCornerZ - MinCornerZ;
+		const bool bTooUneven = SlopeDelta > MaxPlacementSlopeDelta;
+
+		// Rest the mesh BOTTOM on the HIGHEST corner so no terrain pokes through (the gate keeps the
+		// low-side gap tiny). Same bbox-min math as before: actorZ = groundZ - bbox.Min.Z * scale.
+		const float RestGroundZ = (MaxCornerZ > -TNumericLimits<float>::Max()) ? MaxCornerZ : CenterGroundZ;
+		GridLoc.Z = RestGroundZ - StandBaseLocalZ * StandScale + StandGroundZTweak;
+
+		// Stash for the placement log.
+		DbgStandGroundZ = RestGroundZ;
 		DbgStandBboxMinScaledZ = StandBaseLocalZ * StandScale;
 
-		const FRotator GridRot(0.0f, StandPlacementYaw, 0.0f);
+		// Calibration log, throttled to block-state flips / >1cm delta changes (not every frame).
+		if (FMath::Abs(SlopeDelta - LastLoggedSlopeDelta) > 1.0f || bTooUneven != bStandGroundTooUneven)
+		{
+			LastLoggedSlopeDelta = SlopeDelta;
+			UE_LOG(LogTemp, Log, TEXT("Stand slope: cornerDelta=%.2f (min=%.2f max=%.2f), threshold=%.2f -> %s"),
+				SlopeDelta, MinCornerZ, MaxCornerZ, MaxPlacementSlopeDelta,
+				bTooUneven ? TEXT("BLOCKED") : TEXT("OK"));
+		}
 
 		GhostSnapTransform = FTransform(GridRot, GridLoc);
 		GhostStillPart->SetActorLocationAndRotation(GridLoc, GridRot);
-		bGhostSnapValid = true; // floor is always a valid target
 
-		SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		bStandGroundTooUneven = bTooUneven;
+		if (bTooUneven)
+		{
+			bGhostSnapValid = false;
+			SetGhostColor(FLinearColor(1.0f, 0.0f, 0.0f, 0.5f)); // red = blocked (ground too uneven)
+		}
+		else
+		{
+			bGhostSnapValid = true; // flat-enough floor is a valid target
+			SetGhostColor(FLinearColor(0.0f, 1.0f, 0.0f, 0.5f)); // green = valid
+		}
 		return;
 	}
 
@@ -2848,6 +2892,11 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 
 	if (!bGhostSnapValid)
 	{
+		// Stand specifically blocked by the slope gate gets a clear, actionable message.
+		if (bGhostFloorGridMode && bStandGroundTooUneven)
+		{
+			ShowToast(TEXT("Ground too uneven — find a flatter spot"), false);
+		}
 		UE_LOG(LogTemp, Warning, TEXT("Still ghost: %s has no valid placement here (bGhostSnapValid=false)."), *GhostPartID.ToString());
 		return;
 	}

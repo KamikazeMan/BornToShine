@@ -117,6 +117,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandGroundZTweak = 0.0f;
 
+	// Slope gate for the CinderBlockStand: max allowed height delta (cm) between its 4 footprint
+	// corners. Flat/gentle ground stays under this; steep/bumpy ground exceeds it and is rejected.
+	// Tune live in PIE; corner deltas are logged on preview for calibration.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
+	float MaxPlacementSlopeDelta = 20.0f;
+
 	// Grid cell size for snapping floor-placed stands (CinderBlockStand ghost).
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Inventory|Placement")
 	float StandGridSizeCm = 100.0f;
@@ -231,6 +237,12 @@ protected:
 	// Last stand ground-fit components (set in the ghost tick; logged once on placement).
 	float DbgStandGroundZ = 0.0f;
 	float DbgStandBboxMinScaledZ = 0.0f;
+
+	// Slope-gate state: true when the stand ghost is over ground too uneven to place. Drives the red
+	// ghost + the "find a flatter spot" toast on a blocked click. LastLoggedSlopeDelta throttles the
+	// per-frame calibration log.
+	bool bStandGroundTooUneven = false;
+	float LastLoggedSlopeDelta = -1.0f;
 
 	UPROPERTY()
 	class AStillPartActor* GhostStillPart = nullptr;     // the live ghost actor
