@@ -4,6 +4,7 @@
 #include "LawmanCharacter.h"
 #include "MoonshineCharacter_Simple.h"
 #include "Kismet/GameplayStatics.h"
+#include "Navigation/PathFollowingComponent.h" // FPathFollowingRequestResult/Result, EPathFollowingRequestResult
 
 ALawmanController::ALawmanController()
 {
