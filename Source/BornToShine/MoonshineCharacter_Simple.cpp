@@ -36,6 +36,8 @@
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/Material.h"
+#include "LawmanCharacter.h"
+#include "NavigationSystem.h"
 
 namespace
 {
@@ -463,6 +465,9 @@ void AMoonshineCharacter_Simple::Tick(float DeltaTime)
 	// Reconcile suspicion heat (decay + running-still contributions).
 	TickSuspicion(DeltaTime);
 
+	// Heat-driven cop foot-patrol (reads stars only; never modifies heat).
+	TickLawman(DeltaTime);
+
 	// Show the operation prompt when aiming at the Pot of a completed still.
 	UpdateStillPrompt();
 
@@ -541,6 +546,127 @@ void AMoonshineCharacter_Simple::TickSuspicion(float DeltaTime)
 		LastLoggedStars = Stars;
 		UE_LOG(LogTemp, Warning, TEXT("Suspicion: %d star%s  (heat=%.1f)"), Stars, Stars == 1 ? TEXT("") : TEXT("s"), SuspicionHeat);
 	}
+}
+
+AStillPartActor* AMoonshineCharacter_Simple::FindNearestActiveStill(const FVector& From) const
+{
+	AStillPartActor* Best = nullptr;
+	float BestDistSq = TNumericLimits<float>::Max();
+	for (AStillPartActor* Stand : PlacedStillParts)
+	{
+		if (!IsValid(Stand) || Stand->PartID != FName(TEXT("CinderBlockStand"))) continue;
+
+		// "Active" = a finished still (something worth investigating) or one currently running.
+		const bool bActive = (Stand->StillState == EStillState::Running) || IsStillComplete(Stand);
+		if (!bActive) continue;
+
+		const float DistSq = FVector::DistSquared(From, Stand->GetActorLocation());
+		if (DistSq < BestDistSq)
+		{
+			BestDistSq = DistSq;
+			Best = Stand;
+		}
+	}
+	return Best;
+}
+
+void AMoonshineCharacter_Simple::TickLawman(float DeltaTime)
+{
+	// Throttle: this is presence logic, not per-frame critical.
+	LawmanCheckAccumulator += DeltaTime;
+	if (LawmanCheckAccumulator < 1.0f) return;
+	LawmanCheckAccumulator = 0.0f;
+
+	// Drop any lawmen that were destroyed/streamed out.
+	ActiveLawmen.RemoveAll([](const TWeakObjectPtr<ALawmanCharacter>& L) { return !L.IsValid(); });
+
+	const int32 Stars = GetSuspicionStars(); // READ-ONLY; never modifies heat.
+
+	if (Stars >= LawmanSpawnStarThreshold)
+	{
+		if (LawmanClass && ActiveLawmen.Num() < FMath::Max(1, MaxLawmen))
+		{
+			SpawnLawman();
+		}
+	}
+	else if (bDespawnWhenHeatDrops && ActiveLawmen.Num() > 0)
+	{
+		// Heat cooled off — the lawman loses interest and leaves (Increment 1 has no engagement).
+		for (TWeakObjectPtr<ALawmanCharacter>& L : ActiveLawmen)
+		{
+			if (L.IsValid())
+			{
+				UE_LOG(LogTemp, Log, TEXT("Lawman despawned (heat dropped below %d stars)"), LawmanSpawnStarThreshold);
+				L->Destroy();
+			}
+		}
+		ActiveLawmen.Reset();
+	}
+}
+
+void AMoonshineCharacter_Simple::SpawnLawman()
+{
+	UWorld* World = GetWorld();
+	if (!World || !LawmanClass) return;
+
+	UNavigationSystemV1* Nav = UNavigationSystemV1::GetCurrent(World);
+	if (!Nav)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Lawman: no navigation system — cannot spawn"));
+		return;
+	}
+
+	const FVector PlayerLoc = GetActorLocation();
+
+	// Try several directions at SpawnDistanceFromPlayer, projecting each onto the NavMesh so the
+	// lawman always lands on walkable ground (edge of the play area, away from the player).
+	const FVector ProjectExtent(SpawnDistanceFromPlayer, SpawnDistanceFromPlayer, 1000.0f);
+	FNavLocation SpawnNav;
+	bool bFoundSpawn = false;
+	for (int32 Attempt = 0; Attempt < 8 && !bFoundSpawn; ++Attempt)
+	{
+		const float AngleRad = FMath::DegreesToRadians(Attempt * 45.0f);
+		const FVector Candidate = PlayerLoc + FVector(FMath::Cos(AngleRad), FMath::Sin(AngleRad), 0.0f) * SpawnDistanceFromPlayer;
+		if (Nav->ProjectPointToNavigation(Candidate, SpawnNav, ProjectExtent))
+		{
+			bFoundSpawn = true;
+		}
+	}
+	// Fallback: any reachable point within the spawn radius.
+	if (!bFoundSpawn)
+	{
+		bFoundSpawn = Nav->GetRandomReachablePointInRadius(PlayerLoc, SpawnDistanceFromPlayer, SpawnNav);
+	}
+	if (!bFoundSpawn)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Lawman: could not find a NavMesh spawn point near the player"));
+		return;
+	}
+
+	// Choose the approach goal now so the controller can read it on possession.
+	AActor* Target = FindNearestActiveStill(SpawnNav.Location);
+	if (!Target) Target = this;
+
+	// Deferred spawn so PatrolTarget is set BEFORE BeginPlay/possession kicks off the MoveTo.
+	const FVector SpawnLoc = SpawnNav.Location + FVector(0.0f, 0.0f, 90.0f); // lift to capsule height
+	const FRotator SpawnRot(0.0f, (PlayerLoc - SpawnLoc).Rotation().Yaw, 0.0f); // face player, yaw only
+
+	ALawmanCharacter* Lawman = World->SpawnActorDeferred<ALawmanCharacter>(
+		LawmanClass, FTransform(SpawnRot, SpawnLoc), nullptr, nullptr,
+		ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (!Lawman)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Lawman: spawn failed"));
+		return;
+	}
+	Lawman->PatrolTarget = Target;
+	UGameplayStatics::FinishSpawningActor(Lawman, FTransform(SpawnRot, SpawnLoc));
+
+	ActiveLawmen.Add(Lawman);
+
+	const FString TargetName = (Target == this) ? TEXT("player") : TEXT("still");
+	UE_LOG(LogTemp, Log, TEXT("Lawman spawned at %s, heading to %s (heat=%d stars)"),
+		*SpawnLoc.ToString(), *TargetName, GetSuspicionStars());
 }
 
 int32 AMoonshineCharacter_Simple::StandNumber(AStillPartActor* Stand) const

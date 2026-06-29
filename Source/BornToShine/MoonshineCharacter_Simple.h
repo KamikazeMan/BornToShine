@@ -177,6 +177,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Suspicion")
 	void AddSuspicionHeat(float Amount);
 
+	// Nearest complete-or-running still stand to From (the lawman's approach goal); null if none.
+	UFUNCTION(BlueprintCallable, Category = "Suspicion")
+	class AStillPartActor* FindNearestActiveStill(const FVector& From) const;
+
 	// --- Per-still loading UI API (called by UStillInventoryWidget) ---
 
 	// The player's main inventory component (the loading UI shows it alongside the still storage).
@@ -441,6 +445,41 @@ protected:
 
 	// World time of the last heat gain (for grace-window decay).
 	float LastHeatGainTime = 0.0f;
+
+	// --- Cop foot-patrol (Increment 1: spawn at heat + walk to still; READ-ONLY on heat) ---
+
+	// Lawman pawn class to spawn (assign BP_Lawman with mesh + anims in the editor).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion|Lawman")
+	TSubclassOf<class ALawmanCharacter> LawmanClass;
+
+	// Spawn a lawman once the player reaches this many stars (read-only heat check).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion|Lawman")
+	int32 LawmanSpawnStarThreshold = 3;
+
+	// How many lawmen may be active at once (Increment 1 keeps this at 1).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion|Lawman")
+	int32 MaxLawmen = 1;
+
+	// How far (cm) from the player a lawman spawns, projected onto the NavMesh.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion|Lawman")
+	float SpawnDistanceFromPlayer = 4000.0f;
+
+	// If heat falls back below the threshold, despawn the lawman (he "leaves").
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Suspicion|Lawman")
+	bool bDespawnWhenHeatDrops = true;
+
+	// Currently-active lawmen (weak so destroyed/streamed pawns drop out cleanly).
+	UPROPERTY()
+	TArray<TWeakObjectPtr<class ALawmanCharacter>> ActiveLawmen;
+
+	// Throttle so the spawn/despawn check runs about once a second, not every frame.
+	float LawmanCheckAccumulator = 0.0f;
+
+	// Heat-driven spawn/despawn reconciliation (READS stars only; never modifies heat).
+	void TickLawman(float DeltaTime);
+
+	// Spawns one lawman at a NavMesh-projected point ~SpawnDistanceFromPlayer away, aimed at a still.
+	void SpawnLawman();
 
 	// --- Selling (placeholder buyer; sell-all, no partial-sale UI) ---
 

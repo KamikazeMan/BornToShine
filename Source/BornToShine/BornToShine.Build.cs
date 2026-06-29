@@ -20,7 +20,9 @@ public class BornToShine : ModuleRules
 			"Json",
 			"ProceduralMeshComponent",
 			"Niagara",
-			"RenderCore"  // GWhiteTexture for the HUD's untextured triangle fills
+			"RenderCore",      // GWhiteTexture for the HUD's untextured triangle fills
+			"AIModule",        // AAIController / MoveTo for the lawman foot-patrol
+			"NavigationSystem" // NavMesh projection + reachable-point queries
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
