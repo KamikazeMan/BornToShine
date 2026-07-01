@@ -9,6 +9,7 @@
 class UStaticMesh;
 class UStaticMeshComponent;
 class UInventoryComponent;
+class APawn;
 
 /** Operating state of a completed still. Linear progression Empty -> ... -> Done. */
 UENUM(BlueprintType)
@@ -37,6 +38,12 @@ public:
 	// Which still part this actor represents (matches the inventory ItemID).
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
 	FName PartID;
+
+	// The player who placed this part (multiplayer-ready: a bust targets THIS still's owner).
+	// Set at build time; in single-player it is always the local player. Weak so it clears if the
+	// owner pawn is destroyed/respawned.
+	UPROPERTY(BlueprintReadOnly, Category="StillPart")
+	TWeakObjectPtr<APawn> OwnerPawn;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="StillPart")
 	UStaticMeshComponent* MeshComponent;

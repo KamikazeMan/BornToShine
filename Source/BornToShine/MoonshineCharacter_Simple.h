@@ -16,6 +16,10 @@ class UInteractionHUDWidget;
 class AWorldPickupActor;
 class UHotbarWidget;
 
+// Fired when this player is busted by a lawman. The HUD (or a BP) binds this to show the
+// BUSTED / jail screen. Broadcast AFTER the confiscation has been applied.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerBusted);
+
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
  * Much cleaner architecture - character handles movement, component handles building
@@ -180,6 +184,16 @@ public:
 	// Nearest complete-or-running still stand to From (the lawman's approach goal); null if none.
 	UFUNCTION(BlueprintCallable, Category = "Suspicion")
 	class AStillPartActor* FindNearestActiveStill(const FVector& From) const;
+
+	// Applies the bust consequence to THIS player: confiscates inventory + hotbar, money -> 0,
+	// destroys all their placed still parts, heat -> 0, then broadcasts OnBusted. Called by the
+	// lawman on the still's OwnerPawn, so in multiplayer only the busted owner is affected.
+	UFUNCTION(BlueprintCallable, Category = "Suspicion")
+	void ApplyBust();
+
+	// Bind from the HUD/BP to show the BUSTED jail screen. Broadcast after confiscation.
+	UPROPERTY(BlueprintAssignable, Category = "Suspicion")
+	FOnPlayerBusted OnBusted;
 
 	// --- Per-still loading UI API (called by UStillInventoryWidget) ---
 

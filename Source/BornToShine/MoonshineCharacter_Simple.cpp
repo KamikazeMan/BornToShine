@@ -570,6 +570,36 @@ AStillPartActor* AMoonshineCharacter_Simple::FindNearestActiveStill(const FVecto
 	return Best;
 }
 
+void AMoonshineCharacter_Simple::ApplyBust()
+{
+	UE_LOG(LogTemp, Warning, TEXT("BUST applied to %s: confiscating inventory/money/stills, heat -> 0"), *GetName());
+
+	// Confiscate carried items (main inventory + hotbar).
+	if (Inventory) Inventory->ClearInventory();
+	if (HotbarInventory) HotbarInventory->ClearInventory();
+
+	// Money to zero.
+	Money = 0;
+
+	// Destroy all of THIS player's placed still parts.
+	for (AStillPartActor* Part : PlacedStillParts)
+	{
+		if (IsValid(Part))
+		{
+			Part->Destroy();
+		}
+	}
+	PlacedStillParts.Reset();
+
+	// Reset heat (the operation is gone). Not accrual logic — a one-shot consequence.
+	SuspicionHeat = 0.0f;
+	LastHeatGainTime = 0.0f;
+	LastLoggedStars = -1;
+
+	// Notify the HUD/BP to show the BUSTED screen.
+	OnBusted.Broadcast();
+}
+
 void AMoonshineCharacter_Simple::TickLawman(float DeltaTime)
 {
 	// Throttle: this is presence logic, not per-frame critical.
@@ -1196,6 +1226,7 @@ void AMoonshineCharacter_Simple::ConfirmItemPlacement()
 			if (Part)
 			{
 				Part->InitFromItemData(PendingPlacementItemID, PartMesh);
+				Part->OwnerPawn = this; // ownership for the bust system (MP-ready)
 				PlacedStillParts.Add(Part);
 
 				if (Inventory)
@@ -2313,6 +2344,7 @@ void AMoonshineCharacter_Simple::LoadGame()
 		if (Part)
 		{
 			Part->InitFromItemData(SavedPart.PartID, PartMesh);
+			Part->OwnerPawn = this; // single-player: the local player owns all loaded stills
 			Part->bIsFull = SavedPart.bIsFull;
 			Part->bIsSealed = SavedPart.bIsSealed;
 			if (SavedPart.PartID == FName(TEXT("CinderBlockStand")))
@@ -3053,6 +3085,7 @@ void AMoonshineCharacter_Simple::ConfirmStillGhostPlacement()
 	if (Placed)
 	{
 		Placed->InitFromItemData(GhostPartID, PartMesh);
+		Placed->OwnerPawn = this; // ownership for the bust system (MP-ready)
 		// Stands own themselves (OwningStand stays null); every other part records its stand,
 		// chosen by the snap candidate selection in UpdateStillGhost.
 		if (GhostPartID != FName(TEXT("CinderBlockStand")))
