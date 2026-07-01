@@ -230,12 +230,14 @@ void ALawmanController::RunDetection()
 		if (FVector::DotProduct(Facing, Dir) < HalfConeCos) continue; // outside the vision cone
 
 		// Clear line of sight: blocked only by world geometry (terrain/trees/rocks), not by the
-		// still itself. Trace on Visibility, ignoring the lawman and the target part.
+		// still itself. Trace on WorldStatic (not Visibility) so movement-blocking cover — e.g.
+		// Brushify trees that block WorldStatic but not Visibility — also blocks the lawman's sight.
+		// Ignore the lawman and the target part so only terrain/trees/rocks between them can occlude.
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(LawmanPawn);
 		Params.AddIgnoredActor(Part);
 		FHitResult Hit;
-		const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_Visibility, Params);
+		const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_WorldStatic, Params);
 		if (bBlocked) continue; // something occludes it — not seen
 
 		// Spotted with clear LOS → bust immediately (no window).
