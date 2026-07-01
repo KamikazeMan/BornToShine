@@ -87,6 +87,7 @@ void ALawmanController::BeginInvestigation()
 void ALawmanController::BeginSearch()
 {
 	State = ELawmanState::Searching;
+	SearchElapsed = 0.0f; // start the give-up clock when active searching begins
 	SearchPoints.Reset();
 
 	UWorld* World = GetWorld();
@@ -162,7 +163,7 @@ void ALawmanController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (State == ELawmanState::Busted) return;
+	if (State == ELawmanState::Busted || State == ELawmanState::Leaving) return;
 
 	// Line-of-sight detection on its own cadence.
 	DetectAccumulator += DeltaTime;
@@ -171,6 +172,17 @@ void ALawmanController::Tick(float DeltaTime)
 		DetectAccumulator = 0.0f;
 		RunDetection();
 		if (State == ELawmanState::Busted) return;
+	}
+
+	// Search timeout: if he's hunted the area for too long without spotting a still, he gives up.
+	if (State == ELawmanState::Searching)
+	{
+		SearchElapsed += DeltaTime;
+		if (SearchElapsed >= SearchGiveUpTime)
+		{
+			GiveUpSearch();
+			return;
+		}
 	}
 
 	// Look-around pause at a search point: sweep the pawn's yaw so the vision cone scans the area.
@@ -296,5 +308,22 @@ void ALawmanController::BustStill(AStillPartActor* SeenPart)
 	if (AMoonshineCharacter_Simple* OwnerPlayer = Cast<AMoonshineCharacter_Simple>(StillOwner))
 	{
 		OwnerPlayer->ApplyBust(SpottedCount);
+	}
+}
+
+void ALawmanController::GiveUpSearch()
+{
+	if (State == ELawmanState::Busted || State == ELawmanState::Leaving) return;
+	State = ELawmanState::Leaving;
+	StopMovement();
+	bPausing = false;
+
+	UE_LOG(LogTemp, Log, TEXT("Lawman gave up searching (no still found in %.0fs) — leaving."), SearchGiveUpTime);
+
+	// Leave the same way a heat-drop despawn does: remove the pawn. The player's lawman tracker
+	// prunes the destroyed pawn from its active list on its next check.
+	if (APawn* P = GetPawn())
+	{
+		P->Destroy();
 	}
 }

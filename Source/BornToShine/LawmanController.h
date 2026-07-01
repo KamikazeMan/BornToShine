@@ -12,7 +12,8 @@ enum class ELawmanState : uint8
 {
 	Investigating, // heading to the general area of the player's operation
 	Searching,     // wandering nav points in the area, pausing to look around
-	Busted         // spotted a still and made the bust; idle
+	Busted,        // spotted a still and made the bust; idle
+	Leaving        // gave up (search timed out) and is despawning
 };
 
 /**
@@ -75,6 +76,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
 	float DetectionInterval = 0.2f;
 
+	// Max time (s) he'll hunt the area (timed from when he starts searching) before giving up and
+	// leaving if he hasn't spotted a still. This is the player's reward for hiding well.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Search")
+	float SearchGiveUpTime = 30.0f;
+
 protected:
 	void BeginInvestigation();
 	void BeginSearch();
@@ -94,6 +100,9 @@ protected:
 	// Fires the bust on the still's OwnerPawn (multiplayer-ready), passing the spotted-set count.
 	void BustStill(class AStillPartActor* SeenPart);
 
+	// Search timed out with no still found: stop and despawn (same "leave" as a heat-drop despawn).
+	void GiveUpSearch();
+
 	// The player's operation center (heat source) this lawman was sent to investigate.
 	FVector GetOperationCenter() const;
 
@@ -108,4 +117,7 @@ protected:
 	float SweepBaseYaw = 0.0f;
 
 	float DetectAccumulator = 0.0f;
+
+	// Time spent searching (reset when he begins searching); drives the give-up timeout.
+	float SearchElapsed = 0.0f;
 };

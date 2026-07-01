@@ -709,9 +709,8 @@ void AMoonshineCharacter_Simple::SpawnLawman()
 
 	ActiveLawmen.Add(Lawman);
 
-	const FString TargetName = (Target == this) ? TEXT("player") : TEXT("still");
-	UE_LOG(LogTemp, Log, TEXT("Lawman spawned at %s, heading to %s (heat=%d stars)"),
-		*SpawnLoc.ToString(), *TargetName, GetSuspicionStars());
+	UE_LOG(LogTemp, Log, TEXT("Lawman spawned at %s, investigating area (heat=%d stars)"),
+		*SpawnLoc.ToString(), GetSuspicionStars());
 }
 
 int32 AMoonshineCharacter_Simple::StandNumber(AStillPartActor* Stand) const
