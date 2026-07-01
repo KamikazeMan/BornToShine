@@ -80,10 +80,18 @@ protected:
 	void BeginSearch();
 	void GotoSearchPoint(int32 Index);
 
-	// The core mechanic: returns true (and busts) if a still is within range+cone with clear LOS.
+	// The core mechanic: scans for a still within range+cone with clear LOS and busts on the first.
 	void RunDetection();
 
-	// Fires the bust on the still's OwnerPawn (multiplayer-ready).
+	// Range + vision-cone + clear WorldStatic trace test for a single still part (the LOS check
+	// shared by detection and the bail spotted-set count).
+	bool HasLineOfSightToStill(class AStillPartActor* Part) const;
+
+	// Distinct stills (grouped by owning stand) of StillOwner that the lawman currently sees. Drives
+	// the bail fee (BailFeePerStill * spotted count).
+	int32 CountSpottedStills(class APawn* StillOwner) const;
+
+	// Fires the bust on the still's OwnerPawn (multiplayer-ready), passing the spotted-set count.
 	void BustStill(class AStillPartActor* SeenPart);
 
 	// The player's operation center (heat source) this lawman was sent to investigate.

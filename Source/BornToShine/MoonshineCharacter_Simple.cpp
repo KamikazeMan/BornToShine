@@ -570,18 +570,33 @@ AStillPartActor* AMoonshineCharacter_Simple::FindNearestActiveStill(const FVecto
 	return Best;
 }
 
-void AMoonshineCharacter_Simple::ApplyBust()
+void AMoonshineCharacter_Simple::ApplyBust(int32 SpottedStillCount)
 {
-	UE_LOG(LogTemp, Warning, TEXT("BUST applied to %s: confiscating inventory/money/stills, heat -> 0"), *GetName());
+	const int32 Count = FMath::Max(0, SpottedStillCount);
+	const int32 TotalBail = BailFeePerStill * Count;
 
-	// Confiscate carried items (main inventory + hotbar).
+	if (Money >= TotalBail)
+	{
+		// Can make bail: auto-deduct and KEEP everything (all stills, inventory, remaining money).
+		Money -= TotalBail;
+
+		// Heat resets — the heat's off for now.
+		SuspicionHeat = 0.0f;
+		LastHeatGainTime = 0.0f;
+		LastLoggedStars = -1;
+
+		UE_LOG(LogTemp, Warning, TEXT("BUSTED: paid $%d bail for %d spotted still(s), operation intact. Money now $%d."),
+			TotalBail, Count, Money);
+
+		OnBusted.Broadcast(/*bPaidBail*/ true, TotalBail, Count);
+		return;
+	}
+
+	// Can't afford bail: FULL WIPE.
 	if (Inventory) Inventory->ClearInventory();
 	if (HotbarInventory) HotbarInventory->ClearInventory();
-
-	// Money to zero.
 	Money = 0;
 
-	// Destroy all of THIS player's placed still parts.
 	for (AStillPartActor* Part : PlacedStillParts)
 	{
 		if (IsValid(Part))
@@ -591,13 +606,13 @@ void AMoonshineCharacter_Simple::ApplyBust()
 	}
 	PlacedStillParts.Reset();
 
-	// Reset heat (the operation is gone). Not accrual logic — a one-shot consequence.
 	SuspicionHeat = 0.0f;
 	LastHeatGainTime = 0.0f;
 	LastLoggedStars = -1;
 
-	// Notify the HUD/BP to show the BUSTED screen.
-	OnBusted.Broadcast();
+	UE_LOG(LogTemp, Warning, TEXT("BUSTED: couldn't make $%d bail — everything seized."), TotalBail);
+
+	OnBusted.Broadcast(/*bPaidBail*/ false, TotalBail, Count);
 }
 
 void AMoonshineCharacter_Simple::TickLawman(float DeltaTime)

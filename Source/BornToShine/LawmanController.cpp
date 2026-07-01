@@ -195,16 +195,67 @@ void ALawmanController::Tick(float DeltaTime)
 	}
 }
 
-void ALawmanController::RunDetection()
+bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
 {
 	APawn* LawmanPawn = GetPawn();
 	UWorld* World = GetWorld();
-	if (!LawmanPawn || !World) return;
+	if (!IsValid(Part) || !LawmanPawn || !World) return false;
 
 	const FVector EyeLoc = LawmanPawn->GetPawnViewLocation();
 	const FVector Facing = LawmanPawn->GetActorForwardVector();
 	const float HalfConeCos = FMath::Cos(FMath::DegreesToRadians(SightConeAngle * 0.5f));
 	const float RangeSq = SightRange * SightRange;
+
+	// Aim at the part's visual center.
+	FVector TargetLoc = Part->GetComponentsBoundingBox(true).GetCenter();
+	if (TargetLoc.ContainsNaN() || TargetLoc.IsNearlyZero())
+	{
+		TargetLoc = Part->GetActorLocation();
+	}
+
+	const FVector ToTarget = TargetLoc - EyeLoc;
+	const float DistSq = ToTarget.SizeSquared();
+	if (DistSq > RangeSq || DistSq < KINDA_SMALL_NUMBER) return false; // out of range
+
+	const FVector Dir = ToTarget * FMath::InvSqrt(DistSq);
+	if (FVector::DotProduct(Facing, Dir) < HalfConeCos) return false; // outside the vision cone
+
+	// Clear line of sight: blocked only by world geometry (terrain/trees/rocks), not by the still
+	// itself. Trace on WorldStatic (not Visibility) so movement-blocking cover — e.g. Brushify
+	// trees that block WorldStatic but not Visibility — also blocks the lawman's sight. Ignore the
+	// lawman and the target part so only terrain/trees/rocks between them can occlude.
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(LawmanPawn);
+	Params.AddIgnoredActor(Part);
+	FHitResult Hit;
+	const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_WorldStatic, Params);
+	return !bBlocked;
+}
+
+int32 ALawmanController::CountSpottedStills(APawn* StillOwner) const
+{
+	UWorld* World = GetWorld();
+	if (!StillOwner || !World) return 0;
+
+	// Group visible parts by their still (owning stand; a stand groups to itself) so a still with
+	// several visible parts counts once.
+	TSet<AStillPartActor*> SpottedStills;
+	for (TActorIterator<AStillPartActor> It(World); It; ++It)
+	{
+		AStillPartActor* Part = *It;
+		if (!IsValid(Part) || Part->OwnerPawn.Get() != StillOwner) continue;
+		if (!HasLineOfSightToStill(Part)) continue;
+
+		AStillPartActor* Still = Part->OwningStand.IsValid() ? Part->OwningStand.Get() : Part;
+		SpottedStills.Add(Still);
+	}
+	return SpottedStills.Num();
+}
+
+void ALawmanController::RunDetection()
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
 
 	for (TActorIterator<AStillPartActor> It(World); It; ++It)
 	{
@@ -215,34 +266,12 @@ void ALawmanController::RunDetection()
 		// (a transient AStillPartActor with no OwnerPawn).
 		if (!Part->OwnerPawn.IsValid()) continue;
 
-		// Aim at the part's visual center.
-		FVector TargetLoc = Part->GetComponentsBoundingBox(true).GetCenter();
-		if (TargetLoc.ContainsNaN() || TargetLoc.IsNearlyZero())
+		if (HasLineOfSightToStill(Part))
 		{
-			TargetLoc = Part->GetActorLocation();
+			// Spotted with clear LOS → bust immediately (no window).
+			BustStill(Part);
+			return;
 		}
-
-		const FVector ToTarget = TargetLoc - EyeLoc;
-		const float DistSq = ToTarget.SizeSquared();
-		if (DistSq > RangeSq || DistSq < KINDA_SMALL_NUMBER) continue; // out of range
-
-		const FVector Dir = ToTarget * FMath::InvSqrt(DistSq);
-		if (FVector::DotProduct(Facing, Dir) < HalfConeCos) continue; // outside the vision cone
-
-		// Clear line of sight: blocked only by world geometry (terrain/trees/rocks), not by the
-		// still itself. Trace on WorldStatic (not Visibility) so movement-blocking cover — e.g.
-		// Brushify trees that block WorldStatic but not Visibility — also blocks the lawman's sight.
-		// Ignore the lawman and the target part so only terrain/trees/rocks between them can occlude.
-		FCollisionQueryParams Params;
-		Params.AddIgnoredActor(LawmanPawn);
-		Params.AddIgnoredActor(Part);
-		FHitResult Hit;
-		const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_WorldStatic, Params);
-		if (bBlocked) continue; // something occludes it — not seen
-
-		// Spotted with clear LOS → bust immediately (no window).
-		BustStill(Part);
-		return;
 	}
 }
 
@@ -256,12 +285,16 @@ void ALawmanController::BustStill(AStillPartActor* SeenPart)
 	const FString OwnerName = StillOwner ? StillOwner->GetName() : TEXT("unknown");
 	const FVector StillLoc = SeenPart ? SeenPart->GetActorLocation() : FVector::ZeroVector;
 
-	UE_LOG(LogTemp, Warning, TEXT("Lawman SPOTTED still owned by %s — BUSTED (still at %s)"),
-		*OwnerName, *StillLoc.ToString());
+	// How many of THIS owner's stills the lawman can see right now (the spotted set). At least the
+	// one that triggered the bust.
+	const int32 SpottedCount = FMath::Max(1, CountSpottedStills(StillOwner));
+
+	UE_LOG(LogTemp, Warning, TEXT("Lawman SPOTTED %d still(s) owned by %s — BUSTED (nearest at %s)"),
+		SpottedCount, *OwnerName, *StillLoc.ToString());
 
 	// Bust the still's OWNER specifically (multiplayer-ready — only that player is affected).
 	if (AMoonshineCharacter_Simple* OwnerPlayer = Cast<AMoonshineCharacter_Simple>(StillOwner))
 	{
-		OwnerPlayer->ApplyBust();
+		OwnerPlayer->ApplyBust(SpottedCount);
 	}
 }

@@ -17,8 +17,10 @@ class AWorldPickupActor;
 class UHotbarWidget;
 
 // Fired when this player is busted by a lawman. The HUD (or a BP) binds this to show the
-// BUSTED / jail screen. Broadcast AFTER the confiscation has been applied.
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerBusted);
+// BUSTED / jail screen. Broadcast AFTER the outcome is applied: bPaidBail = paid bail and kept
+// the operation; !bPaidBail = couldn't afford it and got fully wiped. TotalBail and
+// SpottedStillCount describe the charge.
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnPlayerBusted, bool, bPaidBail, int32, TotalBail, int32, SpottedStillCount);
 
 /**
  * Simplified player character that uses BuildingComponent for all construction logic
@@ -185,13 +187,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Suspicion")
 	class AStillPartActor* FindNearestActiveStill(const FVector& From) const;
 
-	// Applies the bust consequence to THIS player: confiscates inventory + hotbar, money -> 0,
-	// destroys all their placed still parts, heat -> 0, then broadcasts OnBusted. Called by the
-	// lawman on the still's OwnerPawn, so in multiplayer only the busted owner is affected.
+	// Applies the bust consequence to THIS player with a BAIL check first. Bail =
+	// BailFeePerStill * SpottedStillCount (the stills the lawman had clear LOS on). If affordable,
+	// it's auto-deducted and EVERYTHING is kept; otherwise a full wipe (inventory + hotbar + money
+	// + all stills). Heat resets to 0 either way. Broadcasts OnBusted with the outcome. Called by
+	// the lawman on the still's OwnerPawn, so in multiplayer only the busted owner is affected.
 	UFUNCTION(BlueprintCallable, Category = "Suspicion")
-	void ApplyBust();
+	void ApplyBust(int32 SpottedStillCount);
 
-	// Bind from the HUD/BP to show the BUSTED jail screen. Broadcast after confiscation.
+	// Bail charged per spotted still on a bust; auto-deducted if the owner can afford the total.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Suspicion")
+	int32 BailFeePerStill = 500;
+
+	// Bind from the HUD/BP to show the BUSTED jail screen. Broadcast after the outcome is applied.
 	UPROPERTY(BlueprintAssignable, Category = "Suspicion")
 	FOnPlayerBusted OnBusted;
 
