@@ -197,12 +197,12 @@ void ALawmanController::Tick(float DeltaTime)
 
 void ALawmanController::RunDetection()
 {
-	APawn* Pawn = GetPawn();
+	APawn* LawmanPawn = GetPawn();
 	UWorld* World = GetWorld();
-	if (!Pawn || !World) return;
+	if (!LawmanPawn || !World) return;
 
-	const FVector EyeLoc = Pawn->GetPawnViewLocation();
-	const FVector Facing = Pawn->GetActorForwardVector();
+	const FVector EyeLoc = LawmanPawn->GetPawnViewLocation();
+	const FVector Facing = LawmanPawn->GetActorForwardVector();
 	const float HalfConeCos = FMath::Cos(FMath::DegreesToRadians(SightConeAngle * 0.5f));
 	const float RangeSq = SightRange * SightRange;
 
@@ -232,7 +232,7 @@ void ALawmanController::RunDetection()
 		// Clear line of sight: blocked only by world geometry (terrain/trees/rocks), not by the
 		// still itself. Trace on Visibility, ignoring the lawman and the target part.
 		FCollisionQueryParams Params;
-		Params.AddIgnoredActor(Pawn);
+		Params.AddIgnoredActor(LawmanPawn);
 		Params.AddIgnoredActor(Part);
 		FHitResult Hit;
 		const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_Visibility, Params);
@@ -250,15 +250,15 @@ void ALawmanController::BustStill(AStillPartActor* SeenPart)
 	StopMovement();
 	bPausing = false;
 
-	APawn* Owner = SeenPart ? SeenPart->OwnerPawn.Get() : nullptr;
-	const FString OwnerName = Owner ? Owner->GetName() : TEXT("unknown");
+	APawn* StillOwner = SeenPart ? SeenPart->OwnerPawn.Get() : nullptr;
+	const FString OwnerName = StillOwner ? StillOwner->GetName() : TEXT("unknown");
 	const FVector StillLoc = SeenPart ? SeenPart->GetActorLocation() : FVector::ZeroVector;
 
 	UE_LOG(LogTemp, Warning, TEXT("Lawman SPOTTED still owned by %s — BUSTED (still at %s)"),
 		*OwnerName, *StillLoc.ToString());
 
 	// Bust the still's OWNER specifically (multiplayer-ready — only that player is affected).
-	if (AMoonshineCharacter_Simple* OwnerPlayer = Cast<AMoonshineCharacter_Simple>(Owner))
+	if (AMoonshineCharacter_Simple* OwnerPlayer = Cast<AMoonshineCharacter_Simple>(StillOwner))
 	{
 		OwnerPlayer->ApplyBust();
 	}
