@@ -76,6 +76,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
 	float DetectionInterval = 0.2f;
 
+	// Debug: draw eye->still LOS traces (green = clear, red = blocked) + the vision cone, and log
+	// the blocking actor / spotted distance so you can see WHY a still is/ isn't detected.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
+	bool bDebugDrawSight = true;
+
 	// Max time (s) he'll hunt the area (timed from when he starts searching) before giving up and
 	// leaving if he hasn't spotted a still. This is the player's reward for hiding well.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Search")

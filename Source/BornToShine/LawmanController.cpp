@@ -11,6 +11,8 @@
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"          // UWorld::LineTraceSingleByChannel
 #include "CollisionQueryParams.h"  // FCollisionQueryParams / ECC_Visibility
+#include "DrawDebugHelpers.h"       // DrawDebugLine / DrawDebugCone / DrawDebugPoint
+#include "Components/PrimitiveComponent.h"
 
 ALawmanController::ALawmanController()
 {
@@ -241,6 +243,32 @@ bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
 	Params.AddIgnoredActor(Part);
 	FHitResult Hit;
 	const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_WorldStatic, Params);
+
+	if (bDebugDrawSight)
+	{
+		// Green line = clear LOS (spotted), red = something occluded it. Persist ~1s to see in PIE.
+		DrawDebugLine(World, EyeLoc, TargetLoc, bBlocked ? FColor::Red : FColor::Green,
+			/*bPersistent*/ false, /*LifeTime*/ 1.0f, /*DepthPriority*/ 0, /*Thickness*/ 2.0f);
+
+		if (bBlocked)
+		{
+			const AActor* Blocker = Hit.GetActor();
+			const UPrimitiveComponent* BlockComp = Hit.GetComponent();
+			UE_LOG(LogTemp, Log, TEXT("Lawman LOS to %s BLOCKED by actor '%s' (component '%s') at %s"),
+				*Part->GetName(),
+				Blocker ? *Blocker->GetName() : TEXT("<none>"),
+				BlockComp ? *BlockComp->GetName() : TEXT("<none>"),
+				*Hit.ImpactPoint.ToString());
+			// Mark the blocking point.
+			DrawDebugPoint(World, Hit.ImpactPoint, 12.0f, FColor::Yellow, false, 1.0f);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Log, TEXT("Lawman clear LOS to %s, distance %.0f"),
+				*Part->GetName(), FMath::Sqrt(DistSq));
+		}
+	}
+
 	return !bBlocked;
 }
 
@@ -268,6 +296,19 @@ void ALawmanController::RunDetection()
 {
 	UWorld* World = GetWorld();
 	if (!World) return;
+
+	// Visualize the vision cone (range + half-angle) from the lawman's eye.
+	if (bDebugDrawSight)
+	{
+		if (const APawn* LawmanPawn = GetPawn())
+		{
+			const FVector EyeLoc = LawmanPawn->GetPawnViewLocation();
+			const FVector Facing = LawmanPawn->GetActorForwardVector();
+			const float HalfAngleRad = FMath::DegreesToRadians(SightConeAngle * 0.5f);
+			DrawDebugCone(World, EyeLoc, Facing, SightRange, HalfAngleRad, HalfAngleRad,
+				24, FColor::Cyan, /*bPersistent*/ false, /*LifeTime*/ 1.0f, /*DepthPriority*/ 0, /*Thickness*/ 1.0f);
+		}
+	}
 
 	for (TActorIterator<AStillPartActor> It(World); It; ++It)
 	{
