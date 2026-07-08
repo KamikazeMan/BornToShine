@@ -393,16 +393,16 @@ void ALawmanController::RunDetection()
 	}
 
 	// Cluster each owner's parts into stills and detect by LOS to the base-center (not any part).
-	for (APawn* Owner : Owners)
+	for (APawn* StillOwner : Owners)
 	{
 		TArray<FStillCluster> Clusters;
-		BuildStillClusters(Owner, Clusters);
+		BuildStillClusters(StillOwner, Clusters);
 		for (const FStillCluster& Cluster : Clusters)
 		{
 			if (HasLineOfSightToPoint(Cluster.BaseCenter, Cluster.Parts))
 			{
 				// Spotted the still's main body with clear LOS → bust immediately (no window).
-				BustStill(Owner, Cluster.BaseCenter);
+				BustStill(StillOwner, Cluster.BaseCenter);
 				return;
 			}
 		}
