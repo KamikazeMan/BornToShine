@@ -209,23 +209,95 @@ void ALawmanController::Tick(float DeltaTime)
 	}
 }
 
-bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
+void ALawmanController::BuildStillClusters(APawn* StillOwner, TArray<FStillCluster>& OutClusters) const
+{
+	OutClusters.Reset();
+	UWorld* World = GetWorld();
+	if (!StillOwner || !World) return;
+
+	// Gather this owner's placed parts (ghost previews have no OwnerPawn, so they're excluded).
+	TArray<AStillPartActor*> Parts;
+	for (TActorIterator<AStillPartActor> It(World); It; ++It)
+	{
+		AStillPartActor* Part = *It;
+		if (IsValid(Part) && Part->OwnerPawn.Get() == StillOwner)
+		{
+			Parts.Add(Part);
+		}
+	}
+	if (Parts.Num() == 0) return;
+
+	// Connected-components (single-linkage) clustering by StillClusterRadius so an assembly's parts
+	// become one still, and separate stills stay separate.
+	const float RadiusSq = StillClusterRadius * StillClusterRadius;
+	TArray<bool> Visited;
+	Visited.Init(false, Parts.Num());
+
+	for (int32 i = 0; i < Parts.Num(); ++i)
+	{
+		if (Visited[i]) continue;
+
+		FStillCluster Cluster;
+		Cluster.Owner = StillOwner;
+
+		TArray<int32> Queue;
+		Queue.Add(i);
+		Visited[i] = true;
+		while (Queue.Num() > 0)
+		{
+			const int32 J = Queue.Pop(EAllowShrinking::No);
+			Cluster.Parts.Add(Parts[J]);
+			const FVector LocJ = Parts[J]->GetActorLocation();
+			for (int32 k = 0; k < Parts.Num(); ++k)
+			{
+				if (!Visited[k] && FVector::DistSquared(LocJ, Parts[k]->GetActorLocation()) <= RadiusSq)
+				{
+					Visited[k] = true;
+					Queue.Add(k);
+				}
+			}
+		}
+
+		// Base-center: average of the LOWER parts (Z within the bottom StillBaseLowerFraction of the
+		// cluster's height). This ignores tall parts (cap arm) and small high pipes, so the lawman
+		// must see the main body/base — not a protruding part — to detect the still.
+		float MinZ = TNumericLimits<float>::Max();
+		float MaxZ = -TNumericLimits<float>::Max();
+		for (const AStillPartActor* P : Cluster.Parts)
+		{
+			const float Z = P->GetActorLocation().Z;
+			MinZ = FMath::Min(MinZ, Z);
+			MaxZ = FMath::Max(MaxZ, Z);
+		}
+		const float Threshold = MinZ + (MaxZ - MinZ) * FMath::Clamp(StillBaseLowerFraction, 0.0f, 1.0f);
+
+		FVector Sum = FVector::ZeroVector;
+		int32 Num = 0;
+		for (const AStillPartActor* P : Cluster.Parts)
+		{
+			const FVector L = P->GetActorLocation();
+			if (L.Z <= Threshold + KINDA_SMALL_NUMBER)
+			{
+				Sum += L;
+				++Num;
+			}
+		}
+		Cluster.BaseCenter = (Num > 0) ? (Sum / Num) : Parts[i]->GetActorLocation();
+
+		OutClusters.Add(MoveTemp(Cluster));
+	}
+}
+
+bool ALawmanController::HasLineOfSightToPoint(const FVector& TargetLoc, const TArray<AStillPartActor*>& IgnoreParts) const
 {
 	APawn* LawmanPawn = GetPawn();
 	UWorld* World = GetWorld();
-	if (!IsValid(Part) || !LawmanPawn || !World) return false;
+	if (!LawmanPawn || !World) return false;
 
 	const FVector EyeLoc = LawmanPawn->GetPawnViewLocation();
 	const FVector Facing = LawmanPawn->GetActorForwardVector();
 	const float HalfConeCos = FMath::Cos(FMath::DegreesToRadians(SightConeAngle * 0.5f));
 	const float RangeSq = SightRange * SightRange;
-
-	// Aim at the part's visual center.
-	FVector TargetLoc = Part->GetComponentsBoundingBox(true).GetCenter();
-	if (TargetLoc.ContainsNaN() || TargetLoc.IsNearlyZero())
-	{
-		TargetLoc = Part->GetActorLocation();
-	}
 
 	const FVector ToTarget = TargetLoc - EyeLoc;
 	const float DistSq = ToTarget.SizeSquared();
@@ -234,19 +306,21 @@ bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
 	const FVector Dir = ToTarget * FMath::InvSqrt(DistSq);
 	if (FVector::DotProduct(Facing, Dir) < HalfConeCos) return false; // outside the vision cone
 
-	// Clear line of sight: blocked only by world geometry (terrain/trees/rocks), not by the still
-	// itself. Trace on WorldStatic (not Visibility) so movement-blocking cover — e.g. Brushify
-	// trees that block WorldStatic but not Visibility — also blocks the lawman's sight. Ignore the
-	// lawman and the target part so only terrain/trees/rocks between them can occlude.
+	// Clear line of sight to the base center: blocked only by world geometry (terrain/trees/rocks),
+	// not by the still's OWN parts. Trace on WorldStatic (Brushify trees block WorldStatic). Ignore
+	// the lawman and every part of the cluster so only external cover can occlude.
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(LawmanPawn);
-	Params.AddIgnoredActor(Part);
+	for (AStillPartActor* P : IgnoreParts)
+	{
+		if (IsValid(P)) Params.AddIgnoredActor(P);
+	}
 	FHitResult Hit;
 	const bool bBlocked = World->LineTraceSingleByChannel(Hit, EyeLoc, TargetLoc, ECC_WorldStatic, Params);
 
 	if (bDebugDrawSight)
 	{
-		// Green line = clear LOS (spotted), red = something occluded it. Persist ~1s to see in PIE.
+		// Green line = clear LOS to the base center (detectable), red = occluded. Persist ~1s.
 		DrawDebugLine(World, EyeLoc, TargetLoc, bBlocked ? FColor::Red : FColor::Green,
 			/*bPersistent*/ false, /*LifeTime*/ 1.0f, /*DepthPriority*/ 0, /*Thickness*/ 2.0f);
 
@@ -254,18 +328,17 @@ bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
 		{
 			const AActor* Blocker = Hit.GetActor();
 			const UPrimitiveComponent* BlockComp = Hit.GetComponent();
-			UE_LOG(LogTemp, Log, TEXT("Lawman LOS to %s BLOCKED by actor '%s' (component '%s') at %s"),
-				*Part->GetName(),
+			UE_LOG(LogTemp, Log, TEXT("Lawman LOS to still base %s BLOCKED by actor '%s' (component '%s') at %s"),
+				*TargetLoc.ToString(),
 				Blocker ? *Blocker->GetName() : TEXT("<none>"),
 				BlockComp ? *BlockComp->GetName() : TEXT("<none>"),
 				*Hit.ImpactPoint.ToString());
-			// Mark the blocking point.
 			DrawDebugPoint(World, Hit.ImpactPoint, 12.0f, FColor::Yellow, false, 1.0f);
 		}
 		else
 		{
-			UE_LOG(LogTemp, Log, TEXT("Lawman clear LOS to %s, distance %.0f"),
-				*Part->GetName(), FMath::Sqrt(DistSq));
+			UE_LOG(LogTemp, Log, TEXT("Lawman clear LOS to still base %s, distance %.0f"),
+				*TargetLoc.ToString(), FMath::Sqrt(DistSq));
 		}
 	}
 
@@ -274,22 +347,20 @@ bool ALawmanController::HasLineOfSightToStill(AStillPartActor* Part) const
 
 int32 ALawmanController::CountSpottedStills(APawn* StillOwner) const
 {
-	UWorld* World = GetWorld();
-	if (!StillOwner || !World) return 0;
+	if (!StillOwner) return 0;
 
-	// Group visible parts by their still (owning stand; a stand groups to itself) so a still with
-	// several visible parts counts once.
-	TSet<AStillPartActor*> SpottedStills;
-	for (TActorIterator<AStillPartActor> It(World); It; ++It)
+	TArray<FStillCluster> Clusters;
+	BuildStillClusters(StillOwner, Clusters);
+
+	int32 Count = 0;
+	for (const FStillCluster& Cluster : Clusters)
 	{
-		AStillPartActor* Part = *It;
-		if (!IsValid(Part) || Part->OwnerPawn.Get() != StillOwner) continue;
-		if (!HasLineOfSightToStill(Part)) continue;
-
-		AStillPartActor* Still = Part->OwningStand.IsValid() ? Part->OwningStand.Get() : Part;
-		SpottedStills.Add(Still);
+		if (HasLineOfSightToPoint(Cluster.BaseCenter, Cluster.Parts))
+		{
+			++Count;
+		}
 	}
-	return SpottedStills.Num();
+	return Count;
 }
 
 void ALawmanController::RunDetection()
@@ -310,40 +381,48 @@ void ALawmanController::RunDetection()
 		}
 	}
 
+	// Gather the distinct still owners present in the world.
+	TSet<APawn*> Owners;
 	for (TActorIterator<AStillPartActor> It(World); It; ++It)
 	{
 		AStillPartActor* Part = *It;
-		if (!IsValid(Part)) continue;
-
-		// Only owned, placed parts can be busted — this also skips the player's ghost preview
-		// (a transient AStillPartActor with no OwnerPawn).
-		if (!Part->OwnerPawn.IsValid()) continue;
-
-		if (HasLineOfSightToStill(Part))
+		if (IsValid(Part) && Part->OwnerPawn.IsValid())
 		{
-			// Spotted with clear LOS → bust immediately (no window).
-			BustStill(Part);
-			return;
+			Owners.Add(Part->OwnerPawn.Get());
+		}
+	}
+
+	// Cluster each owner's parts into stills and detect by LOS to the base-center (not any part).
+	for (APawn* Owner : Owners)
+	{
+		TArray<FStillCluster> Clusters;
+		BuildStillClusters(Owner, Clusters);
+		for (const FStillCluster& Cluster : Clusters)
+		{
+			if (HasLineOfSightToPoint(Cluster.BaseCenter, Cluster.Parts))
+			{
+				// Spotted the still's main body with clear LOS → bust immediately (no window).
+				BustStill(Owner, Cluster.BaseCenter);
+				return;
+			}
 		}
 	}
 }
 
-void ALawmanController::BustStill(AStillPartActor* SeenPart)
+void ALawmanController::BustStill(APawn* StillOwner, const FVector& BaseCenter)
 {
 	State = ELawmanState::Busted;
 	StopMovement();
 	bPausing = false;
 
-	APawn* StillOwner = SeenPart ? SeenPart->OwnerPawn.Get() : nullptr;
 	const FString OwnerName = StillOwner ? StillOwner->GetName() : TEXT("unknown");
-	const FVector StillLoc = SeenPart ? SeenPart->GetActorLocation() : FVector::ZeroVector;
 
-	// How many of THIS owner's stills the lawman can see right now (the spotted set). At least the
-	// one that triggered the bust.
+	// How many of THIS owner's stills (as clustered units) the lawman can see right now. At least
+	// the one that triggered the bust.
 	const int32 SpottedCount = FMath::Max(1, CountSpottedStills(StillOwner));
 
-	UE_LOG(LogTemp, Warning, TEXT("Lawman SPOTTED %d still(s) owned by %s — BUSTED (nearest at %s)"),
-		SpottedCount, *OwnerName, *StillLoc.ToString());
+	UE_LOG(LogTemp, Warning, TEXT("Lawman SPOTTED %d still(s) owned by %s — BUSTED (main body at %s)"),
+		SpottedCount, *OwnerName, *BaseCenter.ToString());
 
 	// Bust the still's OWNER specifically (multiplayer-ready — only that player is affected).
 	if (AMoonshineCharacter_Simple* OwnerPlayer = Cast<AMoonshineCharacter_Simple>(StillOwner))

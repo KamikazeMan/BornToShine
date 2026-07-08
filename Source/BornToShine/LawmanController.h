@@ -6,6 +6,16 @@
 #include "AIController.h"
 #include "LawmanController.generated.h"
 
+/** A logical still: an owner's nearby StillPartActors grouped into one detection unit. */
+struct FStillCluster
+{
+	TArray<class AStillPartActor*> Parts;
+	class APawn* Owner = nullptr;
+	// The point the lawman must actually see to detect the still — the main-body/base center,
+	// biased low so a tall cap arm or small protruding pipe alone can't give it away.
+	FVector BaseCenter = FVector::ZeroVector;
+};
+
 /** What the lawman is currently doing. */
 UENUM()
 enum class ELawmanState : uint8
@@ -72,6 +82,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
 	float SightConeAngle = 90.0f;
 
+	// An owner's parts within this distance of each other cluster into ONE still (detection/bust/
+	// bail all treat the cluster as a single unit).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
+	float StillClusterRadius = 600.0f;
+
+	// The detection point is the average of the cluster's LOWER parts — those whose height sits in
+	// the bottom fraction of the cluster (0..1). Smaller = lower/base-only; tall parts are ignored.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
+	float StillBaseLowerFraction = 0.5f;
+
 	// How often (s) the line-of-sight check runs.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lawman|Sight")
 	float DetectionInterval = 0.2f;
@@ -94,16 +114,20 @@ protected:
 	// The core mechanic: scans for a still within range+cone with clear LOS and busts on the first.
 	void RunDetection();
 
-	// Range + vision-cone + clear WorldStatic trace test for a single still part (the LOS check
-	// shared by detection and the bail spotted-set count).
-	bool HasLineOfSightToStill(class AStillPartActor* Part) const;
+	// Groups an owner's placed parts into logical stills (proximity clustering within
+	// StillClusterRadius) and computes each cluster's base-center detection point.
+	void BuildStillClusters(class APawn* StillOwner, TArray<FStillCluster>& OutClusters) const;
 
-	// Distinct stills (grouped by owning stand) of StillOwner that the lawman currently sees. Drives
-	// the bail fee (BailFeePerStill * spotted count).
+	// Range + vision-cone + clear WorldStatic trace test to a still's base-center point. IgnoreParts
+	// (the cluster's own actors) are excluded from the trace so only external cover can occlude.
+	bool HasLineOfSightToPoint(const FVector& TargetLoc, const TArray<class AStillPartActor*>& IgnoreParts) const;
+
+	// Distinct STILLS (clustered units) of StillOwner the lawman currently sees. Drives the bail fee
+	// (BailFeePerStill * spotted count) — counts stills as units, not parts.
 	int32 CountSpottedStills(class APawn* StillOwner) const;
 
 	// Fires the bust on the still's OwnerPawn (multiplayer-ready), passing the spotted-set count.
-	void BustStill(class AStillPartActor* SeenPart);
+	void BustStill(class APawn* StillOwner, const FVector& BaseCenter);
 
 	// Search timed out with no still found: stop and despawn (same "leave" as a heat-drop despawn).
 	void GiveUpSearch();
